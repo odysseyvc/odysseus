@@ -1,0 +1,14 @@
+# Nothing but the program goes into the image.
+.env
+.env.*
+!.env.example
+.venv/
+var/
+.git/
+.claude/
+site/
+tests/
+scripts/
+__pycache__/
+*.pyc
+skills-lock.json

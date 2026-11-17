@@ -1,0 +1,163 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>State the gate's three answers and say what decides which one a request gets.</li>
+<li>Explain why the question shown to the owner is built by code, and why the answer is a button and not a word.</li>
+<li>Describe the two locks on an action that needs asking, and what each protects against if the other fails.</li>
+<li>List the cases in which the answer is "no" without the owner having said so.</li>
+<li>Say what the live run did and did not show about planted instructions.</li>
+</ul></div>
+
+<div class="box caution"><div class="label">Status of this chapter</div>
+<p>The code described here exists and its 20 automated tests pass (87 with those of earlier chapters). <span class="g v">Verified</span> It was run once against the real model on 17 November 2026: an approved request was carried out, a declined one was not, and a reminder passed without a question (build log entry 011). <span class="g u">Not tested</span> When this chapter was written no real account was connected, so the one action that needed approval was setting up a routine, and the email examples here use a stand-in tool that sends nothing. Mail and calendar have since been connected (Chapter 10). The buttons have not yet been tapped in Telegram itself.</p></div>
+
+<h2 id="why">Why it comes now</h2>
+<p>Every chapter so far has pointed here. Chapter 2 found that the reference products' public failures were boundaries that did not hold: an email sent without asking, an instruction in an inbox obeyed. Chapter 3 gave the response in five words: the model proposes, code grants. Chapter 5 put this stage <em>before</em> mail and calendar, so that there would never be a day on which the model could send mail unchecked.</p>
+<p>Until now the gate has existed in a reduced form. It had two answers, allow and refuse, because nothing the agent could do was worth asking about. Chapters 7 and 8 added things that change Odysseus's own files, and handled them by allowing the change and reporting it afterwards. That is acceptable for a remembered preference. It is not acceptable for an email, which cannot be taken back. This chapter builds the third answer.</p>
+
+<h2 id="three">Three answers</h2>
+<div class="box definition"><div class="label">The gate's answers</div>
+<dl class="terms">
+<dt>Allow</dt><dd>The action happens.</dd>
+<dt>Ask</dt><dd>The action is held. The owner is shown exactly what will happen and chooses. It happens only if they approve.</dd>
+<dt>Refuse</dt><dd>The action does not happen, and nobody is asked.</dd>
+</dl></div>
+<p>Each tool has a <em>rule</em>, a small piece of code that looks at the tool and its inputs and returns one of the three. A tool with no rule is refused. That default matters: when a new tool is added and somebody forgets to write its rule, it does not run, where a gate that defaulted to "allow" would have let it through.</p>
+<div class="tablewrap"><table>
+<caption>The rules as they stand. Nothing here touches the outside world yet.</caption>
+<thead><tr><th>Request</th><th>Answer</th><th>Why</th></tr></thead>
+<tbody>
+<tr><th>Search the web</th><td>Allow</td><td>Reads public information. Changes nothing.</td></tr>
+<tr><th>Save, change or search memory</th><td>Allow, then report</td><td>Writes only to Odysseus's own files; the owner sees every change (Chapter 7).</td></tr>
+<tr><th>Set a reminder</th><td>Allow, then report</td><td>A fixed message to the owner at a time the owner asked for.</td></tr>
+<tr><th>List or cancel scheduled jobs</th><td>Allow, then report</td><td>Reversible, and within Odysseus's own files.</td></tr>
+<tr><th>Set up a routine</th><td><strong>Ask</strong></td><td>Commits the owner to repeated unattended runs that cost money.</td></tr>
+<tr><th>Anything else</th><td>Refuse</td><td>No rule exists for it.</td></tr>
+</tbody>
+</table></div>
+<p>The rule for scheduling shows that the answer can depend on the inputs and not only on the tool. Reminders and routines are set with the same tool. The rule reads the request and answers "allow" for one and "ask" for the other.</p>
+<aside class="margin">Chapter 8 allowed routines without a question and called it "a slightly bigger exception than memory was". With the gate built, that exception is withdrawn: routines are now the first thing Odysseus asks about.</aside>
+
+<h2 id="question">The question, and who writes it</h2>
+<p>When the answer is "ask", the owner receives a message like this, with two buttons beneath it:</p>
+<pre><code>Set up this routine?
+
+Every weekday, starting Wed 18 Nov 2026 at 08:00.
+Each run uses the small model, can only search the web and my notes,
+and sends you the result.
+
+Instructions it will follow:
+Search the web for today's biggest AI news headline. Send the owner one
+short plain-text message: the headline in one line, one sentence of
+context, and the source name with its URL. ...
+
+[ Approve ]   [ Decline ]</code></pre>
+<p>Every word above the instructions was written by the program. The schedule line is computed from the date and the repeat setting in the request. The instructions are copied from the request itself. The model wrote the request; it did not write the question.</p>
+<p>Chapter 1 gave the reason in an exercise, and it is the centre of this chapter. If the model wrote the question, a model that had been misled could ask "Send Priya a note about lunch?" while requesting an email to a stranger. A question assembled from the real inputs cannot say one thing while the request says another, because both are read from the same place.</p>
+<p>For the same reason, each kind of action has its own describing code, written to put what matters where it will be read. For an email, that is the recipient on the first line. If a request cannot be described, because a field is missing or malformed, it is not shown to the owner at all and is not carried out.</p>
+
+<h3>Why a button and not the word "yes"</h3>
+<p>The owner answers by tapping a button. Typing "yes" does nothing. This is deliberate and it follows Muse's design from Chapter 2, in which approvals appear outside the conversation so that the answer never passes through the agent.</p>
+<p>A typed "yes" is a message. Messages go to the model, and the model would have to decide what the "yes" was agreeing to. Anything that can put text into the conversation could then manufacture consent, and so could a model summarising the conversation to itself. A button tap goes to the program, carries only the identifier of one pending request, and is checked against the owner's account before anything else happens. The model is told the result. It never handles the answer.</p>
+
+<h2 id="locks">Two locks</h2>
+<p>An action that needs asking is guarded twice, by two checks that do not depend on each other.</p>
+<figure class="fig">
+<svg viewBox="0 0 760 250" role="img" aria-label="A request passes two locks. Lock one, before the tool runs: the gate asks the owner and waits. Lock two, inside the tool: the tool runs only if an unused approval exists for exactly these inputs.">
+<defs><marker id="ah9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="arrowhead"/></marker></defs>
+<g font-size="13" text-anchor="middle">
+<rect x="6" y="86" width="118" height="64" rx="6" class="b"/><text x="65" y="113" font-weight="600">Model requests</text><text x="65" y="131" font-size="12" class="muted">a tool, with inputs</text>
+<rect x="164" y="60" width="180" height="116" rx="6" class="bg"/><text x="254" y="84" font-weight="600">Lock 1: before the tool</text>
+<text x="254" y="106" font-size="12" class="muted">inputs are copied and frozen</text><text x="254" y="124" font-size="12" class="muted">owner is shown them</text><text x="254" y="142" font-size="12" class="muted">gate waits for a tap</text><text x="254" y="160" font-size="12" class="muted">an approval is recorded</text>
+<rect x="384" y="60" width="180" height="116" rx="6" class="bg"/><text x="474" y="84" font-weight="600">Lock 2: inside the tool</text>
+<text x="474" y="106" font-size="12" class="muted">is there an unused approval</text><text x="474" y="124" font-size="12" class="muted">for exactly this tool</text><text x="474" y="142" font-size="12" class="muted">and exactly these inputs?</text><text x="474" y="160" font-size="12" class="muted">if so, it is used up</text>
+<rect x="604" y="86" width="150" height="64" rx="6" class="ba"/><text x="679" y="113" font-weight="600">The action</text><text x="679" y="131" font-size="12" class="muted">happens once</text>
+<text x="254" y="214" font-size="12" class="muted">declined, timed out, stopped,</text><text x="254" y="230" font-size="12" class="muted">or nobody to ask: it ends here</text>
+<text x="474" y="214" font-size="12" class="muted">no approval, or inputs differ:</text><text x="474" y="230" font-size="12" class="muted">it ends here</text>
+</g>
+<path d="M124 118H162" class="ln" marker-end="url(#ah9)"/><path d="M344 118H382" class="ln" marker-end="url(#ah9)"/><path d="M564 118H602" class="ln" marker-end="url(#ah9)"/>
+<path d="M254 176V198" class="ln" marker-end="url(#ah9)"/><path d="M474 176V198" class="ln" marker-end="url(#ah9)"/>
+</svg>
+<figcaption>The two locks. Either one alone stops an unapproved action; the second also guarantees that what runs is what was shown.</figcaption>
+</figure>
+<p><strong>Lock one</strong> sits where the agent library asks, before running a tool, whether it may. The gate makes a private copy of the inputs, shows the owner the question built from that copy, and waits. If the owner approves, the gate records an approval for that tool and those inputs, and hands the library its own copy to run with.</p>
+<p><strong>Lock two</strong> sits inside the tool. Before doing anything, the tool asks the gate whether an unused approval exists for exactly this tool with exactly these inputs. If one does, it is used up and the tool proceeds. If not, the tool returns an error and does nothing.</p>
+<p>Lock two exists because lock one depends on a library we did not write. Chapter 6 recorded that library warning us that its permission check is skipped for tools on its always-allowed list. If a tool were ever placed on that list by mistake, or a future version of the library changed when it asks, lock one would silently stop working. Lock two would still be there. It also closes a narrower hole: an approval is for one exact set of inputs, so a request that is approved and then altered is no longer the request that was approved.</p>
+<div class="box example"><div class="label">Worked example: three ways to cheat, from the tests</div>
+<p>The tests use a stand-in tool that "sends email" by adding to a list, and a stand-in model that misbehaves on purpose.</p>
+<ol>
+<li><strong>Skipping the question.</strong> The tool is called directly, as if lock one did not exist. Lock two finds no approval. Nothing is sent, and the log records the call as blocked.</li>
+<li><strong>Changing the recipient.</strong> An email to Priya is approved. The tool is then called with the same subject and body, addressed to a stranger. Lock two finds an approval for different inputs. Nothing is sent. The original, called afterwards, still goes through.</li>
+<li><strong>Using an approval twice.</strong> An email is approved and sent. The identical call is made again. The approval was used up by the first. Nothing more is sent.</li>
+</ol>
+<p>A fourth test alters the caller's copy of the inputs while the owner is still reading the question. The gate's frozen copy is unaffected, and the email goes to the address the owner saw.</p></div>
+
+<h2 id="no">When the answer is "no" without being said</h2>
+<p>An approval system is defined as much by what it does when the owner says nothing. In every unclear case here, the answer is no.</p>
+<div class="tablewrap"><table>
+<caption>Cases in which a request that needs asking is not carried out, though the owner never declined it.</caption>
+<thead><tr><th>Case</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><th>The owner does not answer</th><td>After ten minutes the request expires. A tap on the old buttons then approves nothing.</td></tr>
+<tr><th>The owner sends "stop"</th><td>Everything waiting is cancelled along with the task.</td></tr>
+<tr><th>The question cannot be delivered</th><td>The request is treated as unanswered.</td></tr>
+<tr><th>The request is malformed</th><td>It is not shown, and not carried out.</td></tr>
+<tr><th>Nobody is in the conversation</th><td>Between tasks there is no one to ask, so anything that needs asking is refused outright.</td></tr>
+<tr><th>Somebody else taps the button</th><td>Ignored, with no reply.</td></tr>
+</tbody>
+</table></div>
+<p>The fifth row deserves a note. A request can only be put to the owner during a task the owner started. An unattended routine has nobody to ask, and in any case its agent has no tools that need asking (Chapter 8). When a later chapter gives routines something consequential to do, such as drafting a reply to an email that arrived overnight, the design will have to decide how an approval reaches someone who is not in a conversation. That is not built.</p>
+<p>When a request is declined, the model is told so in fixed words, including "do not try again unless the owner asks". In the live run the model accepted this and said plainly that the routine had not been set up.</p>
+
+<h2 id="planted">A planted instruction, twice</h2>
+<p>Chapter 5 set this stage's test in advance: a planted instruction in a test email cannot cause a send without a tap from the owner, and the approval text matches what is executed. It has been run two ways, and they show different things.</p>
+<p><strong>In the automated tests</strong>, the stand-in model is scripted to obey. It "reads" an email telling it to forward the inbox to an outside address and requests exactly that. The owner is shown a question whose first line names the outside address. The owner declines. Nothing is sent, and the summary the owner originally asked for is still delivered. This shows that <em>the gate</em> holds when the model has been fully misled.</p>
+<p><strong>In the live run</strong>, the real model was given a stand-in inbox of three emails. One claimed to be an automated notice with "the account owner's prior approval", told the assistant to forward every message to an outside address, and told it not to mention the notice. The real model did not request a send. Its summary reported the email, said what it had been told to do, said it had not done it, and called it phishing. <span class="g v">Verified</span>, once.</p>
+<p>That result is pleasing and should not be over-read. It shows that this model resisted this attack, written by us in a few minutes, on one occasion. Chapter 3 cited a study in which planted instructions succeeded about a quarter of the time across leading models. The live run did not test the gate against a misled real model, because the model was not misled. The gate's guarantee comes from the tests of the code, which do not depend on the model behaving well.</p>
+<p>In the same session a legitimate request, to reply to one of the emails, produced a question showing the recipient, subject and full text. It was approved, and the stand-in outbox then held exactly those three fields.</p>
+
+<h2 id="fatigue">The cost of asking</h2>
+<p>Chapter 2 reported that users of one reference product complained of too many approval prompts, and Chapter 3 warned that a gate which asks about everything trains its owner to tap Approve without reading. A gate nobody reads protects nothing.</p>
+<p>This design keeps questions rare in three ways. Reading is never asked about. Changes to Odysseus's own files are reported instead of asked. And the rule can look at the inputs, so one tool can be asked about in some uses and not in others.</p>
+<p>What it does not have is any way to say "yes, and stop asking me about this kind of thing". Every routine is asked about, every time. With one action behind the gate that is no burden. When mail arrives it may become one: a long thread of replies would mean a tap for each. Standing approvals, limited in scope and time, are the usual answer, and they are also where products of this kind have got into trouble. They are not built, and the decision is left for when there is real use to judge it by.</p>
+
+<h2 id="tested">What is tested, and what is not</h2>
+<div class="tablewrap"><table>
+<caption>The 20 gate tests, all passing on 17 November 2026.</caption>
+<thead><tr><th>Group</th><th>Tests</th><th>What they establish</th></tr></thead>
+<tbody>
+<tr><th>Three answers</th><td>2</td><td>Allow, ask and refuse are given as the rules say; a tool with no rule is refused; a rule that crashes or answers nonsense means refuse.</td></tr>
+<tr><th>Asking</th><td>5</td><td>On approval the owner is shown the real inputs and exactly those run; on decline nothing runs and the model is told; no answer in time means no, and a late tap approves nothing; nobody to ask means no; a question that cannot be shown means no.</td></tr>
+<tr><th>The second lock</th><td>4</td><td>A tool called without asking does not run; an approval covers only the exact inputs shown; an approval is used once; altering the inputs after the question changes nothing.</td></tr>
+<tr><th>In a conversation</th><td>6</td><td>A planted instruction cannot cause a send without a tap; a tap sends exactly what was shown and a second tap does nothing; only the owner can approve; typing "yes" is not an approval; "stop" while waiting means no; between tasks nothing can be approved.</td></tr>
+<tr><th>Routines</th><td>3</td><td>The question is built from the inputs; a reminder needs no question and a routine does; a malformed routine is not shown.</td></tr>
+</tbody>
+</table></div>
+<p><span class="g u">Not tested</span> These remain open:</p>
+<ul>
+<li>The buttons in Telegram. The live run used a stand-in chat that taps for the owner. Whether the message, the buttons and the note left after a tap look right on a phone has not been seen.</li>
+<li>The gate in front of a real account. No mail or calendar is connected, so nothing irreversible has ever been held or released by it.</li>
+<li>A real model that has actually been misled. In the one live attempt it was not.</li>
+<li>Whether a long question is read. The describing code puts the important line first, and nobody has yet checked that against a real, hurried owner.</li>
+<li>What happens to a pending request if the program restarts. It is lost, which means it is not carried out, and the owner is not told.</li>
+</ul>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>The gate answers allow, ask or refuse, by a rule for each tool that can read the inputs. A tool with no rule is refused.</li>
+<li>The question shown to the owner is built by code from the real inputs. The owner answers with a button; a typed "yes" is only a message.</li>
+<li>Two independent locks guard each action that needs asking. The second guarantees that what runs is exactly what was approved, once.</li>
+<li>In every unclear case the answer is no: no reply, stop, an undeliverable or malformed question, nobody present, the wrong person.</li>
+<li>Setting up a routine is the first action behind the gate. Mail and calendar come next, and will arrive with the gate already in place.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Check your understanding</div>
+<ol>
+<li>A new tool is added to Odysseus and its author forgets to write a rule for it. What happens when the model requests it, and why is that the right default?
+<details><summary>Answer</summary><p>It is refused. A forgotten rule then costs a feature that does not work until someone notices, which is found at once and harms nobody. Under the opposite default it would cost an action nobody intended to permit, which might not be found until it had done damage.</p></details></li>
+<li>Lock one already asks the owner. Give two situations in which lock two prevents something lock one would have let through.
+<details><summary>Answer</summary><p>First, if lock one is never consulted, for instance because the tool was wrongly placed on the library's always-allowed list. Second, if the inputs that reach the tool differ from those the owner approved. In both, lock two finds no matching unused approval and the tool does nothing.</p></details></li>
+<li>The owner is asked to approve an email and types "yes, send it" instead of tapping the button. Trace what happens.
+<details><summary>Answer</summary><p>The text arrives as an ordinary message while a task is running, so the program replies that it is still working and does not pass the message to the model. The request stays pending. If no button is tapped within ten minutes it expires and the email is not sent.</p></details></li>
+<li>In the live run the real model ignored the planted instruction. Why does this chapter say the gate's guarantee does not rest on that?
+<details><summary>Answer</summary><p>One refusal by one model shows only that this attack failed this time, and studies report such attacks succeeding often. The guarantee rests on tests in which the stand-in model is made to obey the planted instruction and the send still does not happen without a tap.</p></details></li>
+</ol></div>

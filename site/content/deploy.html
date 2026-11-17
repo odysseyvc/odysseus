@@ -1,0 +1,140 @@
+<header>
+<p class="eyebrow">Deploy guide</p>
+<h1>Run your own Odysseus</h1>
+<p class="lede">From nothing to a bot that answers you in Telegram, first on your own computer and then on a small server that stays awake. These are the steps we took ourselves, and where something went wrong for us, it says so. We ran them on Windows; the macOS and Linux forms shown beside them are the standard equivalents.</p>
+</header>
+
+{{repo_notice}}
+
+<h2>What you will need</h2>
+<p>Three accounts are required. Four more are optional, and each one switches on a capability. You can start with the three and add the rest later by adding a line to one file.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Setting</th><th>Where it comes from</th><th>What it is for</th><th></th></tr></thead>
+<tbody>
+<tr><th><code>TELEGRAM_BOT_TOKEN</code></th><td>In Telegram, message <b>@BotFather</b> and send <code>/newbot</code></td><td>The bot you will talk to</td><td><span class="chip live">Required</span></td></tr>
+<tr><th><code>OWNER_TELEGRAM_ID</code></th><td>Your own numeric Telegram ID; <b>@userinfobot</b> will tell you</td><td>The one account the bot answers. Everyone else is ignored.</td><td><span class="chip live">Required</span></td></tr>
+<tr><th><code>ANTHROPIC_API_KEY</code></th><td>The Claude Console</td><td>The model that does the thinking</td><td><span class="chip live">Required</span></td></tr>
+<tr><th><code>EXA_API_KEY</code></th><td>exa.ai</td><td>Web search</td><td><span class="chip live">Required</span></td></tr>
+<tr><th><code>COMPOSIO_API_KEY</code></th><td>The Composio dashboard</td><td>Mail, calendar, and any other app you connect from the chat</td><td><span class="chip part">Optional</span></td></tr>
+<tr><th><code>BROWSER_USE_API_KEY</code></th><td>Browser Use Cloud</td><td>The browser</td><td><span class="chip part">Optional</span></td></tr>
+<tr><th><code>MISTRAL_API_KEY</code></th><td>The Mistral console</td><td>Reading photos and PDFs you send</td><td><span class="chip part">Optional</span></td></tr>
+</tbody>
+</table></div>
+<p>You also need <b>Python 3.13</b> (the version it is tested on) and, for the server step, a card on a hosting account.</p>
+<div class="callout info"><p><b>What it costs to run.</b> The model and the other services bill you directly, by use. In our own single measurements a question with one web search cost about 1.5 cents and a browser run about 4 cents. The program enforces a limit per task (50 cents by default) and per day (3 dollars by default), and you can change both. A small server is a few dollars a month on top.</p></div>
+
+<div class="stage"><div class="num">1</div><div>
+<h2>Get the code and install it</h2>
+{{clone}}
+<div class="cmd"><div class="lab">macOS and Linux</div><pre><code>python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt</code></pre></div>
+<div class="cmd"><div class="lab">Windows (PowerShell)</div><pre><code>py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt</code></pre></div>
+</div></div>
+
+<div class="stage"><div class="num">2</div><div>
+<h2>Fill in your keys</h2>
+<p>Copy the example settings file and put your values after each <code>=</code>.</p>
+<div class="cmd"><div class="lab">macOS and Linux</div><pre><code>cp .env.example .env</code></pre></div>
+<div class="cmd"><div class="lab">Windows (PowerShell)</div><pre><code>Copy-Item .env.example .env</code></pre></div>
+<p>The file <code>.env</code> is ignored by git, is never put into the server image, and is never shown to the model. Fill in the four required lines. Leave the optional ones commented out until you want them.</p>
+<div class="callout"><p><b>Use your own numeric ID, exactly.</b> <code>OWNER_TELEGRAM_ID</code> is the only thing that decides who the bot obeys. A message from any other account gets no reply at all and costs you nothing.</p></div>
+</div></div>
+
+<div class="stage"><div class="num">3</div><div>
+<h2>Start it and say hello</h2>
+<div class="cmd"><pre><code>python -m odysseus</code></pre></div>
+<p>Open Telegram, find your bot by the username you gave BotFather, and send it a message. It should answer within a few seconds. Then try these:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Send</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><th><code>stop</code></th><td>Ends whatever it is doing. Handled by the program, never shown to the model.</td></tr>
+<tr><th><code>/status</code></th><td>Whether it is busy, and what it has spent today</td></tr>
+<tr><th><code>/memory</code> and <code>/forget a1b2</code></th><td>See what it remembers about you, and remove an entry</td></tr>
+<tr><th><code>/schedule</code> and <code>/cancel a1b2</code></th><td>See reminders and routines, and cancel one</td></tr>
+<tr><th><code>/apps</code></th><td>Whether mail and calendar are connected, with a link for any that is not</td></tr>
+<tr><th><code>/browser</code> and <code>/browser done</code></th><td>Open its browser yourself to sign in to sites; then save the sign-ins</td></tr>
+</tbody>
+</table></div>
+<p>To connect mail and calendar, add <code>COMPOSIO_API_KEY</code>, restart, and send <code>/apps</code>. To connect any other app, just ask for work in it: the reply will carry a link.</p>
+<div class="callout"><p><b>Run only one copy.</b> Telegram hands each message to one program. If two copies run with the same bot token, on your laptop and a server for instance, they take messages from each other. Stop one before starting the other.</p></div>
+</div></div>
+
+<div class="stage"><div class="num">4</div><div>
+<h2>Give it a server</h2>
+<p>On a laptop, reminders only fire while the laptop is awake. A small always-on server fixes that. These steps use Fly.io, which is what we used; any host that can run a container with a persistent disk will do.</p>
+<div class="callout bad"><p><b>Add a payment card first. This one cost us two failed deployments.</b> On a new Fly.io account with no card, every machine is stopped five minutes after it starts. Nothing in the deploy output says so. The bot starts, answers for five minutes and goes silent. The only trace is one line in the machine's log: "Trial machine stopping".</p></div>
+<h3>Create the app and its disk</h3>
+<p>Install the <code>fly</code> command from Fly.io, then:</p>
+<div class="cmd"><pre><code>fly auth login
+fly apps create your-app-name
+fly volumes create odysseus_data --app your-app-name --region sin --size 1</code></pre></div>
+<p>Open <code>fly.toml</code> and change three things: <code>app</code> to the name you just chose, <code>primary_region</code> to a region near you (<code>fly platform regions</code> lists them), and <code>ODYSSEUS_TZ</code> to your own time zone, for example <code>Europe/London</code>.</p>
+<div class="callout"><p><b>Do not skip the time zone.</b> A server's clock is UTC. Without <code>ODYSSEUS_TZ</code>, "remind me at 7am" fires at 7am UTC, and nothing reports an error.</p></div>
+<h3>Send your keys as secrets</h3>
+<div class="cmd"><div class="lab">macOS and Linux</div><pre><code>grep -E '^[A-Z_]+=.+' .env | fly secrets import --app your-app-name --stage</code></pre></div>
+<div class="cmd"><div class="lab">Windows (PowerShell)</div><pre><code>Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=.+' } | fly secrets import --app your-app-name --stage</code></pre></div>
+<h3>Deploy</h3>
+<p>Stop the copy on your laptop first. Then:</p>
+<div class="cmd"><pre><code>fly deploy --ha=false</code></pre></div>
+<p><code>--ha=false</code> matters: it asks for one machine. Two machines would be two copies of the bot.</p>
+<h3>Check that it stayed up</h3>
+<div class="cmd"><pre><code>fly status
+fly logs</code></pre></div>
+<p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> We reported our first deployment as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
+<h3>Updating later</h3>
+<p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update.</p>
+</div></div>
+
+<h2>Settings worth knowing</h2>
+<p>All optional. Put them in <code>.env</code> locally, or set them with <code>fly secrets set</code> on a server.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Setting</th><th>Default</th><th>What it changes</th></tr></thead>
+<tbody>
+<tr><th><code>ODYSSEUS_TASK_USD</code></th><td>0.50</td><td>The most one task may spend before it is ended</td></tr>
+<tr><th><code>ODYSSEUS_DAILY_USD</code></th><td>3.00</td><td>The most one day may spend. After that, new tasks are refused until tomorrow.</td></tr>
+<tr><th><code>ODYSSEUS_MAX_TURNS</code></th><td>25</td><td>The most steps one task may take</td></tr>
+<tr><th><code>ODYSSEUS_MODEL</code></th><td>claude-sonnet-5-5</td><td>The model for conversations</td></tr>
+<tr><th><code>ODYSSEUS_BACKGROUND_MODEL</code></th><td>claude-haiku-5-5</td><td>The model for unattended routines</td></tr>
+<tr><th><code>ODYSSEUS_TZ</code></th><td>the machine's clock</td><td>Your time zone, for reminders and message times. Set it on any server.</td></tr>
+<tr><th><code>ODYSSEUS_BROWSER_ASK_SIGNED_IN</code></th><td>off</td><td>Set to <code>1</code> to be asked before every browser run that is signed in as you</td></tr>
+</tbody>
+</table></div>
+<div class="callout bad"><p><b>Consider turning that last one on.</b> By default a browser run signed in as you starts without asking and is reported afterwards, and nothing asks before a click inside it. If you sign the browser in to anything that can spend money or speak for you, set <code>ODYSSEUS_BROWSER_ASK_SIGNED_IN=1</code>. <a href="hands-the-browser.html#door">Chapter 11</a> explains what is at stake.</p></div>
+
+<h2>What you are trusting</h2>
+<p>Running Odysseus yourself means nobody stands between you and your data except the services you choose to connect. Each one sees something:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Service</th><th>What it sees</th></tr></thead>
+<tbody>
+<tr><th>The model maker</th><td>Your conversations, and whatever the tools return into them</td></tr>
+<tr><th>The search service</th><td>The searches the model makes</td></tr>
+<tr><th>The connector (optional)</th><td>It holds the access to your mail, calendar and connected apps, and your mail passes through it</td></tr>
+<tr><th>The browser vendor (optional)</th><td>The tasks you browse, and the sign-ins you save there</td></tr>
+<tr><th>The text-recognition service (optional)</th><td>Every file you send the bot, in full</td></tr>
+<tr><th>Your host</th><td>The disk holding your memory, schedule and log</td></tr>
+</tbody>
+</table></div>
+
+<h2>If something goes wrong</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>What you see</th><th>Likely cause</th></tr></thead>
+<tbody>
+<tr><th>The bot answers for five minutes after a deploy, then nothing</th><td>No payment card on a new Fly.io account. Look for "Trial machine stopping" in <code>fly logs</code>.</td></tr>
+<tr><th>No reply at all, and you are sure it is running</th><td><code>OWNER_TELEGRAM_ID</code> is not your ID, or a second copy is running somewhere and taking the messages</td></tr>
+<tr><th>"Missing settings: …" at start-up</th><td>A required line in <code>.env</code> is empty. The message names which.</td></tr>
+<tr><th>Reminders arrive hours off</th><td><code>ODYSSEUS_TZ</code> is not set on the server</td></tr>
+<tr><th>"Today's budget … is used up"</th><td>The daily limit was reached. Raise <code>ODYSSEUS_DAILY_USD</code> or wait for tomorrow.</td></tr>
+<tr><th>It says an app is not connected</th><td>Open the link in its reply and approve, then tell it you have</td></tr>
+</tbody>
+</table></div>
+<p>To see what it actually did, read <code>journal.jsonl</code> in its data folder: one line per step, including every reply sent or lost. On Fly.io:</p>
+<div class="cmd"><pre><code>fly ssh console -C "tail -n 20 /data/journal.jsonl"</code></pre></div>
+
+<h2>Checking your copy</h2>
+<p>The tests run in under a minute and call no outside service.</p>
+<div class="cmd"><pre><code>pip install -r requirements-dev.txt
+pytest</code></pre></div>
+<p>They prove what the code around the model does. They do not prove that it works with real services; three faults in our first day were found only by running it for real. The scripts in <code>scripts/</code> are the live checks we used, and each one spends a few cents.</p>

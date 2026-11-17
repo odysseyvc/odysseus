@@ -1,0 +1,123 @@
+<section class="hero"><div class="in">
+<div>
+<p class="eyebrow">A personal AI agent you run yourself</p>
+<h1>An assistant you message, that <em>asks</em> before it acts.</h1>
+<p class="sub">Odysseus lives in a private Telegram chat. It searches, remembers, reminds, reads your mail and calendar, works in your other apps and browses the web. It runs on your own server, with your own keys.</p>
+<div class="actions">
+<a class="btn primary" href="deploy.html">Deploy your own</a>
+<a class="btn ghost" href="book.html">Read how it is built</a>
+</div>
+<p class="fine">The example on this page is an illustration using the bot's real message formats. The question and the grey lines are written by the program, not by the model. Built in the open: the code is public, and every design decision is explained in a <a href="book.html">{{chapters}}-chapter book</a>.</p>
+</div>
+
+<div class="phone" aria-label="An example conversation with Odysseus">
+<div class="bar"><div class="avatar">{{mark}}</div><div class="who">Odysseus<small>bot</small></div></div>
+<div class="thread">
+<div class="msg me">Email Priya that Wednesday at 12:30 works for lunch.</div>
+<div class="msg bot ask"><b>Send this email from your account?</b>
+<div class="lines">To: priya@example.com<br>Subject: Lunch<br><br>Hi Priya, Wednesday at 12:30 works for me. See you at the usual place.</div>
+<div class="keys"><span class="y">Approve</span><span class="n">Decline</span></div></div>
+<div class="msg bot">Sent. I told Priya Wednesday at 12:30 works.<span class="meta">Done on your accounts: sent to priya@example.com: Lunch.</span></div>
+<div class="msg me">Remind me Wednesday at noon to leave.</div>
+<div class="msg bot">Done. I'll remind you on Wednesday at 12:00.<span class="meta">Schedule: set [4c1e] reminder at Wed 18 Nov 2026, 12:00: Leave for lunch with Priya.</span></div>
+</div></div>
+</div></section>
+
+<div class="strip"><div><b>Where it honestly stands.</b><span>Built in a day. {{tests}} automated tests. The parts that read (search, mail, calendar, public pages, files) have each run once against the real services. The parts that act have not: no email has been sent, no event created, no work done in a connected app, and no reminder has fired at its real time. Nothing has been proven over weeks. Nothing on this site claims it is better than anything else.</span><a href="evidence.html">How claims are graded</a></div></div>
+
+<section class="band"><div class="in">
+<p class="eyebrow">What it does</p>
+<h2>Eight things, each built to be switched off, stopped and inspected.</h2>
+<p class="lead">Only the first row needs anything beyond a Telegram bot, a model key and a search key. The rest switch on when you add a key for them.</p>
+<div class="cards">
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></div>
+<h3>Talks and searches</h3><p>Answers in the chat, looks things up with a search service built for agents, and says where a fact came from.</p><span class="chip live">Run live</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9l3 3V20.5H6z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></div>
+<h3>Remembers</h3><p>Keeps a short profile of lasting facts and dated notes, in plain files. Every save is shown to you. <code>/memory</code> lists it, <code>/forget</code> removes an entry.</p><span class="chip live">Run live</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4.2l2.6 1.6M9 2.8h6"/></svg></div>
+<h3>Speaks first</h3><p>Reminders are sent by plain code at the minute you asked. Routines run a read-only agent on a schedule and stay silent when there is nothing to say.</p><span class="chip part">Run live, clock moved by hand</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.800-7-9V6z"/><path d="M9 12l2.2 2.2L15.200 10"/></svg></div>
+<h3>Stops, and stays in budget</h3><p>"Stop" ends a task whether or not the model cooperates. You set a limit per task and per day. Every step is logged.</p><span class="chip live">Run live</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.500" width="18" height="13" rx="2"/><path d="M3.500 7l8.500 6.200L20.500 7"/></svg></div>
+<h3>Mail and calendar</h3><p>Reads both. Sending, replying and inviting guests are shown to you first, word for word. Sign-in codes are removed from mail before the model sees it.</p><span class="chip part">Read live; nothing sent yet</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.500" y="3.500" width="7" height="7" rx="1.500"/><rect x="13.500" y="3.500" width="7" height="7" rx="1.500"/><rect x="3.500" y="13.500" width="7" height="7" rx="1.500"/><path d="M17 14v6M14 17h6"/></svg></div>
+<h3>Your other apps</h3><p>Ask for work in Sheets, Notion, Slack and many more. If the app is not connected, the reply carries a link to connect it. Changes ask once per app per task.</p><span class="chip part">Link sent live; no work done yet</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.500" width="18" height="15" rx="2"/><path d="M3 9h18M6.500 6.800h.01M9.500 6.800h.01"/></svg></div>
+<h3>A browser</h3><p>Hands a task to a browsing agent for sites with no connector. You sign in to sites yourself; no password is stored. See the caveat below.</p><span class="chip open">Two public pages live; one doubtful</span></div>
+
+<div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.500 12s3.500-6.500 9.500-6.500S21.500 12 21.500 12s-3.500 6.500-9.500 6.500S2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/></svg></div>
+<h3>Reads what you send</h3><p>Photograph a bill or forward a PDF. A text-recognition service reads it and the model answers from the text, kept apart from your own words.</p><span class="chip part">One test page live</span></div>
+
+</div></div></section>
+
+<section class="band tint"><div class="in"><div class="split">
+<div>
+<p class="eyebrow">How it stays safe</p>
+<h2>The model proposes. Code grants.</h2>
+<p class="lead" style="margin-bottom:0">A language model can be talked into things by a web page or an email. So the model never performs an action. It asks for one, and ordinary code decides. That code cannot be argued with.</p>
+<ul class="checks">
+<li><b>The question is written by code</b> from the real inputs, so it cannot describe one thing while requesting another.</li>
+<li><b>Only a button counts.</b> Typing "yes" is a message, not an approval.</li>
+<li><b>Two locks.</b> The tool itself refuses to run without an approval for those exact inputs, used once.</li>
+<li><b>Silence means no.</b> No answer, "stop", or nobody in the chat: it is not done.</li>
+</ul>
+</div>
+<div>
+<div class="answers">
+<div class="answer allow"><span class="k">Allow</span><p><b>Reading.</b> Search, your mail and calendar, an app's data. Changes to Odysseus's own memory and reminders, which are reported to you each time.</p></div>
+<div class="answer ask"><span class="k">Ask</span><p><b>Anything that reaches someone or cannot be undone.</b> Sending mail, inviting guests, sharing or deleting in an app, setting up something that recurs.</p></div>
+<div class="answer refuse"><span class="k">Refuse</span><p><b>Everything else.</b> A tool nobody wrote a rule for does not run.</p></div>
+</div>
+<div class="note"><b>Where this does not hold.</b> The browser hands a whole task to another company's agent, and nothing asks before a click inside it. By default a browser run signed in as you starts without a question and is reported afterwards. One setting turns the question back on. <a href="hands-the-browser.html#door">Chapter 11</a> says exactly what that gives up.</div>
+</div>
+</div></div></section>
+
+<section class="band"><div class="in">
+<p class="eyebrow">Measured, not promised</p>
+<h2>What it has actually cost and taken so far.</h2>
+<p class="lead">These are single measurements taken during the build, on one machine, with a mid-priced model. They are not averages and not guarantees.</p>
+<div class="figures">
+<div class="figure"><div class="v">1.5&cent;</div><div class="l">A question that needed one web search</div></div>
+<div class="figure"><div class="v">2&nbsp;s</div><div class="l">A one-word reply, once the agent is kept running</div></div>
+<div class="figure"><div class="v">0.13&nbsp;s</div><div class="l">For "stop" to end a running task</div></div>
+<div class="figure"><div class="v">0.15&cent;</div><div class="l">One unattended routine run on the small model</div></div>
+<div class="figure"><div class="v">4&cent;</div><div class="l">One browser run, taking 20 to 50 seconds</div></div>
+<div class="figure"><div class="v">{{tests}}</div><div class="l">Automated tests, none of which replaces a real run</div></div>
+</div>
+<p class="caption">Each figure is one live run during the build. Three times in one day, passing tests sat beside a real fault that only a live run exposed.</p>
+</div></section>
+
+<section class="band tint"><div class="in">
+<p class="eyebrow">Run it yourself</p>
+<h2>Your bot, your keys, your server.</h2>
+<p class="lead">There is no hosted Odysseus and no account to create with us. You bring a Telegram bot and two keys, and it answers only you.</p>
+<div class="steps3">
+<div><h3>Get the keys</h3><p>A bot token from Telegram's BotFather, a key for the model and a key for search. Mail, apps, the browser and file reading each add one optional key.</p></div>
+<div><h3>Run it on your laptop</h3><p>Four commands. It starts answering in your Telegram chat. This is the right way to try it before paying for anything.</p></div>
+<div><h3>Give it a home</h3><p>Deploy to a small always-on server so reminders fire while you sleep. The guide covers one host step by step, including what went wrong for us.</p></div>
+</div>
+<p style="margin:36px 0 0"><a class="btn primary" href="deploy.html">Open the deploy guide</a></p>
+</div></section>
+
+<section class="band"><div class="in">
+<p class="eyebrow">Built in the open</p>
+<h2>A product you can read from the first decision.</h2>
+<p class="lead">Odysseus was built to be understood. The book explains each part the way a textbook would, including what each part's tests do not prove. The code is there to check it against.</p>
+<div class="duo">
+<a class="tile" href="book.html"><h3>The book</h3><p>{{chapters}} chapters with objectives, definitions, worked examples and questions: what a personal agent is made of, why each part was chosen, and what each part's tests do and do not prove.</p><span class="more">Read the contents &rarr;</span></a>
+<a class="tile" href="{{repo}}"><h3>The code</h3><p>The whole program, its automated tests, the deployment files and this site's source, under the MIT licence. Small enough to read in an afternoon.</p><span class="more">Open the repository &rarr;</span></a>
+</div>
+</div></section>
+
+<section class="closing band tint">
+<h2>Try it on your own machine first.</h2>
+<p>It takes a bot token, two keys and a few minutes. If it is not for you, stop the program and nothing is left running anywhere.</p>
+<div class="actions"><a class="btn primary" href="deploy.html">Deploy your own</a><a class="btn ghost" href="book.html">Read how it is built</a></div>
+</section>

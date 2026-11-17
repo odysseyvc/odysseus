@@ -1,0 +1,25 @@
+# Odysseus on Fly.io: one small machine that is always on, with one disk.
+#
+# There is no [http_service] section on purpose. The bot fetches its messages
+# from Telegram by long polling, so nothing needs to reach this machine from
+# the internet, and no port is opened.
+#
+app = "odysseus-611755"
+primary_region = "sin"
+
+[env]
+  ODYSSEUS_DATA_DIR = "/data"
+  # The server's own clock is UTC. Reminders, routines and message stamps must
+  # use the owner's local time.
+  ODYSSEUS_TZ = "Asia/Kolkata"
+
+[mounts]
+  source = "odysseus_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[restart]]
+  policy = "always"

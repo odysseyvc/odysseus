@@ -1,0 +1,97 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Say why an assistant with a scheduler cannot live on a laptop.</li>
+<li>Describe the four things a deployment of Odysseus consists of: an image, a machine, a disk and secrets.</li>
+<li>Explain why the server opens no port to the internet.</li>
+<li>Name two things that are easy to get wrong when moving a program like this to a server, and how each was handled.</li>
+</ul></div>
+
+<div class="box caution"><div class="label">Status of this chapter</div>
+<p><strong>The deployment described here ran for five minutes and is currently switched off.</strong> <span class="g v">Verified</span> On 17 November 2026 Odysseus was deployed to a hosting service and started there: the program wrote its start record to the mounted disk, showing mail, the browser and file reading connected, and handled one message. Five minutes after starting, the hosting service stopped the machine, because the owner's new account has no payment card on it and machines on such accounts are limited to five minutes (build log entry 017). The bot is running on the owner's laptop again. Everything in this chapter about how the deployment is put together stands; Section 13.6 has been revised to say what happened.</p></div>
+
+<h2 id="why">Why it had to move</h2>
+<p>Through Chapters 6 to 12, Odysseus ran on its owner's own computer. For a program that only answers messages, that is merely inconvenient: it answers when the computer is on.</p>
+<p>Chapter 8 changed the stakes. A reminder set for seven in the morning is worth nothing if the computer is asleep at seven. The design copes with that as well as it can, by sending a missed reminder late with a note saying so, and the chapter recorded plainly that "a scheduler runs only while that machine is awake". The only real fix is a machine that does not sleep.</p>
+
+<h2 id="four">Four things</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Image</dt><dd>A sealed package containing a program and everything it needs to run: the right version of the language, the libraries, the code. The same image runs the same way anywhere.</dd>
+<dt>Machine</dt><dd>A small rented computer that runs one image.</dd>
+<dt>Volume</dt><dd>A disk attached to a machine that keeps its contents when the machine is replaced.</dd>
+<dt>Secret</dt><dd>A value, such as a key, that the hosting service stores encrypted and hands to the program when it starts, without its ever being written in the code or the image.</dd>
+</dl></div>
+<p>A deployment of Odysseus is exactly these four.</p>
+<div class="tablewrap"><table>
+<caption>What the deployment consists of.</caption>
+<thead><tr><th>Thing</th><th>What it holds</th><th>What happens when the program is updated</th></tr></thead>
+<tbody>
+<tr><th>Image</th><td>The program and its libraries. No keys, no data, no tests, no website.</td><td>Rebuilt and replaced</td></tr>
+<tr><th>Machine</th><td>One shared processor and one gigabyte of memory, always on</td><td>Restarted on the new image</td></tr>
+<tr><th>Volume</th><td>Memory, the schedule, the log and the browser profile's identifier: everything from Chapters 6 to 11 that must last</td><td>Untouched</td></tr>
+<tr><th>Secrets</th><td>The keys for Telegram, the model, search, mail, the browser and text recognition, and the owner's Telegram ID</td><td>Untouched</td></tr>
+</tbody>
+</table></div>
+<p>The division in the right-hand column is the point. Code changes often and is disposable. Data must never be lost by a change of code. Keys must never be in either. Chapter 7 put all of memory in plain files in one folder, and Chapter 8 put the schedule beside it; that decision now pays off, because "everything that must last" is one folder, and the volume is mounted exactly there.</p>
+
+<h2 id="noport">A server with no door</h2>
+<p>Most programs on servers wait for connections from the internet, and so must have an address and an open port, and must be defended against everyone who finds it.</p>
+<p>Odysseus opens no port at all. Chapter 1 noted that a Telegram bot can collect its messages by asking Telegram for them repeatedly, called long polling. Every connection the program makes is outward: to Telegram, to the model, to search, to the connector, to the browser vendor. Nothing on the internet can start a conversation with the machine, because there is nothing listening.</p>
+<p>The configuration file says so by omission. It has no section describing a web service, and a comment explains that the absence is deliberate, so that nobody later adds one out of habit.</p>
+<aside class="margin">Long polling has one rule that matters here: only one program may poll for a given bot at a time. Two copies take messages from each other. The copy on the owner's computer was stopped before the server's copy started.</aside>
+
+<h2 id="wrong">Two things that are easy to get wrong</h2>
+<h3>The clock</h3>
+<p>Servers keep time in UTC. The owner does not live in UTC. Chapter 8 stored times as plain local date and time, "the same clock that stamps the owner's messages", and warned that if the program moved to a server elsewhere, nine in the morning must still mean the owner's nine in the morning.</p>
+<p>On the owner's own computer this needed no thought, because the computer's clock was already the owner's. On the server it would have been silently wrong by five and a half hours: every reminder late, every message stamped with the wrong time, every "tomorrow" possibly the wrong day. The setting built in Chapter 8 for this moment pins the program's one clock to the owner's time zone, and the deployment sets it.</p>
+<h3>Who owns the disk</h3>
+<p>The image runs the program as an ordinary user and not as the all-powerful administrator, which limits what a fault in the program could damage. A freshly attached volume, however, arrives owned by the administrator, and an ordinary user cannot write to it. A program that cannot write its memory would fail at its first save.</p>
+<p>So the machine starts with one line that runs as administrator, hands the data folder to the program's user, and then starts the program as that user. <span class="g v">Verified</span> On the server, the data folder and the files in it belong to the program's user.</p>
+
+<h2 id="unknown">One unknown, resolved</h2>
+<p>The agent library of Chapter 6 is not pure code. It carries a separate program inside it, built for a particular kind of computer. On the owner's computer that was the Windows version. Whether the right version would be installed in a Linux image, and would run there, could not be checked in advance, because the owner's computer has no tool for building images; the image was built by the hosting service.</p>
+<p><span class="g v">Verified</span> It was installed and it ran. The program connects to the agent library before it writes its start record, and the start record was written.</p>
+
+<h2 id="tested">What is verified, and what is not</h2>
+<div class="tablewrap"><table>
+<caption>The state of the deployment on 17 November 2026.</caption>
+<thead><tr><th>Check</th><th>Result</th></tr></thead>
+<tbody>
+<tr><th>The image builds</th><td><span class="g v">Verified</span> 224 megabytes</td></tr>
+<tr><th>The machine starts</th><td><span class="g v">Verified</span></td></tr>
+<tr><th>The machine stays started</th><td><strong>It did not.</strong> It was checked half a minute after launch and stopped by the hosting service at five minutes, under a limit on accounts with no payment card.</td></tr>
+<tr><th>The program starts and connects to the agent library</th><td><span class="g v">Verified</span> start record written, with mail, browser and file reading connected</td></tr>
+<tr><th>The data folder is on the volume and writable</th><td><span class="g v">Verified</span></td></tr>
+<tr><th>No error in the machine's log</th><td><span class="g v">Verified</span> at the time of checking</td></tr>
+<tr><th>A message is answered from the server</th><td>One message was received and its task finished in 1.7 seconds. Whether the reply was delivered was not recorded at the time, and is not known.</td></tr>
+<tr><th>A reminder fires at the right local time</th><td><span class="g u">Not tested</span></td></tr>
+<tr><th>Memory and the schedule survive a restart of the machine</th><td><span class="g u">Not tested</span></td></tr>
+<tr><th>One gigabyte of memory is enough, including while a routine runs</th><td><span class="g u">Not tested</span></td></tr>
+<tr><th>What it costs in a month</th><td><span class="g u">Not tested</span> estimated from list prices only</td></tr>
+</tbody>
+</table></div>
+<p>Two further gaps belong here. Nothing backs up the volume beyond whatever the hosting service does by default, so the owner's memory and schedule exist in one place. And nothing tells the owner if the machine stops: a dead assistant is silent, which is the one failure Chapter 8's rule about announcing failures cannot cover, because the thing that would announce it is the thing that has died.</p>
+<div class="box example"><div class="label">Worked example: the second gap, five minutes later</div>
+<p>The paragraph above was written before the deployment was tried by its owner. Within minutes it described a real event.</p>
+<p>The machine was checked thirty seconds after launch and found running. At five minutes the hosting service stopped it, under a limit that applies to new accounts with no payment card. The copy on the owner's laptop had been stopped beforehand, correctly, so that two copies would not compete for messages. For some minutes no copy of Odysseus was running anywhere, and nothing said so. The owner found out by sending a message and getting no answer.</p>
+<p>Three lessons, in order of generality. A check made at thirty seconds is evidence about thirty seconds. Stopping the old copy before the new one has proved itself removes the fallback at the moment it is most likely to be needed. And a system that announces its own failures still needs something outside itself to announce its death.</p>
+<p>One fix was made at once, to a different gap the incident exposed: the log recorded that the server's one task had finished and did not record whether its reply was sent. Every reply is now recorded as sent or as failed. The watcher from outside is not built.</p></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>A scheduler needs a machine that does not sleep, so Odysseus was moved to a rented one.</li>
+<li>A deployment is an image, a machine, a volume and secrets. Code is replaceable, data persists, keys are in neither.</li>
+<li>The server opens no port. Every connection is outward.</li>
+<li>The clock is pinned to the owner's time zone, and the data folder is handed to the program's user at start-up.</li>
+<li>The program started on the server with everything connected, and was stopped by the hosting service after five minutes because the account has no payment card. It is back on the owner's laptop until that is settled.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Check your understanding</div>
+<ol>
+<li>Memory, the schedule and the log are kept on a volume and not inside the image. What would happen at the next update if they were in the image?
+<details><summary>Answer</summary><p>An update replaces the image. Everything written inside the running copy would be thrown away with it, so every update would wipe the owner's memory and schedule.</p></details></li>
+<li>Why is it safe for this server to have no firewall rules letting traffic in, when most servers need them?
+<details><summary>Answer</summary><p>Nothing on it listens for incoming connections. The bot asks Telegram for its messages, and every other connection is also started from the machine outward, so there is no door for a firewall to guard.</p></details></li>
+<li>The time zone setting is left out. The owner, at 10 in the evening local time, asks for a reminder "tomorrow at 7am". Describe what goes wrong.
+<details><summary>Answer</summary><p>The program believes the time is 4:30 in the afternoon, UTC. The message is stamped with that time, the model works out "tomorrow at 7am" from it, and the reminder is stored as 7:00 on the server's clock, which is 12:30 in the afternoon for the owner. It arrives five and a half hours late, and no error is reported anywhere.</p></details></li>
+</ol></div>

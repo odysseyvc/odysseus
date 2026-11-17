@@ -1,0 +1,5 @@
+# For running the tests and the live-check scripts on a developer's machine.
+-r requirements.txt
+pytest==9.2.0
+pytest-asyncio==1.5.0
+playwright==1.65.2   # only scripts/live_ocr.py uses it, to make test files

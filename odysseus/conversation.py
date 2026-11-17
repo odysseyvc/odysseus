@@ -1,0 +1,334 @@
+"""The rules of the conversation, independent of Telegram.
+
+This file decides who may speak, what "stop" does, when a task may start and
+what the person is told when one ends. None of those decisions is the model's.
+"""
+from __future__ import annotations
+
+import asyncio
+import time
+from datetime import datetime
+from typing import Callable, Protocol
+
+from .agent import AgentRunner, Outcome
+from .config import Settings
+from .journal import Journal, Ledger
+from .memory import MEMORY_NOTE, MemoryStore
+from .ocr import MAX_BYTES, OcrBackend, OcrError, file_block, resolve_type
+from .anyapp import AnyApp
+from .apps import Apps
+from .browser import Browser
+from .gate import Gate
+from .schedule import ScheduleStore
+
+STOP_WORDS = {"stop", "/stop", "cancel", "/cancel"}
+TELEGRAM_LIMIT = 4096
+DRAFT_INTERVAL_S = 0.8   # Telegram asks for about one message a second per chat
+
+
+class Chat(Protocol):
+    async def send(self, text: str) -> None: ...
+    async def draft(self, draft_id: int, text: str) -> None: ...
+    async def ask(self, text: str, approval_id: str) -> None: ...   # a message with Approve and Decline buttons
+
+
+def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
+    parts = []
+    while len(text) > limit:
+        cut = text.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    if text:
+        parts.append(text)
+    return parts
+
+
+class Conversation:
+    def __init__(self, settings: Settings, journal: Journal, ledger: Ledger, runner: AgentRunner,
+                 memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
+                 schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
+                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None):
+        self._s = settings
+        self._journal = journal
+        self._ledger = ledger
+        self._runner = runner
+        self._memory = memory
+        self._now = now
+        self._shown_version = -1     # the version of the profile the model last saw
+        self._schedule = schedule
+        self._delivered: list[str] = []   # what scheduled jobs sent the owner since the model last heard
+        self._gate = gate
+        self._apps = apps
+        self._browser = browser
+        self._ocr = ocr
+        self._anyapp = anyapp
+        self._task: asyncio.Task | None = None
+        self._draft_seq = 0
+
+    def is_owner(self, user_id: int) -> bool:
+        return user_id == self._s.owner_id
+
+    @property
+    def busy(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    async def handle(self, user_id: int, text: str, chat: Chat) -> None:
+        # 1. Who may speak. Anyone but the owner gets no reply at all.
+        if user_id != self._s.owner_id:
+            self._journal.write("dropped", user_id=user_id)
+            return
+        text = (text or "").strip()
+        if not text:
+            return
+        command = text.lower()
+
+        # Signing in to sites is done by the owner, by hand, in a live view of the browser. No model is involved,
+        # and no password passes through Odysseus.
+        if command.startswith("/browser"):
+            if self._browser is None:
+                await chat.send("There is no browser: no browser key is in my settings.")
+            elif command.split()[1:] == ["done"]:
+                closed = await self._browser.login_done()
+                await chat.send("Closed, and your sign-ins are saved." if closed else "No sign-in browser was open.")
+            else:
+                try:
+                    link = await self._browser.login_link()
+                except Exception as e:
+                    self._journal.write("error", where="browser.login", error=type(e).__name__)
+                    await chat.send("I could not open a browser for you. The details are in the log.")
+                    return
+                await chat.send("Open this link to use my browser yourself, and sign in to any site you want me to be able to use "
+                                "as you. Treat the link like a password: anyone who has it can control that browser. It closes by "
+                                f"itself after 20 minutes.\n\n{link}\n\nWhen you have finished, send /browser done so that your sign-ins are saved.")
+            return
+
+        # Which accounts are connected, with a link to connect any that are not. No model is involved.
+        if command == "/apps":
+            if self._apps is None:
+                await chat.send("Mail and calendar are not set up: there is no connector key in my settings.")
+            else:
+                await chat.send(await asyncio.to_thread(self._apps.status))
+            return
+
+        # Scheduled jobs can be listed and cancelled by the owner directly. No model is involved.
+        if self._schedule is not None and command == "/schedule":
+            await chat.send("Scheduled:\n" + self._schedule.listing()
+                            + "\n\nTo cancel one, send /cancel and its id, for example /cancel a1b2.")
+            return
+        if self._schedule is not None and command.startswith("/cancel ") and command.split()[1:]:
+            job = self._schedule.cancel(command.split()[1], by="owner")
+            await chat.send(("Cancelled: " + job.describe()) if job else "There is no scheduled job with that id. Send /schedule to see them.")
+            return
+
+        # 2. Stop is handled here and never shown to the model.
+        if command in STOP_WORDS:
+            await self._stop(chat)
+            return
+        if command in ("/start", "/help"):
+            await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /status shows today's "
+                            "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
+                            "/schedule shows reminders and routines, and /cancel followed by an id removes one. "
+                            "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
+            return
+        # Memory can be read and pruned by the owner directly. No model is involved.
+        if self._memory is not None and command == "/memory":
+            await chat.send("What I remember about you:\n" + self._memory.profile_text()
+                            + "\n\nTo remove an entry, send /forget and its id, for example /forget a1b2.")
+            return
+        if self._memory is not None and command.startswith("/forget"):
+            entry_id = command[len("/forget"):].strip()
+            old = self._memory.forget(entry_id, by="owner") if entry_id else None
+            await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
+            return
+        if command == "/status":
+            state = "working on a task" if self.busy else "idle"
+            await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f} of ${self._s.daily_usd:.2f}.")
+            return
+
+        # 3. One task at a time in this version.
+        if self.busy:
+            await chat.send("Still working on the last task. Send stop to end it.")
+            return
+
+        # 4. The daily budget is checked before any model call is made.
+        if self._ledger.spent_today() >= self._s.daily_usd:
+            self._journal.write("refused", reason="daily_budget")
+            await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started this.")
+            return
+
+        self._task = asyncio.create_task(self._run(text, chat))
+
+    async def handle_file(self, user_id: int, data: bytes | None, name: str, mime: str | None, size: int, caption: str, chat: Chat) -> None:
+        """The owner sent a photo or a document. Read its text, then treat it as a message that includes that text.
+
+        `data` is None when the file was too big to fetch; `size` is what Telegram reported.
+        """
+        if user_id != self._s.owner_id:
+            self._journal.write("dropped", user_id=user_id, what="file")
+            return                      # a stranger's file is never downloaded or read
+        if self._ocr is None:
+            await chat.send("I can't read files yet: no text-recognition key is in my settings.")
+            return
+        if self.busy:
+            await chat.send("Still working on the last task. Send stop to end it, then send the file again.")
+            return
+        try:
+            kind = resolve_type(mime, name)
+            if data is None or size > MAX_BYTES or len(data) > MAX_BYTES:
+                raise OcrError("That file is too big for me to fetch. The limit is 20 MB.")
+            result = await asyncio.to_thread(self._ocr.read, data, kind)
+        except OcrError as e:
+            self._journal.write("file", name=name, ok=False, error=str(e)[:200])
+            await chat.send(str(e))
+            return
+        except Exception as e:
+            self._journal.write("file", name=name, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
+            await chat.send("I could not read that file. The details are in the log.")
+            return
+        self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text))
+        said = (caption or "").strip() or "(The owner sent this file with no message.)"
+        await self.handle(user_id, f"{file_block(name, result)}\n\n{said}", chat)
+
+    async def handle_decision(self, user_id: int, approval_id: str, approved: bool) -> str:
+        """The owner tapped Approve or Decline. Returns a short line to show on the button's message."""
+        if user_id != self._s.owner_id:
+            self._journal.write("dropped", user_id=user_id, what="approval tap")
+            return ""
+        if self._gate is None or self._gate.resolve(approval_id, approved) is None:
+            return "This request is no longer waiting."
+        return "Approved." if approved else "Declined."
+
+    async def wait(self) -> None:
+        """Wait for the current task, if any. Used by tests and at shutdown."""
+        if self._task is not None:
+            await asyncio.gather(self._task, return_exceptions=True)
+
+    async def _stop(self, chat: Chat) -> None:
+        task = self._task
+        if task is None or task.done():
+            await chat.send("Nothing is running.")
+            return
+        self._journal.write("stop_requested")
+        if self._gate is not None:
+            self._gate.cancel_all()      # anything waiting for an answer is treated as declined
+        if self._browser is not None:
+            await self._browser.stop()   # a browser run in progress is cancelled at the vendor
+        try:
+            await self._runner.stop()
+        except Exception as e:  # the stop must not depend on the SDK cooperating
+            self._journal.write("error", where="stop", error=type(e).__name__)
+        # Give the run a moment to end by itself, then end it regardless.
+        done, _ = await asyncio.wait({task}, timeout=self._s.stop_grace_s)
+        if not done:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await self._runner.reset()   # the client is in an unknown state; start a clean one next time
+            self._journal.write("task_end", status="stopped", forced=True, cost_usd=0.0)
+            await chat.send("Stopped.")
+
+    def _preamble(self, blank: bool) -> str:
+        """The memory block, shown when the model has no context or the profile has changed since it last saw it."""
+        out = ""
+        if blank or self._memory.version != self._shown_version:
+            self._shown_version = self._memory.version
+            out += f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        if self._delivered:
+            # So that "tell me more about that" makes sense after a reminder or a routine's message.
+            sent, self._delivered = self._delivered, []
+            out += ("SENT TO THE OWNER BY SCHEDULED JOBS SINCE THEIR LAST MESSAGE\n"
+                    + "\n---\n".join(t[:1500] for t in sent[-5:]) + "\nEND\n\n")
+        return out
+
+    def record_delivery(self, text: str) -> None:
+        self._delivered.append(text)
+
+    async def _run(self, prompt: str, chat: Chat) -> None:
+        self._draft_seq += 1
+        draft_id = self._draft_seq
+        if self._gate is not None:
+            async def ask_owner(approval) -> None:
+                await chat.ask(approval.text, approval.id)
+            self._gate.set_asker(ask_owner)
+        started = time.monotonic()
+        last_draft = 0.0
+        self._journal.write("task_start", chars=len(prompt))
+
+        async def on_text(text_so_far: str) -> None:
+            nonlocal last_draft
+            now = time.monotonic()
+            if now - last_draft < DRAFT_INTERVAL_S:
+                return
+            last_draft = now
+            try:
+                await chat.draft(draft_id, text_so_far[:TELEGRAM_LIMIT])
+            except Exception:
+                pass  # a failed preview must never end the task
+
+        stamp = f"\n\n[{self._now().strftime('%A %d %B %Y, %H:%M')}]"
+        if self._memory is not None:
+            self._memory.pop_changes()   # anything pending is not from this task
+        if self._schedule is not None:
+            self._schedule.pop_changes()
+        if self._apps is not None:
+            self._apps.pop_changes()
+        if self._browser is not None:
+            self._browser.pop_changes()
+            self._browser.pop_cost()
+        if self._anyapp is not None:
+            self._anyapp.pop_changes()
+            self._anyapp.pop_links()
+        try:
+            outcome: Outcome = await self._runner.run(prompt + stamp, on_text, self._preamble if self._memory else None)
+        finally:
+            if self._gate is not None:
+                self._gate.set_asker(None)   # between tasks nobody is being asked, so nothing can be approved
+                self._gate.cancel_all()
+            if self._anyapp is not None:
+                self._anyapp.end_task()      # an approval to change an app lasts for one task only
+        browser_cost = self._browser.pop_cost() if self._browser is not None else 0.0
+        self._ledger.add(outcome.cost_usd + browser_cost)
+        self._journal.write("task_end", status=outcome.status, cost_usd=outcome.cost_usd + browser_cost, browser_usd=browser_cost, turns=outcome.turns,
+                            detail=outcome.detail, seconds=round(time.monotonic() - started, 1))
+
+        notes = {
+            "stopped": "Stopped.",
+            "budget": f"I ended this task because it reached its budget of ${self._s.task_usd:.2f}.",
+            "turn_limit": f"I ended this task because it reached its limit of {self._s.max_turns} steps.",
+            "error": "Something went wrong and I could not finish. The details are in the log.",
+        }
+        body = outcome.text.strip()
+        note = notes.get(outcome.status)
+        if note:
+            body = f"{body}\n\n{note}" if body else note
+        if not body:
+            body = "I have nothing to say in reply, which should not happen. The details are in the log."
+        # Every change the model made to memory during this task is reported by code, not by the model.
+        changes = self._memory.pop_changes() if self._memory is not None else []
+        if changes:
+            body += "\n\nMemory: " + "; ".join(changes) + "."
+        acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else [])
+        # A connection link is added by code, exactly as the connector gave it. The model never handles it.
+        for app_name, link in (self._anyapp.pop_links() if self._anyapp is not None else []):
+            body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{link}"
+        if acted:
+            body += "\n\nDone on your accounts: " + "; ".join(acted) + "."
+        browsed = self._browser.pop_changes() if self._browser is not None else []
+        if browsed:
+            body += "\n\nBrowser: " + "; ".join(browsed) + "."
+        scheduled = self._schedule.pop_changes() if self._schedule is not None else []
+        if scheduled:
+            line = "; ".join(t.rstrip(".") for t in scheduled)
+            body += "\n\nSchedule: " + line + ("" if line.endswith("…") else ".")
+        # Whether the reply actually left is recorded. Before this, a task could be logged as done and its
+        # reply lost without a trace, which is exactly what could not be ruled out on the first day on a server.
+        parts = split_message(body)
+        sent = 0
+        try:
+            for part in parts:
+                await chat.send(part)
+                sent += 1
+            self._journal.write("reply", parts=sent, chars=len(body))
+        except Exception as e:
+            self._journal.write("error", where="reply", error=type(e).__name__, message=str(e)[:300], parts_sent=sent, parts=len(parts))
