@@ -226,7 +226,7 @@ a.tile:hover { border-color: var(--ink-3); }
 .rail li { margin: 0; }
 .rail li a, .rail li.planned { display: flex; padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
 .rail li a:hover { color: var(--accent); }
-.rail li .n { flex: none; width: 2.3em; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.rail li .n { flex: none; min-width: 2.3em; padding-right: 0.45em; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .rail li.here > a { color: var(--ink); font-weight: 600; }
 .rail li.planned { opacity: 0.55; }
 

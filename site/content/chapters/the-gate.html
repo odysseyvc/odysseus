@@ -120,6 +120,27 @@ context, and the source name with its URL. ...
 <p>This design keeps questions rare in three ways. Reading is never asked about. Changes to Odysseus's own files are reported instead of asked. And the rule can look at the inputs, so one tool can be asked about in some uses and not in others.</p>
 <p>What it does not have is any way to say "yes, and stop asking me about this kind of thing". Every routine is asked about, every time. With one action behind the gate that is no burden. When mail arrives it may become one: a long thread of replies would mean a tap for each. Standing approvals, limited in scope and time, are the usual answer, and they are also where products of this kind have got into trouble. They are not built, and the decision is left for when there is real use to judge it by.</p>
 
+<h2 id="holes">Four holes, found by reading the code</h2>
+<p>After the gate was built and tested, an independent reading of the whole program found four ways around it. None was found by a test, because each test checked what its author had thought to check. All four are now closed or narrowed. <span class="g v">Verified</span> by unit tests; none has been exercised by a real attack.</p>
+<div class="tablewrap"><table>
+<caption>The four holes and what was done about each.</caption>
+<thead><tr><th>Hole</th><th>How it could be used</th><th>What changed</th></tr></thead>
+<tbody>
+<tr><th>Two allowed actions that add up to a leak</th><td>Reading mail is allowed. Searching the web is allowed. A model misled by something it read could put what it found in the mailbox into a search query, which goes to a search company.</td><td>What is read from the owner's accounts is fingerprinted. A search or browser task that carries a fingerprint is shown to the owner first.</td></tr>
+<tr><th>Approving text that was not shown</th><td>Approval questions were cut off at a fixed length, while the full inputs ran. The owner could approve an email whose last paragraph they never saw.</td><td>Questions are sent whole, over several messages if need be, with the buttons on the last. A question too long to show is refused.</td></tr>
+<tr><th>One approval covering too much</th><td>In a connected app, approving one edit covered every later "change" in that app for the task, including clearing a sheet or running a script.</td><td>Clearing, replacing, archiving, merging and running things are asked about every time.</td></tr>
+<tr><th>A filter that hid too much</th><td>The filter that removes sign-in codes worked line by line, and an app's whole answer was one line. One suspicious word could blank the lot.</td><td>Answers are laid out one field per line.</td></tr>
+</tbody></table></div>
+<p>The first hole is the most instructive, because no single rule was wrong. "Reading is allowed" is right. "Searching is allowed" is right. The gate judged each tool call alone, and the danger was in the sequence.</p>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms">
+<dt>Fingerprint</dt><dd>A piece of text distinctive enough to recognise later: an email address, a number of six or more digits, a code mixing letters and digits such as a booking reference, or any run of six consecutive words.</dd>
+</dl></div>
+<p>Everything the mail, calendar and app tools return is fingerprinted as it is read. Before a search query or a browser task leaves, it is compared with the fingerprints. A match turns "allow" into "ask", and the question shows the owner the query and which details were recognised. Anything the owner typed themselves is exempt: if they wrote the booking reference in their message, searching for it is their request. An unattended routine has nobody to ask, so there a matching search is refused.</p>
+<div class="box caution"><div class="label">What a text match cannot do</div>
+<p>This check compares characters. It does not understand meaning. A paraphrase passes. So does a detail split across three searches, and so does a short fact such as a name or a date. It makes the crude version of the attack visible to the owner. It does not make leaking impossible, and it should not be described as if it did. The defences that have held against determined attackers in published work keep untrusted text away from the part of the system that can act; that separation is not built here.</p></div>
+<p>There is a cost as well. The owner may now be asked about a search, which never happened before. How often that interrupts ordinary use is <span class="g u">Not tested</span>.</p>
+
 <h2 id="tested">What is tested, and what is not</h2>
 <div class="tablewrap"><table>
 <caption>The 20 gate tests, all passing on 17 November 2026.</caption>

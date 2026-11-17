@@ -7,35 +7,119 @@
     {
       "title": "Part I · The problem",
       "chapters": [
-        {"n": 1, "slug": "what-we-are-building", "title": "What we are building", "revised": "17 November 2026",
-         "summary": "The goal in one sentence, the vocabulary the rest of the book depends on, and the test that will decide whether Odysseus works."},
-        {"n": 2, "slug": "three-products-one-design", "title": "Three products, one design", "revised": "17 November 2026",
-         "summary": "What Instinct, Muse and Grok Bot do, how each is built as far as anyone outside can tell, and where each has failed in public."},
-        {"n": 3, "slug": "anatomy-of-a-personal-agent", "title": "Anatomy of a personal agent", "revised": "17 November 2026",
-         "summary": "The nine parts every such assistant needs, how a single request travels through them, and the one rule that keeps it safe: the model proposes, code grants."}
+        {
+          "n": 1,
+          "slug": "what-we-are-building",
+          "title": "What we are building",
+          "revised": "17 November 2026",
+          "summary": "The goal in one sentence, the vocabulary the rest of the book depends on, and the test that will decide whether Odysseus works."
+        },
+        {
+          "n": 2,
+          "slug": "three-products-one-design",
+          "title": "Three products, one design",
+          "revised": "17 November 2026",
+          "summary": "What Instinct, Muse and Grok Bot do, how each is built as far as anyone outside can tell, and where each has failed in public."
+        },
+        {
+          "n": 3,
+          "slug": "anatomy-of-a-personal-agent",
+          "title": "Anatomy of a personal agent",
+          "revised": "17 November 2026",
+          "summary": "The nine parts every such assistant needs, how a single request travels through them, and the one rule that keeps it safe: the model proposes, code grants."
+        }
       ]
     },
     {
       "title": "Part II · The plan",
       "chapters": [
-        {"n": 4, "slug": "choosing-the-stack", "title": "Choosing the stack", "revised": "17 November 2026",
-         "summary": "How each part was chosen, why the first proposal was thrown out, and how to read a benchmark that was run by the company it flatters."},
-        {"n": 5, "slug": "the-build-plan", "title": "The build plan", "revised": "17 November 2026",
-         "summary": "Six stages, what each one proves, and the test each must pass before the next begins."}
+        {
+          "n": 4,
+          "slug": "choosing-the-stack",
+          "title": "Choosing the stack",
+          "revised": "17 November 2026",
+          "summary": "How each part was chosen, why the first proposal was thrown out, and how to read a benchmark that was run by the company it flatters."
+        },
+        {
+          "n": 5,
+          "slug": "the-build-plan",
+          "title": "The build plan",
+          "revised": "17 November 2026",
+          "summary": "Six stages, what each one proves, and the test each must pass before the next begins."
+        }
       ]
     },
     {
       "title": "Part III · The build",
       "chapters": [
-        {"n": 6, "slug": "a-thread-that-answers", "title": "A thread that answers", "revised": "17 November 2026", "summary": "The thin Telegram slice, file by file: one allowed user, streamed replies, web search, a stop that works, a budget and a log. Tested against a stand-in, then run live, which found a bug and a slow start."},
-        {"n": 7, "slug": "memory-that-survives", "title": "Memory that survives", "revised": "17 November 2026", "summary": "A small profile read in full, dated notes that are searched, a history of every change, and why every save is reported to the owner. Passed its test in one live run."},
-        {"n": 8, "slug": "speaking-first", "title": "Speaking first", "revised": "17 November 2026", "summary": "Reminders sent by code, routines run by a read-only agent, three recorded outcomes for every run, and why the half-hourly check was left switched off. Passed its test in one live run with the clock moved by hand."},
-        {"n": 9, "slug": "the-gate", "title": "The gate", "revised": "17 November 2026", "summary": "Allow, ask or refuse; a question written by code and answered with a button; two independent locks. Built before the first tool that needs it, and so far guarding only the setting up of routines."},
-        {"n": 10, "slug": "hands-mail-and-calendar", "title": "Hands: mail and calendar", "revised": "17 November 2026", "summary": "Six narrow tools over a connector service, with sends held at the gate and sign-in codes kept from the model. Also covers reaching any other app from the chat. Reads the owner's real accounts; has sent nothing yet."},
-        {"n": 11, "slug": "hands-the-browser", "title": "Hands: the browser", "revised": "17 November 2026", "summary": "Tasks handed to a vendor's browsing agent, for everything without a connector. The gate can only decide whether a run starts, and by the owner's choice it no longer asks even then. The chapter says plainly what that gives up. Browsed two public pages live; one report was doubtful."},
-        {"n": 12, "slug": "eyes-reading-files", "title": "Eyes: reading files", "revised": "17 November 2026", "summary": "Photos and PDFs the owner sends are turned into text by a recognition service and placed in the message, fenced off from the owner's own words. Read one invented test bill correctly; no real photograph yet."},
-        {"n": 13, "slug": "a-home-that-stays-awake", "title": "A home that stays awake", "revised": "17 November 2026", "summary": "Moving from the owner's laptop to a small always-on server: an image, a machine, a disk and secrets, with no door open to the internet. Ran there for five minutes before the hosting service stopped it, which the chapter examines."},
-        {"n": 14, "title": "Measuring it", "summary": "An evaluation set made from the owner's real errands, scored on trusted completion."}
+        {
+          "n": 6,
+          "slug": "a-thread-that-answers",
+          "title": "A thread that answers",
+          "revised": "17 November 2026",
+          "summary": "The thin Telegram slice, file by file: one allowed user, streamed replies, web search, a stop that works, a budget and a log. Tested against a stand-in, then run live, which found a bug and a slow start."
+        },
+        {
+          "n": 7,
+          "slug": "memory-that-survives",
+          "title": "Memory that survives",
+          "revised": "17 November 2026",
+          "summary": "A small profile read in full, dated notes that are searched, a history of every change, and why every save is reported to the owner. Passed its test in one live run."
+        },
+        {
+          "n": 8,
+          "slug": "speaking-first",
+          "title": "Speaking first",
+          "revised": "17 November 2026",
+          "summary": "Reminders sent by code, routines run by a read-only agent, three recorded outcomes for every run, and why the half-hourly check was left switched off. Passed its test in one live run with the clock moved by hand."
+        },
+        {
+          "n": 9,
+          "slug": "the-gate",
+          "title": "The gate",
+          "revised": "18 November 2026",
+          "summary": "Allow, ask or refuse; a question written by code and answered with a button; two independent locks. Then four holes found by reading the code, and what was done about each."
+        },
+        {
+          "n": 10,
+          "slug": "hands-mail-and-calendar",
+          "title": "Hands: mail and calendar",
+          "revised": "18 November 2026",
+          "summary": "Reading and acting in the owner's mail and calendar through a connector service: ten narrow tools, each with its own rule. Read live; sending, changing and deleting have run only in a test world."
+        },
+        {
+          "n": 11,
+          "slug": "hands-the-browser",
+          "title": "Hands: the browser",
+          "revised": "17 November 2026",
+          "summary": "Tasks handed to a vendor's browsing agent, for everything without a connector. The gate can only decide whether a run starts, and by the owner's choice it no longer asks even then. The chapter says plainly what that gives up. Browsed two public pages live; one report was doubtful."
+        },
+        {
+          "n": 12,
+          "slug": "eyes-reading-files",
+          "title": "Eyes: reading files",
+          "revised": "17 November 2026",
+          "summary": "Photos and PDFs the owner sends are turned into text by a recognition service and placed in the message, fenced off from the owner's own words. Read one invented test bill correctly; no real photograph yet."
+        },
+        {
+          "n": 13,
+          "slug": "a-home-that-stays-awake",
+          "title": "A home that stays awake",
+          "revised": "17 November 2026",
+          "summary": "Moving from the owner's laptop to a small always-on server: an image, a machine, a disk and secrets, with no door open to the internet. Ran there for five minutes before the hosting service stopped it, which the chapter examines."
+        },
+        {
+          "n": 14,
+          "title": "Measuring it",
+          "summary": "An errand suite: the real agent against a seeded test world, scored by code on what is true afterwards. It found real faults, scored 97%, and was judged not good enough. The chapter explains why.",
+          "slug": "measuring-it",
+          "revised": "18 November 2026"
+        },
+        {
+          "n": 15,
+          "title": "A world that does not hold still",
+          "summary": "What the research on evaluation found, and the measurement built from it: situations nobody listed, in a world where things happen on their own."
+        }
       ]
     }
   ]

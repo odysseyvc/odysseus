@@ -100,6 +100,24 @@
 <p>Anything Odysseus does on an account is reported by code at the end of the reply, under "Done on your accounts", in the same manner as changes to memory and the schedule.</p>
 <p>Disconnecting is done at the connector service or in the Google account's own security settings, which list every application with access and let the owner revoke it. Chapter 2 recorded a reference product that went on reading an inbox after the user disconnected it. Here there is nothing held locally to go on reading with: Odysseus keeps no copy of the mailbox and no token. It does keep whatever the model chose to write into memory about what it read, and the conversation itself, until that is condensed or the program restarts.</p>
 
+<h2 id="more">Four more tools: change, delete, draft, archive</h2>
+<p>The errand suite of Chapter 14 asked the agent to move a meeting, and it could not: there was no tool to change an event. Four tools were added, each calling one of the connector's actions, with the inputs taken from the connector's own description of that action.</p>
+<div class="tablewrap"><table>
+<caption>The four added tools and the gate's answer for each.</caption>
+<thead><tr><th>Tool</th><th>What it does</th><th>Gate</th><th>Why</th></tr></thead>
+<tbody>
+<tr><th>calendar_change</th><td>Moves an event, changes its length or renames it</td><td>Asks if the event has guests; otherwise allowed and reported</td><td>Guests are emailed the change. An event nobody else is on only changes the owner's own calendar.</td></tr>
+<tr><th>calendar_delete</th><td>Deletes an event</td><td>Always asks</td><td>It cannot be taken back from the chat.</td></tr>
+<tr><th>mail_draft</th><td>Saves an email as a draft, unsent</td><td>Allowed and reported</td><td>Nothing leaves the account. The owner sends it, or asks for it to be sent.</td></tr>
+<tr><th>mail_archive</th><td>Takes a message out of the inbox</td><td>Allowed and reported</td><td>The message is kept and can be moved back.</td></tr>
+</tbody></table></div>
+<p>Changing and deleting raise a question the first six tools did not. To write the approval question for "delete this event", the program has to say which event. The model supplies only an id. If the question were written from what the model says the event is, a misled model could describe a harmless event and delete an important one.</p>
+<p>So the program keeps its own record. Whenever the calendar is listed, it notes each event's id, title, time and guests. A change or a deletion is accepted only for an id in that record, and the question is written from the record. An id the program has never seen is refused before the owner is asked anything. The same record decides whether a change needs asking: the program, not the model, knows whether the event has guests.</p>
+<div class="box example"><div class="label">Worked example: moving two events</div>
+<p>"Push my standup review back an hour." The agent lists today's calendar and finds the event. The program's record shows no guests, so the change runs without a question and the reply ends "Done on your accounts: changed "Team standup review" from Wed 18 Nov at 11:00 to Wed 18 Nov 2026 at 12:00".</p>
+<p>"Move my 1:1 with Sam to 4pm." The record shows one guest. The owner is shown the event, its time now, its new time and "Guests: sam@example.org", with Approve and Decline. Only after Approve does the change run, and Sam is notified.</p></div>
+<p>One more change came from the suite. Mail search returned at most ten messages and did not say when there were more. Asked to archive the week's promotions, the agent archived the ones it could see and reported the job done. Search now returns up to 25 and says when its list may be cut short, with a hint to narrow the search. <span class="g v">Verified</span> in the test world; all four tools are <span class="g u">Not tested</span> against the real service.</p>
+
 <h2 id="tested">What is tested, and what is not</h2>
 <div class="tablewrap"><table>
 <caption>The 20 mail and calendar tests, all passing on 17 November 2026 against a stand-in for the connector.</caption>
