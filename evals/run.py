@@ -56,7 +56,7 @@ class OwnerChat:
     def __init__(self, tap: str):
         self.sent: list[str] = []
         self.asks: list[str] = []
-        self._tap = tap
+        self._taps = tap.split(",")      # one answer per question, in order; the last one repeats
         self.conv = None
         self.owner = 0
 
@@ -71,7 +71,8 @@ class OwnerChat:
 
         async def tap():
             await asyncio.sleep(0.3)
-            await self.conv.handle_decision(self.owner, approval_id, self._tap == "approve")
+            answer = self._taps[min(len(self.asks), len(self._taps)) - 1]
+            await self.conv.handle_decision(self.owner, approval_id, answer == "approve")
         asyncio.get_running_loop().create_task(tap())
 
 
@@ -109,15 +110,16 @@ async def run_trial(task: Task, n: int, base, out: Path, search_shape, agent: st
 
     if agent == "real":
         apps = Apps(world, journal, clock.now, tz="Asia/Kolkata")
-        gate = make_gate(journal, clock.now, timeout_s=30, with_apps=True)
+        gate = make_gate(journal, clock.now, timeout_s=30, apps=apps)
         runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps), gate=gate,
                              system_prompt=conversation_prompt(True))
         conv = Conversation(settings, journal, ledger, runner, memory, now=clock.now, schedule=schedule, gate=gate, apps=apps)
         chat.conv, chat.owner = conv, settings.owner_id
         try:
             async def go():
-                await conv.handle(settings.owner_id, task.say, chat)
-                await conv.wait()
+                for message in (task.say, *task.then):       # the errand, then any follow-up messages
+                    await conv.handle(settings.owner_id, message, chat)
+                    await conv.wait()
             await asyncio.wait_for(go(), TRIAL_TIMEOUT_S)
             ends = [r for r in journal.read() if r["kind"] == "task_end"]
             status = ends[-1]["status"] if ends else "no task"
@@ -153,7 +155,7 @@ async def run_trial(task: Task, n: int, base, out: Path, search_shape, agent: st
                 schedule.add(kind, text, when.isoformat())
 
     reply = "\n\n".join(chat.sent)
-    ctx = Ctx(world, memory, schedule, reply, chat.asks, delivered, journal.read())
+    ctx = Ctx(world, memory, schedule, reply, chat.asks, delivered, journal.read(), search.queries)
     try:
         failures = task.check(ctx)
     except Exception as e:
@@ -173,7 +175,8 @@ async def run_trial(task: Task, n: int, base, out: Path, search_shape, agent: st
     return {"task": task.id, "area": task.area, "trial": n, "passed": passed, "status": status, "failures": failures, "overreach": over,
             "false_done": false_done, "action": bool(task.action), "trap": task.trap, "trap_acted": acted_on_trap, "trap_asked": asked_for_trap,
             "asks": len(chat.asks), "asks_expected": task.asks, "extra_asks": extra_asks, "cost_usd": round(cost, 4), "seconds": seconds,
-            "say": task.say, "reply": reply, "questions": chat.asks, "sent": world.sent, "created": world.created,
+            "say": " // ".join((task.say, *task.then)), "reply": reply, "searches": search.queries, "drafts": world.drafts,
+            "archived": world.archived, "deleted": [e["title"] for e in world.deleted], "changed": world.changed, "questions": chat.asks, "sent": world.sent, "created": world.created,
             "jobs": [j.describe() for j in schedule.jobs()], "memory": [e.text for e in memory.profile()],
             "tools": [r["name"] for r in journal.read() if r["kind"] == "tool_request"],
             "errors": [r for r in journal.read() if r["kind"] == "error"]}

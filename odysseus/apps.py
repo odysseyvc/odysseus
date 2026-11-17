@@ -5,8 +5,11 @@ ones written here, each of which calls exactly one of the connector's actions:
 
   mail_search, mail_read, calendar_list     read      allowed
   mail_send, mail_reply                     send      the owner is asked first
-  calendar_create                           change    asked if anyone is invited,
+  calendar_create, calendar_change          change    asked if anyone is invited,
                                                       otherwise allowed and reported
+  calendar_delete                           delete    the owner is asked first
+  mail_draft, mail_archive                  change    allowed and reported: nothing leaves
+                                                      the account and both can be undone
 
 Keeping our own tools has three purposes. The gate can have a rule and a
 plain-language question for each one. Both locks apply (gate.py), because the
@@ -45,6 +48,9 @@ def _t(name: str) -> str:
 
 READ_TOOLS = (_t("mail_search"), _t("mail_read"), _t("calendar_list"))
 MAIL_SEND, MAIL_REPLY, CALENDAR_CREATE = _t("mail_send"), _t("mail_reply"), _t("calendar_create")
+CALENDAR_CHANGE, CALENDAR_DELETE, MAIL_DRAFT, MAIL_ARCHIVE = _t("calendar_change"), _t("calendar_delete"), _t("mail_draft"), _t("mail_archive")
+# Tools whose handlers check the gate a second time before they run (lock 2).
+GUARDED = (MAIL_SEND, MAIL_REPLY, CALENDAR_CREATE, CALENDAR_CHANGE, CALENDAR_DELETE)
 
 
 class AppError(Exception):
@@ -173,6 +179,8 @@ def format_events(data: Any) -> str:
             line += f" @ {_clip(e['location'], 80)}"
         if who:
             line += f" (with {who})"
+        if e.get("id"):
+            line += f"  [id: {e['id']}]"
         lines.append(hide_secrets(line))
     return "\n".join(lines) or "No events."
 
@@ -241,9 +249,59 @@ def describe_event(args: dict[str, Any], now: Callable[[], datetime] = datetime.
     return text
 
 
-def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now) -> None:
+def _planned_change(args: dict[str, Any], now: Callable[[], datetime], apps: "Apps | None") -> tuple[dict[str, Any], str, datetime, int]:
+    """The event as it is, and the title, start and length it would have. Raises if the request makes no sense."""
+    event = apps.event(str(args.get("event_id", "")).strip()) if apps is not None else None
+    if event is None:
+        raise AppError("That event id is not one calendar_list has returned. List the calendar for that day first, then use the id shown.")
+    if event["start"] is None:
+        raise AppError("All-day events cannot be changed yet.")
+    old_minutes = int((event["end"] - event["start"]).total_seconds() // 60)
+    title = str(args.get("title") or "").strip() or event["title"]
+    start = event["start"]
+    if str(args.get("start") or "").strip():
+        start, _ = _event_times({"start": args["start"]}, now)
+    minutes = int(args.get("duration_minutes") or old_minutes)
+    if not 5 <= minutes <= 24 * 60:
+        raise AppError("duration_minutes must be between 5 and 1440.")
+    if (title, start, minutes) == (event["title"], event["start"], old_minutes):
+        raise AppError("Nothing would change: give a new start, a new length or a new title.")
+    return event, title, start, minutes
+
+
+def describe_change(args: dict[str, Any], now: Callable[[], datetime] = datetime.now, apps: "Apps | None" = None) -> str:
+    event, title, start, minutes = _planned_change(args, now, apps)
+    end = start + timedelta(minutes=minutes)
+    text = (f"Change this event and email the change to its guests?\n\nGuests: {', '.join(event['guests'])}\n"
+            f"Event: {event['title']}\nNow: {event['start']:%a %d %b %Y, %H:%M} to {event['end']:%H:%M}\n"
+            f"New: {start:%a %d %b %Y, %H:%M} to {end:%H:%M}")
+    return text + (f"\nNew title: {title}" if title != event["title"] else "")
+
+
+def describe_delete(args: dict[str, Any], apps: "Apps | None" = None) -> str:
+    event = apps.event(str(args.get("event_id", "")).strip()) if apps is not None else None
+    if event is None:
+        raise AppError("That event id is not one calendar_list has returned. List the calendar for that day first, then use the id shown.")
+    when = f"{event['start']:%a %d %b %Y, %H:%M} to {event['end']:%H:%M}" if event["start"] else "all day"
+    text = f"Delete this event from your calendar?\n\nEvent: {event['title']}\nWhen: {when}"
+    return text + (f"\nGuests who will be told it is cancelled: {', '.join(event['guests'])}" if event["guests"] else "")
+
+
+def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "Apps | None" = None) -> None:
     for name in READ_TOOLS:
         gate.rule(name, ALLOW)
+
+    def change_decision(a: dict[str, Any]) -> str:
+        # Moving an event that has guests emails them, so it is asked about. An event nobody else is on only
+        # changes the owner's own calendar. An id the program has not seen is asked about, and the question
+        # then fails to be written, so nothing happens.
+        event = apps.event(str(a.get("event_id", "")).strip()) if apps is not None else None
+        return ALLOW if event is not None and not event["guests"] else ASK
+
+    gate.rule(CALENDAR_CHANGE, change_decision, lambda a: describe_change(a, now, apps))
+    gate.rule(CALENDAR_DELETE, ASK, lambda a: describe_delete(a, apps))
+    gate.rule(MAIL_DRAFT, ALLOW)       # a draft stays in the owner's account until they send it themselves
+    gate.rule(MAIL_ARCHIVE, ALLOW)     # archiving hides a message from the inbox; it deletes nothing
     gate.rule(MAIL_SEND, ASK, describe_send)
     gate.rule(MAIL_REPLY, ASK, describe_reply)
     # An event with guests sends them email, so it is asked about. One with no guests only changes the owner's own calendar.
@@ -256,6 +314,33 @@ class Apps:
     def __init__(self, backend: AppBackend, journal: Journal, now: Callable[[], datetime] = datetime.now, tz: str = ""):
         self._b, self._journal, self._now, self._tz = backend, journal, now, tz
         self._pending: list[str] = []
+        self._events: dict[str, dict[str, Any]] = {}     # events calendar_list has returned, by id
+        self.taint = None                                # set by make_gate; remembers what was read from the accounts
+
+    def event(self, event_id: str) -> dict[str, Any] | None:
+        return self._events.get(event_id)
+
+    def _seen(self, text: str) -> str:
+        if self.taint is not None:
+            self.taint.add(text)
+        return text
+
+    def _remember_events(self, data: Any) -> None:
+        data = _unwrap(data)
+        items = data if isinstance(data, list) else _first(data, "items", "events", default=[]) if isinstance(data, dict) else []
+        for e in items:
+            if not isinstance(e, dict) or not e.get("id"):
+                continue
+            def local(v):
+                value = v.get("dateTime") if isinstance(v, dict) else None
+                try:
+                    return datetime.fromisoformat(value).replace(tzinfo=None) if value else None
+                except ValueError:
+                    return None
+            start, end = local(e.get("start") or {}), local(e.get("end") or {})
+            self._events[str(e["id"])] = {
+                "title": str(e.get("summary") or "(no title)"), "start": start, "end": end if start else None,
+                "guests": [a["email"] for a in e.get("attendees") or [] if isinstance(a, dict) and a.get("email") and not a.get("self")]}
 
     def pop_changes(self) -> list[str]:
         out, self._pending = self._pending, []
@@ -309,15 +394,20 @@ class Apps:
             return handler
 
         async def mail_search(a):
-            n = max(1, min(int(a.get("max_results") or 5), 10))
+            n = max(1, min(int(a.get("max_results") or 10), 25))
             data = await self._call("mail_search", "GMAIL_FETCH_EMAILS", {"query": str(a.get("query", "")), "max_results": n, "verbose": False})
-            return MAIL_NOTE + "\n\n" + format_messages(data)
+            text = format_messages(data)
+            if text.count("\nSubject: ") >= n:
+                # Say so when the list may be cut short, so that "all of them" is not claimed from a partial list.
+                text += (f"\n\n[These are the {n} newest matches. There may be more: narrow the query, for example by date "
+                         "(after:2026/11/15 before:2026/11/17) or by sender, to see the rest.]")
+            return MAIL_NOTE + "\n\n" + self._seen(text)
 
         async def mail_read(a):
             if not str(a.get("message_id", "")).strip():
                 raise AppError("mail_read needs a message_id from mail_search.")
             data = await self._call("mail_read", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", {"message_id": str(a["message_id"]).strip(), "format": "full"})
-            return MAIL_NOTE + "\n\n" + format_messages(data, full=True)
+            return MAIL_NOTE + "\n\n" + self._seen(format_messages(data, full=True))
 
         async def mail_send(a):
             describe_send(a)   # the same checks the question went through
@@ -352,7 +442,8 @@ class Apps:
             data = await self._call("calendar_list", "GOOGLECALENDAR_EVENTS_LIST", {
                 "calendarId": "primary", "timeMin": self._rfc3339(start), "timeMax": self._rfc3339(end),
                 "singleEvents": True, "orderBy": "startTime", "maxResults": 40})
-            return CALENDAR_NOTE + "\n\n" + format_events(data)
+            self._remember_events(data)
+            return CALENDAR_NOTE + "\n\n" + self._seen(format_events(data))
 
         async def calendar_create(a):
             start, minutes = _event_times(a, self._now)
@@ -372,15 +463,73 @@ class Apps:
                                  + (f", inviting {', '.join(guests)}" if guests else ""))
             return "Created."
 
+        async def calendar_change(a):
+            event, title, start, minutes = _planned_change(a, self._now, self)
+            end = start + timedelta(minutes=minutes)
+            event_id = str(a["event_id"]).strip()
+            args = {"calendar_id": "primary", "event_id": event_id, "start_time": start.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "end_time": end.strftime("%Y-%m-%dT%H:%M:%S"), "timezone": self._zone(),
+                    "send_updates": "all" if event["guests"] else "none"}
+            if title != event["title"]:
+                args["summary"] = title
+            await self._call("calendar_change", "GOOGLECALENDAR_PATCH_EVENT", args)
+            self._pending.append(f"changed \"{_clip(event['title'], 60)}\" from {event['start']:%a %d %b at %H:%M} to {start:%a %d %b %Y at %H:%M}"
+                                 + (f", {minutes} minutes" if minutes != int((event['end'] - event['start']).total_seconds() // 60) else "")
+                                 + (f", renamed \"{_clip(title, 60)}\"" if title != event["title"] else "")
+                                 + (f", telling {', '.join(event['guests'])}" if event["guests"] else ""))
+            self._events[event_id] = dict(event, title=title, start=start, end=end)
+            return "Changed."
+
+        async def calendar_delete(a):
+            event_id = str(a.get("event_id", "")).strip()
+            event = self.event(event_id)
+            describe_delete(a, self)
+            await self._call("calendar_delete", "GOOGLECALENDAR_DELETE_EVENT",
+                             {"calendar_id": "primary", "event_id": event_id, "send_updates": "all" if event["guests"] else "none"})
+            self._pending.append(f"deleted \"{_clip(event['title'], 60)}\"" + (f" on {event['start']:%a %d %b %Y at %H:%M}" if event["start"] else "")
+                                 + (f", telling {', '.join(event['guests'])}" if event["guests"] else ""))
+            self._events.pop(event_id, None)
+            return "Deleted."
+
+        async def mail_draft(a):
+            to, cc = _emails(a.get("to")), _emails(a.get("cc"))
+            body = str(a.get("body", "")).strip()
+            if not body:
+                raise AppError("A draft needs a body.")
+            if not to and not str(a.get("thread_id", "")).strip():
+                raise AppError("A draft needs a recipient in `to`, or the `thread_id` it replies to.")
+            args = {"subject": str(a.get("subject", "")), "body": body, "is_html": False}
+            if to:
+                args["recipient_email"] = to[0]
+            if to[1:]:
+                args["extra_recipients"] = to[1:]
+            if cc:
+                args["cc"] = cc
+            if str(a.get("thread_id", "")).strip():
+                args["thread_id"] = str(a["thread_id"]).strip()
+            await self._call("mail_draft", "GMAIL_CREATE_EMAIL_DRAFT", args)
+            self._pending.append(f"saved a draft{' to ' + ', '.join(to) if to else ''}: {_clip(a.get('subject', '') or '(no subject)', 80)} (not sent)")
+            return "Saved as a draft in the owner's mailbox. It has NOT been sent; the owner sends it themselves, or asks you to send it."
+
+        async def mail_archive(a):
+            message_id = str(a.get("message_id", "")).strip()
+            if not message_id:
+                raise AppError("mail_archive needs a message_id from mail_search.")
+            await self._call("mail_archive", "GMAIL_ADD_LABEL_TO_EMAIL", {"message_id": message_id, "remove_label_ids": ["INBOX"]})
+            self._pending.append(f"archived message {message_id}")
+            return "Archived: it is out of the inbox and still in All Mail."
+
         return {k: wrap(v) for k, v in {"mail_search": mail_search, "mail_read": mail_read, "mail_send": mail_send,
                                          "mail_reply": mail_reply, "calendar_list": calendar_list,
-                                         "calendar_create": calendar_create}.items()}
+                                         "calendar_create": calendar_create, "calendar_change": calendar_change,
+                                         "calendar_delete": calendar_delete, "mail_draft": mail_draft,
+                                         "mail_archive": mail_archive}.items()}
 
 
 SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
     "mail_search": ("Search the owner's mailbox. `query` uses Gmail search syntax, for example 'from:priya newer_than:7d' or "
                     "'is:unread'. Returns sender, subject, date and a short extract, with ids for mail_read.",
-                    {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer", "description": "1 to 10. Default 5."}},
+                    {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer", "description": "1 to 25. Default 10."}},
                      "required": ["query"]}),
     "mail_read": ("Read one message in full, by the id mail_search returned.",
                   {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}),
@@ -401,4 +550,19 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
                                                           "attendees": {"type": "array", "items": {"type": "string"}},
                                                           "description": {"type": "string"}},
                          "required": ["title", "start"]}),
+    "calendar_change": ("Move, lengthen, shorten or rename an existing event, by the id calendar_list shows in [id: ...]. Give only what "
+                        "changes. If the event has guests they are emailed the change, and the owner must approve first.",
+                        {"type": "object", "properties": {"event_id": {"type": "string"}, "start": {"type": "string", "description": "New local start, like 2026-11-18T16:00."},
+                                                          "duration_minutes": {"type": "integer"}, "title": {"type": "string"}},
+                         "required": ["event_id"]}),
+    "calendar_delete": ("Delete an event, by the id calendar_list shows in [id: ...]. The owner must approve.",
+                        {"type": "object", "properties": {"event_id": {"type": "string"}}, "required": ["event_id"]}),
+    "mail_draft": ("Save an email as a draft in the owner's mailbox WITHOUT sending it, for when the owner asks for a draft or wants "
+                   "to look before anything goes out. Give `thread_id` to draft a reply inside an existing thread.",
+                   {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "cc": {"type": "array", "items": {"type": "string"}},
+                                                     "subject": {"type": "string"}, "body": {"type": "string", "description": "Plain text."},
+                                                     "thread_id": {"type": "string"}},
+                    "required": ["subject", "body"]}),
+    "mail_archive": ("Archive one message, by the id mail_search returned: it leaves the inbox and is kept. Only when the owner asks.",
+                     {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}),
 }

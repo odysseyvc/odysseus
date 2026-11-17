@@ -35,6 +35,7 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 from .journal import Journal
 
 ALLOW, ASK, REFUSE = "allow", "ask", "refuse"
+MAX_QUESTION = 12000     # characters of an approval question; it is sent whole, over several messages if need be
 
 
 @dataclass
@@ -125,6 +126,11 @@ class Gate:
             self._journal.write("gate", tool=tool, verdict="refused", reason=f"cannot describe: {type(e).__name__}")
             detail = f" ({e})" if type(e).__name__.endswith("Error_") or type(e).__name__ in ("ScheduleError", "AppError") else ""
             return False, f"This request is not well formed, so it was not shown to the owner and was not done.{detail}", None
+        if len(text) > MAX_QUESTION:
+            # What cannot be shown in full cannot be approved: the owner would be agreeing to text they never saw.
+            self._journal.write("gate", tool=tool, verdict="refused", reason="too long to show", chars=len(text))
+            return False, (f"This is too long to show the owner in full ({len(text)} characters; the limit is {MAX_QUESTION}), so it was "
+                           "not shown and was not done. Do it in smaller pieces."), None
         approval = Approval(secrets.token_hex(4), tool, frozen, text, asyncio.get_running_loop().create_future())
         self._pending[approval.id] = approval
         self._journal.write("gate", tool=tool, verdict="asked", approval=approval.id, args=frozen)

@@ -128,11 +128,26 @@ def describe_browse(args: dict[str, Any]) -> str:
             f"Task it will be given:\n{task}")
 
 
-def add_rules(gate: Gate, ask_signed_in: bool = False) -> None:
-    if ask_signed_in:
-        gate.rule(BROWSE_TOOL, lambda a: ASK if a.get("signed_in") else ALLOW, describe_browse)
-    else:
-        gate.rule(BROWSE_TOOL, ALLOW)
+def add_rules(gate: Gate, ask_signed_in: bool = False, taint: Any = None) -> None:
+    """A browser run is asked about if it is signed in and the owner wants that, or if its task carries details
+    read from the owner's accounts (taint.py): the task is handed to another company's agent and typed into websites."""
+    def leak(a: dict[str, Any]) -> list[str]:
+        return taint.leaked(str(a.get("task", ""))) if taint is not None else []
+
+    def decide(a: dict[str, Any]) -> str:
+        return ASK if (ask_signed_in and a.get("signed_in")) or leak(a) else ALLOW
+
+    def describe(a: dict[str, Any]) -> str:
+        found = leak(a)
+        if not found:
+            return describe_browse(a)
+        task = " ".join(str(a.get("task", "")).split())
+        if not task:
+            raise ValueError("no task")
+        return ("Give this task to the browser? It contains details that came from your mail, calendar or apps, and the "
+                f"browser may type them into websites.\n\nDetails recognised: {', '.join(found)}\n\nTask it will be given:\n{task}")
+
+    gate.rule(BROWSE_TOOL, decide, describe)
 
 
 SCHEMA = (

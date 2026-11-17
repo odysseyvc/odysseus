@@ -43,7 +43,7 @@ async def main() -> int:
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
     gate = make_gate(journal, now, with_apps=apps is not None, with_browser=browser is not None,
-                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp)
+                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,

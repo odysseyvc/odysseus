@@ -13,11 +13,14 @@ rule and question for each, as it has for mail. It sorts an action by the words
 in its name instead:
 
   reading   (GET, LIST, SEARCH, ...)       allowed
-  changing  (CREATE, UPDATE, APPEND, ...)  the owner is asked once per app per task;
-                                           approving covers further changes in that
-                                           app until the task ends
-  reaching other people, or destroying
-            (SEND, SHARE, DELETE, PAY, ...) the owner is asked every time
+  adding or editing
+            (CREATE, UPDATE, APPEND, ...)  the owner is asked once per app per task;
+                                           approving covers further additions and edits
+                                           in that app until the task ends
+  reaching other people, destroying, or
+  setting something in motion
+            (SEND, SHARE, DELETE, PAY, CLEAR,
+             REPLACE, RUN, ARCHIVE, ...)   the owner is asked every time
 
 An action whose name fits none of these is treated as changing. Sorting by name
 is a rule of thumb and can be wrong; it errs towards asking.
@@ -40,12 +43,21 @@ OWN_TOOLS = {"GMAIL": "mail", "GOOGLECALENDAR": "calendar"}   # these have their
 
 ALWAYS_ASK = {"SEND", "REPLY", "POST", "PUBLISH", "SHARE", "SHARING", "INVITE", "DELETE", "REMOVE", "TRASH", "DESTROY", "PURGE",
               "PAY", "PAYMENT", "TRANSFER", "PURCHASE", "BUY", "ORDER", "CHARGE", "REFUND", "MESSAGE", "COMMENT", "FORWARD",
-              "EMAIL", "TWEET", "DM", "NOTIFY", "BROADCAST", "REVOKE", "GRANT", "PERMISSION", "PERMISSIONS", "TRANSFER"}
-CHANGES = {"CREATE", "UPDATE", "ADD", "APPEND", "SET", "WRITE", "INSERT", "REPLACE", "CLEAR", "MOVE", "COPY", "RENAME", "EDIT",
-           "MODIFY", "PATCH", "PUT", "UPSERT", "DUPLICATE", "IMPORT", "UPLOAD", "FORMAT", "MERGE", "SORT", "RUN", "EXECUTE",
-           "START", "STOP", "ENABLE", "DISABLE", "CANCEL", "CLOSE", "OPEN", "ASSIGN", "APPROVE", "ARCHIVE", "RESTORE", "BATCH"}
-READS = {"GET", "LIST", "FETCH", "SEARCH", "FIND", "READ", "LOOKUP", "QUERY", "RETRIEVE", "VIEW", "CHECK", "COUNT", "DESCRIBE",
-         "EXPORT", "DOWNLOAD", "INFO", "STATUS", "NAMES", "PREVIEW"}
+              "EMAIL", "TWEET", "DM", "NOTIFY", "BROADCAST", "REVOKE", "GRANT", "PERMISSION", "PERMISSIONS", "TRANSFER",
+              # Not reaching anyone, but hard to undo or able to start something: asked every time, never covered by
+              # an earlier approval in the same app.
+              "CLEAR", "REPLACE", "OVERWRITE", "TRUNCATE", "RESET", "MERGE", "ARCHIVE", "UNARCHIVE", "RESTORE", "RUN", "EXECUTE",
+              "TRIGGER", "START", "STOP", "ENABLE", "DISABLE", "CANCEL", "CLOSE", "REOPEN", "APPROVE", "REJECT", "ACCEPT",
+              "DECLINE", "SUBMIT", "DEPLOY", "RELEASE", "LOCK", "UNLOCK", "MOVE", "BATCH", "BULK", "LEAVE", "JOIN", "KICK", "BAN"}
+CHANGES = {"CREATE", "UPDATE", "ADD", "APPEND", "SET", "WRITE", "INSERT", "COPY", "RENAME", "EDIT", "MODIFY", "PATCH", "PUT",
+           "UPSERT", "DUPLICATE", "IMPORT", "UPLOAD", "FORMAT", "SORT", "OPEN", "ASSIGN", "UNASSIGN", "MARK", "UNMARK", "TOGGLE",
+           "STAR", "UNSTAR", "PIN", "UNPIN", "LIKE", "UNLIKE", "FOLLOW", "UNFOLLOW", "SUBSCRIBE", "UNSUBSCRIBE", "MUTE", "UNMUTE",
+           "LABEL", "TAG", "UNTAG", "RESOLVE", "COMPLETE", "SYNC", "SAVE", "GENERATE", "CONVERT", "LINK", "UNLINK", "ATTACH"}
+# Words that mean "this only reads" wherever they appear in a name...
+READS = {"GET", "LIST", "FETCH", "SEARCH", "FIND", "LOOKUP", "QUERY", "RETRIEVE", "COUNT", "DESCRIBE", "EXPORT", "DOWNLOAD"}
+# ...and words that mean it only when they are the action itself (the first word after the app's name).
+# "SHEETS_READ_RANGE" reads; "GMAIL_MARK_AS_READ" and "ISSUE_SET_STATUS" do not.
+READS_IF_FIRST = {"READ", "VIEW", "CHECK", "INFO", "STATUS", "NAMES", "PREVIEW", "SHOW", "WHOAMI", "ME"}
 
 
 def toolkit_of(slug: str) -> str:
@@ -54,12 +66,13 @@ def toolkit_of(slug: str) -> str:
 
 def classify(slug: str) -> str:
     """read | change | reach, from the words in a catalogue tool's name."""
-    words = set(slug.upper().split("_")[1:])
-    if words & ALWAYS_ASK:
-        return "reach"
-    if words & READS and not words & (CHANGES - {"BATCH"}):
-        return "read"
-    return "change"
+    ordered = slug.upper().split("_")[1:]
+    words = set(ordered)
+    hard = words & (ALWAYS_ASK - {"BATCH", "BULK"})     # "many at once" does not by itself make something risky
+    reads = bool(words & READS) or (bool(ordered) and ordered[0] in READS_IF_FIRST)
+    if reads and not hard and not words & CHANGES:
+        return "read"       # includes BATCH_GET: fetching many things at once is still only fetching
+    return "reach" if hard else "change"
 
 
 class AnyAppBackend(Protocol):
@@ -70,9 +83,9 @@ class AnyAppBackend(Protocol):
     def execute(self, slug: str, arguments: dict[str, Any]) -> Any: ...
 
 
-def _pretty(args: dict[str, Any], limit: int = 1500) -> str:
-    text = json.dumps(args, indent=2, ensure_ascii=False, default=str)
-    return text if len(text) <= limit else text[:limit].rstrip() + "\n… (cut; the full inputs are what will run)"
+def _pretty(args: dict[str, Any]) -> str:
+    # Shown whole. The gate refuses a question too long to show in full, so nothing is ever approved unseen.
+    return json.dumps(args, indent=2, ensure_ascii=False, default=str)
 
 
 class AnyApp:
@@ -82,6 +95,7 @@ class AnyApp:
         self._task_ok: set[str] = set()         # apps the owner has approved changes in, for this task only
         self._changes: list[str] = []
         self._links: list[tuple[str, str]] = []
+        self.taint = None                       # set by make_gate; remembers what was read from the apps
 
     # --- what the owner is shown ---------------------------------------------------
 
@@ -120,9 +134,9 @@ class AnyApp:
         app = self.name(toolkit_of(slug))
         if classify(slug) == "reach":
             return f"Do this in {app}?\n\nAction: {slug}\nWith:\n{_pretty(inputs)}"
-        return (f"Let me make changes in {app} for this task?\n\n"
-                f"Approving covers further changes in {app} until this task ends. Anything that sends, shares or deletes "
-                f"will still ask each time.\n\nFirst change: {slug}\nWith:\n{_pretty(inputs)}")
+        return (f"Let me add and edit things in {app} for this task?\n\n"
+                f"Approving covers further additions and edits in {app} until this task ends. Anything that sends, shares, deletes, "
+                f"clears, replaces or starts something will still ask each time.\n\nFirst change: {slug}\nWith:\n{_pretty(inputs)}")
 
     def approved(self, args: dict[str, Any]) -> None:
         slug = str(args.get("tool", "")).strip().upper()
@@ -217,9 +231,13 @@ class AnyApp:
             self._journal.write("tool", name="app_run", ok=True, tool=slug, action=kind)
             if kind != "read":
                 self._changes.append(f"ran {slug} in {self.name(toolkit_of(slug))}")
-            text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False, default=str)
+            # One field per line, so that hiding a line that looks like a sign-in code hides that field and not the whole result.
+            text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False, default=str, indent=1)
             cut = "" if len(text) <= 8000 else f"\n[Cut: {len(text)} characters in all. Ask for less, or a narrower range.]"
-            return f"{APP_NOTE}\n\n{hide_secrets(text[:8000])}{cut}"
+            shown = hide_secrets(text[:8000])
+            if self.taint is not None:
+                self.taint.add(shown)
+            return f"{APP_NOTE}\n\n{shown}{cut}"
 
         return {"app_find": wrap("app_find", app_find), "app_connect": wrap("app_connect", app_connect), "app_run": wrap("app_run", app_run)}
 

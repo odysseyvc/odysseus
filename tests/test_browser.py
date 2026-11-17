@@ -87,7 +87,7 @@ async def test_by_default_a_signed_in_run_starts_without_a_question_and_the_owne
     assert isinstance(await x.gate.permission(BROWSE_TOOL, dict(SIGNED)), PermissionResultAllow)
     out = await x.browse(dict(SIGNED))
     assert "is_error" not in out and x.backend.runs == [(SIGNED["task"], True, 0.5)]
-    assert BROWSE_TOOL in x.gate.always_allowed()
+    assert x.gate.decide(BROWSE_TOOL, dict(SIGNED)) == "allow"     # decided per run: allowed unless the task carries private details
     note = x.browser.pop_changes()[0]
     assert note.startswith("ran a signed-in browser task ($0.03) as you: \"On shop.example, open my orders"), "the task is shown, after the fact"
     await x.browse(dict(PUBLIC))

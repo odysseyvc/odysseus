@@ -267,6 +267,8 @@ class Conversation:
                 pass  # a failed preview must never end the task
 
         stamp = f"\n\n[{self._now().strftime('%A %d %B %Y, %H:%M')}]"
+        if self._gate is not None and getattr(self._gate, "taint", None) is not None:
+            self._gate.taint.owner_said(prompt)      # the owner's own words are theirs to send anywhere
         if self._memory is not None:
             self._memory.pop_changes()   # anything pending is not from this task
         if self._schedule is not None:

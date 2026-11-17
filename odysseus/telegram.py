@@ -4,7 +4,7 @@ from __future__ import annotations
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from .conversation import Conversation
+from .conversation import Conversation, split_message
 from .ocr import MAX_BYTES
 
 
@@ -26,7 +26,12 @@ class TelegramChat:
             InlineKeyboardButton(text="Approve", callback_data=f"ap:{approval_id}:y"),
             InlineKeyboardButton(text="Decline", callback_data=f"ap:{approval_id}:n"),
         ]])
-        await self._bot.send_message(self._chat_id, text[:4000], parse_mode=None, reply_markup=buttons)
+        # The question is sent whole. If it is longer than one message, the buttons go on the last part,
+        # so that they are reached only after everything they cover has been shown.
+        parts = split_message(text)
+        for part in parts[:-1]:
+            await self._bot.send_message(self._chat_id, part, parse_mode=None)
+        await self._bot.send_message(self._chat_id, parts[-1], parse_mode=None, reply_markup=buttons)
 
 
 def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:

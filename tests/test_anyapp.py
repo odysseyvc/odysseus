@@ -84,7 +84,8 @@ def call(tool, **arguments):
 @pytest.mark.parametrize("slug, kind", [
     ("GOOGLESHEETS_BATCH_GET", "read"), ("GOOGLESHEETS_GET_SHEET_NAMES", "read"), ("GOOGLEDRIVE_FIND_FILE", "read"),
     ("NOTION_SEARCH_NOTION_PAGE", "read"), ("GITHUB_LIST_REPOSITORY_ISSUES", "read"),
-    (APPEND, "change"), ("GOOGLESHEETS_VALUES_UPDATE", "change"), ("GOOGLESHEETS_SEARCH_AND_REPLACE", "change"),
+    (APPEND, "change"), ("GOOGLESHEETS_VALUES_UPDATE", "change"), ("GOOGLESHEETS_SEARCH_AND_REPLACE", "reach"), ("GOOGLESHEETS_CLEAR_VALUES", "reach"),
+    ("GMAILISH_MARK_AS_READ", "change"), ("TRACKER_SET_STATUS", "change"), ("SHEETS_READ_RANGE", "read"), ("ACME_RUN_WORKFLOW", "reach"),
     ("NOTION_CREATE_NOTION_PAGE", "change"), ("GOOGLESHEETS_BATCH_UPDATE", "change"), ("ACME_FROBNICATE_WIDGET", "change"),
     ("SLACK_SEND_MESSAGE", "reach"), ("GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", "reach"), ("GOOGLEDRIVE_DELETE_FILE", "reach"),
     ("GITHUB_CREATE_AN_ISSUE_COMMENT", "reach"), ("STRIPE_CREATE_REFUND", "reach"), ("NOTION_GET_AND_DELETE_BLOCK", "reach"),
@@ -142,7 +143,7 @@ async def test_the_first_change_in_an_app_asks_and_then_covers_that_app_for_the_
     assert (await x.run(first))["is_error"] is True and x.backend.calls == [], "no approval, no change"
     asked = approving(x)
     out = await x.gate.permission(APP_RUN, first)
-    assert "Let me make changes in Googlesheets for this task?" in asked[0] and APPEND in asked[0] and '"spreadsheetId": "s1"' in asked[0]
+    assert "Let me add and edit things in Googlesheets for this task?" in asked[0] and APPEND in asked[0] and '"spreadsheetId": "s1"' in asked[0]
     await x.run(out.updated_input)
     assert isinstance(await x.gate.permission(APP_RUN, second), PermissionResultAllow) and len(asked) == 1, "the second change is not asked about"
     await x.run(second)

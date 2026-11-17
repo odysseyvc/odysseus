@@ -107,7 +107,7 @@ async def test_reading_mail_is_labelled_and_never_shows_a_code(tmp_path):
     x = rig(tmp_path)
     out = (await x.h["mail_search"]({"query": "is:unread", "max_results": 99}))["content"][0]["text"]
     assert out.startswith(MAIL_NOTE) and "482913" not in out
-    assert x.backend.calls[0] == ("GMAIL_FETCH_EMAILS", {"query": "is:unread", "max_results": 10, "verbose": False})
+    assert x.backend.calls[0] == ("GMAIL_FETCH_EMAILS", {"query": "is:unread", "max_results": 25, "verbose": False})
     full = (await x.h["mail_read"]({"message_id": "m2"}))["content"][0]["text"]
     assert "482913" not in full and "It expires in 10 minutes." in full
     assert (await x.h["mail_read"]({}))["is_error"] is True

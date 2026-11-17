@@ -29,6 +29,7 @@ from .journal import Journal
 from .memory import MEMORY_NOTE, MemoryError_, MemoryStore
 from .schedule import REPEATS, ScheduleError, ScheduleStore, parse_when
 from .search import SERVER, SearchSpec, make_search_handler
+from .taint import Taint
 
 
 def _name(n: str) -> str:
@@ -71,19 +72,38 @@ def routine_tools(with_apps: bool) -> frozenset[str]:
     return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset())
 
 
+def describe_search(args: dict[str, Any], taint: Taint) -> str:
+    found = taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}")
+    return ("Search the web with this? It contains details that came from your mail, calendar or apps, and a search is "
+            f"sent to a search company.\n\nDetails recognised: {', '.join(found)}\n\nQuery: {str(args.get('query', '')).strip()}\n"
+            f"Purpose: {str(args.get('objective', '')).strip()}")
+
+
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
-              browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None) -> Gate:
-    """The gate for conversations, with a rule for every tool that exists."""
+              browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None, apps: Apps | None = None) -> Gate:
+    """The gate for conversations, with a rule for every tool that exists.
+
+    Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
+    and so that what is read from the accounts is remembered for the check on what leaves through search.
+    """
     gate = Gate(journal, timeout_s)
+    taint = gate.taint = Taint()
+    with_apps = with_apps or apps is not None
+    if apps is not None:
+        apps.taint = taint
     if with_browser:
-        browser_mod.add_rules(gate, browser_ask_signed_in)
+        browser_mod.add_rules(gate, browser_ask_signed_in, taint)
     if anyapp is not None:
+        anyapp.taint = taint
         anyapp.add_rules(gate)
     if with_apps:
         from datetime import datetime
-        apps_mod.add_rules(gate, now or datetime.now)
-    for name in (SEARCH_TOOL, *MEMORY_TOOLS, _name("list_schedule"), _name("cancel_schedule")):
+        apps_mod.add_rules(gate, now or datetime.now, apps)
+    for name in (*MEMORY_TOOLS, _name("list_schedule"), _name("cancel_schedule")):
         gate.rule(name, ALLOW)
+    # A search is allowed unless it carries details read from the owner's accounts (taint.py); then the owner is asked.
+    gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(f"{a.get('query', '')} {a.get('objective', '')}") else ALLOW,
+              lambda a: describe_search(a, taint))
     gate.rule(SCHEDULE_TOOL, _schedule_decision, lambda args: describe_routine(args, now, with_apps))
     return gate
 
@@ -157,13 +177,25 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      browser: Browser | None = None, anyapp: AnyApp | None = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     m = make_memory_handlers(memory, journal)
-    search = tool("web_search", spec.description, spec.input_schema)(make_search_handler(spec, journal))
+    search_handler = make_search_handler(spec, journal)
+    if gate is not None:
+        search_handler = gate.guarded(SEARCH_TOOL, search_handler)     # lock 2, for a search that carries private details
+    elif apps is not None:
+        # An unattended routine has nobody to ask, so a search carrying details from the accounts is simply refused.
+        plain = search_handler
+
+        async def search_handler(args: dict[str, Any]) -> dict[str, Any]:
+            if apps.taint is not None and apps.taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}"):
+                journal.write("tool", name="web_search", ok=False, error="carries details from the accounts")
+                return _err("Not searched: the query contains details from the owner's mail or calendar, and nobody is here to approve sending them.")
+            return await plain(args)
+    search = tool("web_search", spec.description, spec.input_schema)(search_handler)
     recall = tool("recall", "Search your saved notes and entries by keyword, for when the owner refers to something that is not in view.",
                   {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]})(m["recall"])
     app_tools = {}
     if apps is not None:
         h = apps.handlers()
-        for name in (apps_mod.MAIL_SEND, apps_mod.MAIL_REPLY, apps_mod.CALENDAR_CREATE):
+        for name in apps_mod.GUARDED:
             short = name.rsplit("__", 1)[1]
             if gate is not None:
                 h[short] = gate.guarded(name, h[short])   # lock 2

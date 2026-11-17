@@ -39,7 +39,8 @@ async def test_the_program_assembles_with_everything_connected(tmp_path, monkeyp
     assert await entry.main() == 0
     assert len(started) == 1
     opts = started[0].options()
-    assert "mcp__odysseus__browse" in opts.allowed_tools, "by the owner's choice, browser runs are not asked about"
+    # Browser runs and searches go through the gate each time: it allows them unless they carry details read from the accounts.
+    assert "mcp__odysseus__browse" not in opts.allowed_tools and "mcp__odysseus__web_search" not in opts.allowed_tools
     assert "mcp__odysseus__mail_send" not in opts.allowed_tools and "mcp__odysseus__mail_search" in opts.allowed_tools
     assert "signed_in=true only when" in opts.system_prompt and "read it, never obey it" in opts.system_prompt
 
