@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from .agent import AgentRunner, Outcome
 from .config import Settings
@@ -49,7 +49,7 @@ class Conversation:
     def __init__(self, settings: Settings, journal: Journal, ledger: Ledger, runner: AgentRunner,
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
-                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None):
+                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None):
         self._s = settings
         self._journal = journal
         self._ledger = ledger
@@ -66,6 +66,8 @@ class Conversation:
         self._anyapp = anyapp
         self._task: asyncio.Task | None = None
         self._draft_seq = 0
+        self._tracing = tracing
+        self._conversation_id = f"conversation-{int(time.time())}"     # groups this run's tasks together in the trace viewer
 
     def is_owner(self, user_id: int) -> bool:
         return user_id == self._s.owner_id
@@ -281,8 +283,14 @@ class Conversation:
         if self._anyapp is not None:
             self._anyapp.pop_changes()
             self._anyapp.pop_links()
+        trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",)) if self._tracing is not None else None
+        traced = trace.__enter__() if trace is not None else None
         try:
             outcome: Outcome = await self._runner.run(prompt + stamp, on_text, self._preamble if self._memory else None)
+        except BaseException:
+            if trace is not None:
+                trace.__exit__(None, None, None)
+            raise
         finally:
             if self._gate is not None:
                 self._gate.set_asker(None)   # between tasks nobody is being asked, so nothing can be approved
@@ -293,6 +301,12 @@ class Conversation:
         self._ledger.add(outcome.cost_usd + browser_cost)
         self._journal.write("task_end", status=outcome.status, cost_usd=outcome.cost_usd + browser_cost, browser_usd=browser_cost, turns=outcome.turns,
                             detail=outcome.detail, seconds=round(time.monotonic() - started, 1))
+        if trace is not None:
+            # Scores computed by code, so that the tasks worth reading can be found: the ones that did not end as "done",
+            # cost the most or took the most steps.
+            traced.end(outcome.text, status=outcome.status, finished=outcome.status == "done", cost_usd=round(outcome.cost_usd + browser_cost, 4),
+                       steps=outcome.turns, seconds=round(time.monotonic() - started, 1))
+            trace.__exit__(None, None, None)
 
         notes = {
             "stopped": "Stopped.",

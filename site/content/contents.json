@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 185
+    "tests": 191
   },
   "parts": [
     {
@@ -118,7 +118,9 @@
         {
           "n": 15,
           "title": "A world that does not hold still",
-          "summary": "What the research on evaluation found, and the measurement built from it: situations nobody listed, in a world where things happen on their own."
+          "summary": "What the research on evaluation found, and the first version built from it: a world with time, events, other people and failing tools; properties checked on every run; every errand run reworded and under failure. Errands that passed every time as written failed one time in eleven.",
+          "slug": "a-world-that-does-not-hold-still",
+          "revised": "18 November 2026"
         }
       ]
     }

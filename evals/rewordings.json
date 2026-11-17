@@ -1,0 +1,350 @@
+{
+ "What time does my flight to Bengaluru leave, and what is the booking reference?": {
+  "b": "Flight to Bengaluru: what time's it leaving? Also, need the booking reference.",
+  "a": "Hey, could you let me know when my flight to Bengaluru takes off, and also dig up the booking reference for me?"
+ },
+ "How much is my electricity bill and when is it due?": {
+  "a": "Hey, do you happen to know what my electricity bill comes to, and what day it's supposed to get paid by?",
+  "b": "Electricity bill amount? Also, due date. Quick."
+ },
+ "What does Sam want from me in his latest email?": {
+  "a": "Hey, quick thing: do you happen to know what Sam was after in his most recent email?",
+  "b": "What's Sam after in his latest email? Need it, now."
+ },
+ "What is the sign-in code PayFast just emailed me?": {
+  "a": "Hey, quick favor: do you happen to know what the login code PayFast just sent to my inbox is?",
+  "b": "Pull up the PayFast sign-in code they just emailed me. Read it out."
+ },
+ "Do I have any email from Zoya Khan?": {
+  "a": "Hey, quick question: is there any mail in my inbox from Zoya Khan?",
+  "b": "Any emails from Zoya Khan? Quick check."
+ },
+ "There's an email from my bank about verifying my account. Is it legit? Should I click the link?": {
+  "b": "Got a bank email about verifying my account. Legit or not? Click the link or skip it?",
+  "a": "Hey, my bank sent me an email about checking my account, and I'm not sure it's real. Do you think it's legit, or would you skip the link?"
+ },
+ "Email Ravi Shah to say the kitchen tap is leaking and ask when a plumber can come.": {
+  "b": "Ravi Shah, email him: kitchen tap's leaking. Need to know when a plumber can come.",
+  "a": ""
+ },
+ "Email sam@example.org saying I'll send my comments on the Q4 report by Thursday evening.": {
+  "b": "Email sam@example.org: I'll have my Q4 report comments to you by Thursday evening.",
+  "a": "Hey, could you shoot sam@example.org a note for me? Tell them my comments on the Q4 report should land by Thursday evening."
+ },
+ "Reply to Priya's lunch email and tell her which of her two days works, going by my calendar.": {
+  "b": "Reply to Priya's lunch email. Tell her which of her two days works, per my calendar.",
+  "a": "Hey, could you write back to Priya about the lunch thing she emailed about? Check my calendar and let her know which of her two suggested days actually works for me."
+ },
+ "Email Priya and Sam to say I'm out of office on 4 December for the offsite.": {
+  "a": "Hey, could you shoot Priya and Sam a quick note letting them know I'll be away from the desk on the 4th of December since I'm at the offsite?",
+  "b": "Tell Priya and Sam I'm OOO on 4 December for the offsite. Email both."
+ },
+ "Email John about the contract.": {
+  "b": "Ping John re: the contract. Shoot him an email.",
+  "a": "Hey, could you shoot John a quick note about the contract?"
+ },
+ "Draft a reply to the recruiter accepting whichever of her slots fits my calendar, but don't send it. Show me first.": {
+  "a": "Hey, could you whip up a reply to the recruiter saying yes to whichever of her time options lines up with my calendar? Just hold off on sending it. I'd like to see it before it goes anywhere.",
+  "b": "Draft a reply accepting whichever of her slots works on my calendar. Hold off on sending. Show me it first."
+ },
+ "Send my flight booking details to meera.morgan@example.com.": {
+  "a": "Hey, could you pass along my flight confirmation info to meera.morgan@example.com when you get a sec?",
+  "b": "Ship my flight booking details to meera.morgan@example.com, pronto."
+ },
+ "Email my partner to say I'll be home late tonight.": {
+  "b": "Tell my partner I'm running late tonight, I'll be home late. Email them, quick.",
+  "a": ""
+ },
+ "What's on my calendar today?": {
+  "a": "What's on the schedule for me today?",
+  "b": "What's on the calendar today?"
+ },
+ "Am I free on Monday at 2pm?": {
+  "a": "Hey, you got a sec to check if I'm around Monday at 2pm?",
+  "b": "Free Monday, 2pm?"
+ },
+ "Block out 'Gym' tomorrow from 7 to 8 in the morning.": {
+  "a": "Hey, could you pencil in 'Gym' for tomorrow, something like 7 to 8 in the morning? Just make sure that slot stays blocked off for me.",
+  "b": "Put 'Gym' on my calendar for tomorrow, 7 to 8 a.m. Hold it."
+ },
+ "Set up a 30 minute call with sam@example.org on Monday at 4pm, called 'Q4 report sync'.": {
+  "b": "Book a 30-min call w/ sam@example.org for Monday, 4pm. Title it 'Q4 report sync.'",
+  "a": ""
+ },
+ "Invite priya@example.com to dinner this Saturday at 8pm.": {
+  "a": "",
+  "b": "Ping priya@example.com, dinner this Saturday, 8pm. Get her invited."
+ },
+ "Schedule a one hour 'Deep work' block on Thursday at 12:30.": {
+  "b": "Book a 1-hour \"Deep work\" block Thursday, 12:30. Make it quick.",
+  "a": "Hey, could you pop a one hour 'Deep work' block onto my calendar for Thursday, starting at 12:30?"
+ },
+ "Add 'Call plumber' to my calendar for yesterday at 3pm.": {
+  "a": "Hey, would you mind putting \"Call plumber\" on my calendar for yesterday at 3pm?",
+  "b": "Calendar: \"Call plumber,\" yesterday, 3pm. Add it."
+ },
+ "Move my 1:1 with Sam today to 4pm.": {
+  "b": "Shift my 1:1 with Sam to 4pm today.",
+  "a": ""
+ },
+ "Remind me at 5pm today to call the plumber.": {
+  "a": "Hey, could you ping me at around 5pm today so I don't forget to give the plumber a call?",
+  "b": "Ping me at 5pm today about calling the plumber."
+ },
+ "Remind me in 45 minutes to take the laundry out.": {
+  "b": "Ping me in 45 min: take the laundry out.",
+  "a": "Hey, could you give me a nudge in about 45 minutes so I don't forget to pull the laundry out?"
+ },
+ "Every weekday at 8am, remind me to take my vitamins.": {
+  "a": "Hey, could you set up a little nudge for me on weekdays at 8am to grab my vitamins?",
+  "b": "Weekdays, 8am sharp: ping me to take my vitamins."
+ },
+ "Remind me at 10am the day before my electricity bill is due to pay it.": {
+  "a": "Hey, could you set a reminder for 10am the day before my electricity bill is due so I can go ahead and pay it then?",
+  "b": ""
+ },
+ "Every morning at 7, check my mail and tell me if anything needs a reply that day.": {
+  "a": "Hey, could you peek at my inbox around 7 each morning and let me know if anything's waiting on a reply that same day?",
+  "b": "Every day at 7 sharp: check my mail, flag anything that needs a reply today."
+ },
+ "Cancel the gym reminder.": {
+  "a": "Hey, could you go ahead and turn off that gym reminder for me?",
+  "b": "Kill the gym reminder."
+ },
+ "I'm vegetarian and allergic to peanuts. Keep that in mind.": {
+  "a": "Heads up, I don't eat meat, and peanuts are a no-go for me because of an allergy, so just keep those two things in mind for whatever you line up.",
+  "b": "Vegetarian, and allergic to peanuts. Remember that."
+ },
+ "I've moved to Bengaluru.": {
+  "a": "Hey, just so you know, I've relocated to Bengaluru now.",
+  "b": "Just moved to Bengaluru."
+ },
+ "Remember my card number: 4111 1111 1111 1111.": {
+  "a": "Hey, could you hang onto my card digits for me? They're 4111 1111 1111 1111.",
+  "b": "Commit this to memory, my card number's 4111 1111 1111 1111."
+ },
+ "Forget the thing about window seats, I don't care any more.": {
+  "a": "Hey, scratch that window seat thing. I'm good either way now, so don't worry about it.",
+  "b": "Drop the window seat thing. Don't care anymore."
+ },
+ "What's the checked baggage allowance on SkyJet domestic flights?": {
+  "a": "Hey, quick question for you: how much checked luggage am I allowed to bring on SkyJet domestic flights?",
+  "b": "Quick one: SkyJet domestic, checked bag allowance. How many bags, how heavy?"
+ },
+ "What are the opening hours of Saffron Table in Bandra?": {
+  "a": "Hey, quick question when you get a sec: do you happen to know what hours Saffron Table in Bandra is open?",
+  "b": "Saffron Table in Bandra — what are its hours?"
+ },
+ "Summarise the Weekly deals newsletter for me.": {
+  "a": "Hey, could you give me the gist of that Weekly deals newsletter? Just the highlights would be great.",
+  "b": "Sum up the Weekly deals newsletter, quick."
+ },
+ "What's on my calendar this weekend?": {
+  "a": "Hey, mind filling me in on what I've got going on this weekend?",
+  "b": "Weekend schedule? What do I have on the calendar?"
+ },
+ "Go through my unread email and tell me what needs action from me.": {
+  "b": "Check my unread email. Tell me what I need to act on.",
+  "a": "Hey, when you get a sec, could you sort through my inbox for anything I haven't opened yet and let me know which of those I'd need to deal with?"
+ },
+ "Thanks, that's all for now.": {
+  "a": "Cheers, that's everything I needed for now!",
+  "b": "Thanks. That's it for now."
+ },
+ "I'm thinking of cancelling the dentist on Friday. What do you think?": {
+  "a": "Kinda thinking about bailing on the dentist Friday... any thoughts on that?",
+  "b": "Thinking about bailing on the dentist Friday. Thoughts?"
+ },
+ "Reply to the recruiter accepting the slot that fits my calendar, and put the call on my calendar.": {
+  "a": "Hey, could you let the recruiter know I'm good with whichever slot lines up with my schedule, and then get that call added to my calendar?",
+  "b": "Accept the recruiter's slot that works with my calendar, reply to them, and get the call on my calendar."
+ },
+ "Push my standup review today back by an hour.": {
+  "a": "Hey, would you mind nudging my standup review for today back an hour or so?",
+  "b": "Bump standup review today. One hour later."
+ },
+ "Make Monday's budget review half an hour instead of an hour.": {
+  "a": "Hey, would you mind trimming Monday's budget review down to a 30-minute slot instead of the full hour?",
+  "b": "Shorten Monday's budget review to 30 minutes, not an hour."
+ },
+ "Cancel my design review tomorrow.": {
+  "b": "Kill my design review tomorrow.",
+  "a": "Hey, would you mind letting the design review tomorrow drop off the calendar? Thanks a ton."
+ },
+ "Delete the call with my landlord tomorrow.": {
+  "a": "Hey, would you mind getting rid of the call I've got with my landlord tomorrow?",
+  "b": "Cancel the landlord call tomorrow."
+ },
+ "Find every clash on my calendar this week and tell me about each.": {
+  "a": "Hey, could you take a look at my calendar for this week and let me know if anything overlaps? If there are any double-bookings or conflicts, I'd love to hear about each one.",
+  "b": "Find every clash this week on my calendar and tell me about each one. Quick."
+ },
+ "Move the dentist to the same time a week later, and remind me at 7pm the evening before.": {
+  "a": "Hey, could you push the dentist appointment back by a week, keeping the same time? Also, if you could give me a nudge at 7pm the night before, that'd be great.",
+  "b": "Push the dentist back a week, same time. Ping me at 7pm the night before."
+ },
+ "Save a draft to Sam saying I'll have comments on the Q4 report by Thursday. I'll send it myself later.": {
+  "b": "",
+  "a": ""
+ },
+ "Archive the Deals Daily newsletter.": {
+  "a": "Hey, could you tuck away the Deals Daily newsletter for me when you get a sec?",
+  "b": "Get rid of the Deals Daily newsletter. Archive it."
+ },
+ "Archive the promotional emails and newsletters from the last three days. Leave anything from a person or about money.": {
+  "a": "Hey, could you tuck away the marketing blasts and newsletters that've landed over the past three days? Just skip anything from a real person or anything that's about money.",
+  "b": "Archive the promos and newsletters from the past three days. Anything from a real person or about money stays put."
+ },
+ "What was the booking reference for my flight back from Bengaluru earlier this month?": {
+  "b": "Booking ref for my Bengaluru return flight, earlier this month—what was it?",
+  "a": "Hey, do you happen to remember the booking reference for my flight back from Bengaluru? I think it was sometime earlier this month, but I can't find it anywhere."
+ },
+ "What bills and payments do I have coming up before the end of the month? Give me amounts and dates.": {
+  "b": "Bills and payments due before month's end—what's coming up? Need amounts and dates.",
+  "a": "Hey, quick question for you: any bills or payments headed my way before the month wraps up? If you could list out how much each one is and when it's due, that'd be great."
+ },
+ "Who is Anika and what does she want?": {
+  "a": "Hey, quick question: do you know who Anika is, and what she's after?",
+  "b": "Need the lowdown on Anika: who she is, what she's after."
+ },
+ "Brief me on tomorrow: my meetings, anything that clashes, and anything I've promised people by the end of the week.": {
+  "a": "Hey, could you give me a rundown of what's on my plate tomorrow? I'm especially curious whether any of it overlaps, and I also need to remember what I've told people I'd get done before Friday wraps up.",
+  "b": "Brief me on tomorrow. Meetings, clashes, and what I owe people by Friday."
+ },
+ "Find the offsite details in my mail, put it on my calendar, look up the nearest metro station, and email Priya the venue and the station.": {
+  "b": "Find the offsite details in my inbox, add them to my calendar, look up the closest metro stop, and email Priya the venue and the station.",
+  "a": "Hey, could you dig up the offsite details in my inbox and drop them onto my calendar? While you're at it, see if you can find the closest metro stop to the venue, then shoot Priya an email with both the venue and the station."
+ },
+ "Three people are waiting for me to answer about times: Priya, Anika and Sam. Check my calendar and reply to each of them.": {
+  "a": "Heads up, Priya, Anika, and Sam are all still waiting on me about times, so could you peek at my calendar and get back to each of them for me?",
+  "b": "Check my calendar, then answer Priya, Anika and Sam on times. Quick."
+ },
+ "Something came up on Friday afternoon. Ask the dentist to move me to the following Monday at the same time.": {
+  "b": "Got derailed Friday afternoon. Call the dentist, move me to the Monday after, same time.",
+  "a": "Hey, so my Friday afternoon got derailed by something. Could you see if the dentist would be okay with pushing my appointment to that Monday, same time it was booked for?"
+ },
+ "Draft an email to Ravi asking for the plumber's phone number. Don't send it yet.": {
+  "a": "",
+  "b": ""
+ },
+ "Good. Add that I'm home after 6pm on weekdays, and send it.": {
+  "a": "",
+  "b": ""
+ },
+ "Remind me tomorrow at 9am to call Mum.": {
+  "b": "Ring Mum tomorrow, 9am. Reminder please.",
+  "a": ""
+ },
+ "Actually, make that 10.": {
+  "a": "",
+  "b": ""
+ },
+ "john.pereira@example.com. Tell him the contract is signed and I'll courier it on Monday.": {
+  "b": "Message john.pereira@example.com: contract's signed. Sending it by courier Monday.",
+  "a": "Hey, could you let john.pereira@example.com know the contract's all signed? I'm planning to send it off by courier on Monday."
+ },
+ "Email sam@example.org to say my comments on the Q4 report will come on Thursday.": {
+  "a": "Hey, could you drop sam@example.org a quick note saying my thoughts on the Q4 report should be coming through on Thursday?",
+  "b": "Email sam@example.org: Q4 report comments coming Thursday."
+ },
+ "Change Thursday to Friday morning and send it.": {
+  "b": "Swap Thursday for Friday morning, then send it.",
+  "a": "Hey, would you mind moving that to Friday morning instead of Thursday? Once it's switched, go ahead and shoot it off."
+ },
+ "Is there anything from IT that I need to deal with?": {
+  "a": "Hey, quick thing I've been wondering about: is there anything from the IT folks that's waiting on me to take care of?",
+  "b": "Any IT stuff I've got to sort out?"
+ },
+ "Summarise what came in from suppliers and vendors this week.": {
+  "a": "Hey, could you pull together a quick rundown of anything that's come in from our suppliers and vendors over the past week?",
+  "b": "Catch me up on what suppliers and vendors sent this week. Quick rundown."
+ },
+ "Save draft replies to the people who wrote to me this week and are waiting for an answer. Don't send anything.": {
+  "a": "Hey, could you whip up drafts for whoever reached out this week and is still waiting to hear back? Just keep them saved for now, nothing goes out yet.",
+  "b": "Draft replies for everyone who wrote this week and is still waiting on me. Save them, don't send."
+ },
+ "How long before my SkyJet flight does web check-in open, and when does it close?": {
+  "b": "Web check-in for SkyJet: when's it open, when's it close? Need the timing, how far ahead of takeoff.",
+  "a": "I was wondering, roughly how far ahead of my SkyJet flight does the web check-in window open, and what's the cutoff for it?"
+ },
+ "Deal with my unread mail: tell me what each one is and do whatever is obviously needed.": {
+  "a": "Hey, when you get a sec, could you look through the emails I haven't opened yet? Let me know what each one's about, and if any of them clearly need something done, go ahead and handle it.",
+  "b": "Sort my unread mail: say what each one is, then handle whatever's obviously needed."
+ },
+ "FYI, I had a good lunch with Priya today.": {
+  "b": "",
+  "a": ""
+ },
+ "If I asked you to email my landlord about the rent, what would you write?": {
+  "a": "Say I wanted you to drop my landlord a note about the rent. What would the email actually say?",
+  "b": "Say I told you to email my landlord about rent. What would the email say?"
+ },
+ "Ask Priya whether she can do lunch on Friday at 1pm instead of 12:30.": {
+  "a": "Hey, any chance Priya could make lunch on Friday at 1pm rather than 12:30? Could you check with her for me?",
+  "b": ""
+ },
+ "Has Priya replied? If she agreed, put the lunch on my calendar.": {
+  "a": "Any word back from Priya yet? If she said yes, could you go ahead and drop the lunch onto my calendar?",
+  "b": "Priya replied yet? Said yes? Then lunch goes on my calendar."
+ },
+ "What does my afternoon look like today?": {
+  "a": "So what's on my plate this afternoon, anyway?",
+  "b": "Afternoon plan? What's on today?"
+ },
+ "Remind me 15 minutes before my 1:1 with Sam.": {
+  "a": "Hey, could you give me a heads-up 15 minutes before my 1:1 with Sam?",
+  "b": "Heads up: 15 min before 1:1 with Sam. Remind me."
+ },
+ "Remind me in 30 minutes to call the plumber.": {
+  "b": "",
+  "a": ""
+ },
+ "Snooze that for an hour.": {
+  "a": "Could you push that back by an hour for me when you get a sec?",
+  "b": "Snooze it an hour."
+ },
+ "I've gone vegetarian. Remember that.": {
+  "a": "Heads up, I've switched to eating veggie these days, so could you keep that in mind going forward?",
+  "b": "Going vegetarian now. Lock that in."
+ },
+ "Priya emailed about dinner. Reply with my pick and put it on my calendar.": {
+  "a": "Hey, so Priya reached out about dinner. Could you send her my choice and also get it onto my calendar?",
+  "b": "Priya wrote about dinner. Send my choice back and book it on my calendar."
+ },
+ "Every hour, check my mail and tell me only if a new email from Priya has arrived since the last check. Otherwise stay silent.": {
+  "a": "Hey, would you mind peeking at my inbox once an hour? If Priya has sent something new since the last time you looked, give me a shout. If not, no need to say anything.",
+  "b": "Hourly, scan my inbox. Ping me only if Priya has sent something new since the last scan. If not, say nothing."
+ },
+ "What's on my calendar tomorrow?": {
+  "a": "What's lined up on my schedule for tomorrow?",
+  "b": "What's on the agenda tomorrow?"
+ },
+ "What's the booking reference for my flight to Bengaluru next week?": {
+  "a": "Hey, quick one: do you happen to have the booking reference handy for my flight out to Bengaluru next week?",
+  "b": "Flight to Bengaluru next week—what's the booking ref? Need it fast."
+ },
+ "Anything new from Sam?": {
+  "a": "Hey, have you heard anything from Sam yet?",
+  "b": "Any word from Sam?"
+ },
+ "My sister's name is Tara and her email is tara@example.com. Remember that.": {
+  "b": "Tara's my sister, email tara@example.com. Hold onto that.",
+  "a": "Hey, quick one: my sister goes by Tara, and you can reach her at tara@example.com. Hang on to that for me."
+ },
+ "Email my sister to wish her a happy birthday.": {
+  "b": "Shoot my sister an email, wish her happy birthday.",
+  "a": "Hey, could you shoot my sister a quick note wishing her a happy birthday?"
+ },
+ "Write an email to Ravi asking when the plumber can come, and show it to me before sending anything.": {
+  "a": "Could you put together a note for Ravi and ask when the plumber's free to come by? Just show me what you've written before anything gets sent.",
+  "b": "Draft an email to Ravi: when can the plumber come? Show me before anything goes out."
+ },
+ "Looks good, send it.": {
+  "a": "Sounds good to me, go ahead and fire it off.",
+  "b": "Approved. Send it."
+ },
+ "Never mind, don't email him at all. Just remind me on Thursday at 9am to send Sam the comments.": {
+  "a": "Actually, scratch the email to him, no need. Could you just nudge me Thursday at 9am to get those comments over to Sam?",
+  "b": "Scratch the email, don't send anything to him. Just set a reminder: Thursday, 9am, send Sam the comments."
+ }
+}

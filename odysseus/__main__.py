@@ -20,6 +20,7 @@ from .routines import make_routine_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
 from .tools import make_gate, make_tool_server
+from .tracing import Tracing
 
 
 async def main() -> int:
@@ -48,8 +49,12 @@ async def main() -> int:
                                                             anyapp=anyapp),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
                                                            with_files=ocr is not None, with_anyapp=anyapp is not None))
+    # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
+    tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
+                      secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
+                               settings.browser_use_api_key, settings.mistral_api_key))
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
-                                browser=browser, ocr=ocr, anyapp=anyapp)
+                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing)
     bot = Bot(settings.telegram_token)
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
@@ -59,7 +64,8 @@ async def main() -> int:
                           run_routine, now=now, on_delivered=conversation.record_delivery)
 
     await runner.start()   # connect the agent loop now, so the first message is not slow
-    journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None, files=ocr is not None)
+    journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
+                  files=ocr is not None, tracing=tracing.on)
     ticking = asyncio.create_task(scheduler.run_forever())
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
@@ -70,6 +76,7 @@ async def main() -> int:
         await runner.close()
         await run_routine.runner.close()
         await bot.session.close()
+        tracing.close()
     return 0
 
 

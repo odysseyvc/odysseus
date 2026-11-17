@@ -315,6 +315,7 @@ class Apps:
         self._b, self._journal, self._now, self._tz = backend, journal, now, tz
         self._pending: list[str] = []
         self._events: dict[str, dict[str, Any]] = {}     # events calendar_list has returned, by id
+        self.retry_wait_s = 1.0                          # pause before a failed read is tried again; doubled for the second retry
         self.taint = None                                # set by make_gate; remembers what was read from the accounts
 
     def event(self, event_id: str) -> dict[str, Any] | None:
@@ -363,13 +364,26 @@ class Apps:
         return "\n\n".join(lines)
 
     async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
-        try:
-            data = await asyncio.to_thread(self._b.execute, slug, arguments)
-        except Exception as e:
-            self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
-            raise AppError(str(e)[:300] if isinstance(e, AppError) else type(e).__name__) from e
-        self._journal.write("tool", name=tool, ok=True)
-        return data
+        # Reading is safe to repeat, so a failed read is tried again before the model hears of it. A failed write is
+        # never repeated by code: the service may have done it and lost the answer, and a second try would do it twice.
+        reading = tool in ("mail_search", "mail_read", "calendar_list")
+        for attempt in range(3 if reading else 1):
+            try:
+                data = await asyncio.to_thread(self._b.execute, slug, arguments)
+            except Exception as e:
+                self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", attempt=attempt + 1)
+                if reading and attempt < 2:
+                    await asyncio.sleep(self.retry_wait_s * (attempt + 1))
+                    continue
+                # The service's own words are passed on (cleaned and cut short), so the model can tell "try again shortly"
+                # from "that id does not exist". Before this, it was shown only the error's class name.
+                said = hide_secrets(" ".join(str(e).split()))[:300] or type(e).__name__
+                if not reading:
+                    said += (" This may or may not have taken effect. Before trying again, check whether it did: search the sent "
+                             "mail, or list the calendar. Do not repeat it blindly.")
+                raise AppError(said) from e
+            self._journal.write("tool", name=tool, ok=True)
+            return data
 
     def _zone(self) -> str:
         if self._tz:

@@ -192,3 +192,38 @@ async def test_a_line_that_looks_like_a_code_hides_that_field_and_not_the_whole_
     app = AnyApp(backend, Journal(tmp_path / "j.jsonl"))
     out = (await app.handlers()["app_run"]({"tool": "GOOGLESHEETS_BATCH_GET", "arguments": {}}))["content"][0]["text"]
     assert HIDDEN in out and "4821" not in out and "Rent" in out and "3180" in out
+
+
+# --- failures: what the model is told, and what is retried --------------------------------------
+
+def failing(tmp_path, *faults):
+    from evals.sim import Sim
+    journal = Journal(tmp_path / "journal.jsonl")
+    sim = Sim(planned=list(faults))
+    apps = Apps(sim, journal, lambda: NOW, tz="Asia/Kolkata")
+    apps.retry_wait_s = 0
+    return sim, apps.handlers(), journal
+
+
+async def test_a_failed_read_is_tried_again_before_the_model_hears_of_it(tmp_path):
+    from evals.sim import Fault
+    sim, h, journal = failing(tmp_path, Fault("GMAIL_FETCH_EMAILS", 1, "rate"), Fault("GMAIL_FETCH_EMAILS", 2, "error"))
+    out = await h["mail_search"]({"query": "from:priya"})
+    assert "is_error" not in out and "Priya" in out["content"][0]["text"]
+    assert [r["ok"] for r in journal.read() if r["kind"] == "tool"] == [False, False, True]
+
+
+async def test_when_a_read_keeps_failing_the_model_is_given_the_services_own_words(tmp_path):
+    from evals.sim import Fault
+    sim, h, _ = failing(tmp_path, *(Fault("GOOGLECALENDAR_EVENTS_LIST", n, "rate") for n in (1, 2, 3)))
+    out = await h["calendar_list"]({"start": "2026-11-19T00:00", "end": "2026-11-20T00:00"})
+    assert out["is_error"] is True and "Rate limit exceeded" in out["content"][0]["text"], "not just the error's class name"
+
+
+async def test_a_failed_write_is_never_repeated_by_code_and_warns_that_it_may_have_happened(tmp_path):
+    from evals.sim import Fault
+    sim, h, _ = failing(tmp_path, Fault("GMAIL_SEND_EMAIL", 1, "lost_ack"))
+    out = await h["mail_send"]({"to": ["ravi.shah@example.org"], "subject": "Tap", "body": "The tap is leaking."})
+    text = out["content"][0]["text"]
+    assert out["is_error"] is True and "timed out" in text and "may or may not have taken effect" in text and "check" in text.lower()
+    assert len(sim.sent) == 1, "it was sent once, by the call that reported a timeout, and not again"

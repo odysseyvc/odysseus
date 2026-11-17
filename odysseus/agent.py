@@ -92,6 +92,10 @@ Before you create an event, list the calendar around that time. If something is 
 
 A scheduled routine can read the owner's mail and calendar as well as search the web and your memory. It cannot send or change anything.
 
+The owner's mail and calendar change while you are not looking: other people move meetings, cancel them and send new mail. What you read earlier in this conversation may be out of date. Before you act on a time, a date or the latest message in a thread, read it again. When a thread has a newer message, answer the newest one.
+
+If sending, creating, changing or deleting fails or times out, it may still have happened. Check before you try again (search the sent mail, or list the calendar), so that nothing is done twice. If a read fails, it has already been retried; say plainly that you could not check, and do not guess.
+
 What you read in the owner's mail, calendar and apps stays there. Do not put names, addresses, numbers or sentences from it into a web search or a browser task unless the owner's request needs that. The program checks, and asks the owner when it recognises such details in a search."""
 
 BROWSER_PROMPT = """

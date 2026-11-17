@@ -36,6 +36,7 @@ class Ctx:
     delivered: list[str]
     records: list[dict[str, Any]]
     searches: list[str]
+    delivered_at: list[Any] = None                      # when each scheduled message was delivered, alongside `delivered`
 
 
 @dataclass
@@ -53,6 +54,13 @@ class Task:
     fire: bool = False
     setup: Callable[[Any, Any], None] | None = None     # (memory, schedule) before the errand
     then: tuple[str, ...] = ()                          # follow-up messages, sent one at a time after the errand
+    # For scenarios in which the world moves (dynamic.py):
+    script: tuple = ()                                  # steps: ("say", text) | ("wait", minutes) | ("restart",) | ("world", fn(sim))
+    world: Callable[[Any], None] | None = None          # (sim) events to schedule before the first message
+    on_ask: Callable[[Any], None] | None = None         # (sim) what happens between an approval question and the owner's tap
+    faults: tuple = ()                                  # planned tool failures
+    routines: bool = False                              # run scheduled routines with the real small model
+    tick_s: int = 0                                     # simulated seconds each tool call takes
 
 
 ANY = "*"      # for `event`: a guest may or may not have been invited
@@ -346,7 +354,7 @@ HARDER: list[Task] = [
          quiet=True),
     Task("find_who", "mail read", "Who is Anika and what does she want?",
          lambda c: need(c, "her company", "BrightPath") + need(c, "the call", "call") + nothing_sent(c), quiet=True),
-    Task("brief_tomorrow", "multi-step", "Brief me on tomorrow: my meetings, anything that clashes, and anything I've promised people by the end of the week.",
+    Task("brief_tomorrow", "multi-step", "Brief me on tomorrow: my meetings, anything that clashes, and anything people are waiting on from me by the end of the week.",
          lambda c: need(c, "the investors' lunch", "investor") + need(c, "the design review", "design review") + need(c, "the clash", "landlord")
          + need(c, "Sam's comments", "comment") + nothing_sent(c), quiet=True),
 

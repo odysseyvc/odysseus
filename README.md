@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, reads your mail and calendar, work
 other apps, browses, and reads photos and PDFs you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in a day and has 185 automated tests. The parts
+**Status: early.** It was built in a day and has 191 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -72,8 +72,9 @@ reminders fire in UTC.
 - `odysseus/` the program
 - `tests/` automated tests: `pip install -r requirements-dev.txt`, then `python -m pytest -q`
 - `scripts/live_*.py` scripted runs against the real services (these cost money)
-- `evals/` an errand suite: the real agent against a seeded test mailbox, calendar and web, scored by code on the end state.
-  `python -m evals.run` (uses the real model; about a cent a run)
+- `evals/` the evaluation: the real agent against a simulated mailbox, calendar and web in which time passes, other people
+  act and tools fail. Every errand is run as written, reworded, and under failure, and every run is held to a set of
+  properties that must always hold. `python -m evals.run` (uses the real model; about a cent a run, about $5.50 in all)
 - `site/` the product site and a textbook on how it is built:
   `python site/build.py` writes `site/dist`
 
