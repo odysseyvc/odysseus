@@ -78,6 +78,8 @@ class Sim(World):
         self._queue: list[tuple[datetime, int, str, Callable[["Sim"], None]]] = []
         self._conditional: list[tuple[Callable[["Sim"], bool], timedelta, str, Callable[["Sim"], None]]] = []
         self._counts: dict[str, int] = {}
+        self.mail_listeners: list[Callable[[dict[str, Any]], None]] = []      # told of each email that arrives, as the connector's trigger would be
+        self.watch_store: Any = None
         self._last_faulted: str = ""
         self._n = 0
 
@@ -121,6 +123,8 @@ class Sim(World):
         self._n += 1
         mid = f"n{self._n:03d}"
         self.mail.append({"id": mid, "thread": thread or f"t{mid}", "from": sender, "date": self.clock.t, "unread": True, "subject": subject, "body": body})
+        for listener in self.mail_listeners:
+            listener({"id": f"ev-{mid}", "trigger_slug": "GMAIL_NEW_GMAIL_MESSAGE", "payload": {"sender": sender, "subject": subject, "message_text": body, "message_id": mid}})
         return mid
 
     def others_move(self, event_id: str, start: datetime) -> None:

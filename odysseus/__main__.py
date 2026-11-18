@@ -22,6 +22,7 @@ from .telegram import TelegramChat, build_dispatcher
 from .tools import make_gate, make_tool_server
 from .tracing import Tracing
 from .voice import MistralVoice
+from .watch import ComposioTriggers, Watcher, WatchStore
 from .whatsapp import WhatsApp, make_http, serve
 
 
@@ -70,12 +71,19 @@ async def main() -> int:
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
     voice = MistralVoice(settings.mistral_api_key, settings.voice_model) if settings.mistral_api_key else None     # same key: it also listens
+    # Watches: being told when something happens in mail or calendar. They need the connector, which sends the events.
+    watches = WatchStore(settings.data_dir / "watches.db", now=now) if connector else None
+    box: dict = {}       # the watcher is built further down, once there is somewhere to send its messages
+
+    async def on_watch():
+        await asyncio.to_thread(box["watcher"].activate)
     gate = make_gate(journal, now, with_apps=apps is not None, with_browser=browser is not None,
-                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps)
+                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
-                                                            anyapp=anyapp),
+                                                            anyapp=anyapp, watches=watches, on_watch=on_watch),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
-                                                           with_files=ocr is not None, with_anyapp=anyapp is not None), persist=True)
+                                                           with_files=ocr is not None, with_anyapp=anyapp is not None,
+                                                           with_watches=watches is not None), persist=True)
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
@@ -83,7 +91,7 @@ async def main() -> int:
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
-                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice)
+                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches)
     bot = Bot(settings.telegram_token)
 
     # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.
@@ -101,6 +109,23 @@ async def main() -> int:
     scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
                           run_routine, now=now, on_delivered=conversation.record_delivery)
 
+    watcher = triage = None
+    if watches is not None:
+        # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
+        triage = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), memory, now,
+                                     with_apps=True)
+        watcher = box["watcher"] = Watcher(watches, ComposioTriggers(settings.composio_api_key, f"odysseus-{settings.owner_id}"), triage, notify,
+                                           journal, ledger, settings.daily_usd, now=now, on_delivered=conversation.record_delivery)
+        if watches.watches():           # something is being watched for: make sure events are coming, and listen
+            try:
+                await asyncio.to_thread(watcher.activate)
+            except Exception as e:
+                journal.write("error", where="watch.activate", error=type(e).__name__, message=str(e)[:200])
+        try:
+            await asyncio.to_thread(watcher.start, asyncio.get_running_loop())
+        except Exception as e:
+            journal.write("error", where="watch.listen", error=type(e).__name__, message=str(e)[:200])
+
     interrupted = unfinished(journal)      # read before this run of the program writes anything
     await runner.start()   # connect the agent loop now, so the first message is not slow
     if interrupted is not None:
@@ -110,7 +135,7 @@ async def main() -> int:
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, voice=voice is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
+                  files=ocr is not None, voice=voice is not None, watches=watches is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
     if whatsapp is not None:
         door = await serve(whatsapp, settings.whatsapp_port)
     ticking = asyncio.create_task(scheduler.run_forever())
@@ -122,6 +147,9 @@ async def main() -> int:
         await conversation.wait()
         await runner.close()
         await run_routine.runner.close()
+        if watcher is not None:
+            watcher.stop()
+            await triage.runner.close()
         await bot.session.close()
         if door is not None:
             await door.cleanup()

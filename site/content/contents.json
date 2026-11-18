@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 220
+    "tests": 232
   },
   "parts": [
     {
@@ -142,6 +142,13 @@
           "title": "Ears: voice notes",
           "revised": "18 November 2026",
           "summary": "A voice note is turned into text, shown back to the owner, and then handled like any typed message. Checked end to end with a synthesized recording; no real voice yet."
+        },
+        {
+          "n": 19,
+          "slug": "being-told",
+          "title": "Being told: watches",
+          "revised": "18 November 2026",
+          "summary": "\"Tell me when Priya replies.\" The connector reports each new email or calendar change, a read-only small model judges it against what the owner asked for, and code does the telling. Run in the simulated world; not yet fired by a real email."
         }
       ]
     }

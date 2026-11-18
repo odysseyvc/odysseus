@@ -48,6 +48,7 @@ from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.routines import make_routine_runner  # noqa: E402
 from odysseus.schedule import Scheduler, ScheduleStore  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
+from odysseus.watch import Watcher, WatchStore  # noqa: E402
 
 from . import invariants, perturb  # noqa: E402
 from .dynamic import SCENARIOS  # noqa: E402
@@ -139,9 +140,11 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         """Start the program on this trial's files, as it starts in real use."""
         apps = Apps(sim, journal, clock.now, tz="Asia/Kolkata")
         apps.retry_wait_s = 0.05          # the pause between retries is real time; nothing in the simulation depends on it
-        gate = make_gate(journal, clock.now, timeout_s=30, apps=apps)
-        runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps), gate=gate,
-                             system_prompt=conversation_prompt(True),
+        store = WatchStore(folder / "watches.db", now=clock.now) if task.watches else None
+        sim.watch_store = store
+        gate = make_gate(journal, clock.now, timeout_s=30, apps=apps, with_watches=store is not None)
+        runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, watches=store), gate=gate,
+                             system_prompt=conversation_prompt(True, with_watches=store is not None),
                              persist=any(step[0] == "restart" for step in script))     # kept on disk, as in real use, where a restart happens
         conv = Conversation(settings, journal, ledger, runner, memory, now=clock.now, schedule=schedule, gate=gate, apps=apps)
         chat.conv, chat.owner = conv, settings.owner_id
@@ -157,16 +160,31 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
             async def send(self, text):
                 delivered.append(text)
                 delivered_at.append(clock.t)
+        watcher = triage = None
+        if store is not None:
+            # Arriving mail is checked against the watches by the real small model, as it is in real use.
+            triage = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), memory,
+                                         clock.now, with_apps=True)
+            watcher = Watcher(store, None, triage, Sink(), journal, ledger, settings.daily_usd, now=clock.now, on_delivered=conv.record_delivery)
+            sim.mail_listeners[:] = [arrived.append]
+        live.update(watcher=watcher, triage=triage)
         live.update(runner=runner, conv=conv, routine=routine,
                     scheduler=Scheduler(schedule, Sink(), journal, ledger, settings.daily_usd, routine, now=clock.now, on_delivered=conv.record_delivery))
 
     async def close():
-        for thing in (live.get("runner"), getattr(live.get("routine"), "runner", None)):
+        for thing in (live.get("runner"), getattr(live.get("routine"), "runner", None), getattr(live.get("triage"), "runner", None)):
             if thing is not None:
                 try:
                     await thing.close()
                 except Exception:
                     pass
+
+    arrived: list[dict] = []
+
+    async def check_arrivals():
+        """Hand each email that has arrived to the watcher, as the connector's trigger would."""
+        while arrived and live.get("watcher") is not None:
+            await live["watcher"].on_event(arrived.pop(0))
 
     async def let_time_pass(minutes: int):
         """Move the clock in steps. At each step whatever is due in the world happens, and the scheduler runs."""
@@ -174,6 +192,7 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         while clock.t < end:
             sim.advance(min(timedelta(minutes=5), end - clock.t))
             await live["scheduler"].tick()
+            await check_arrivals()
 
     if agent == "real":
         try:
@@ -189,6 +208,7 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
                         await let_time_pass(step[1])
                     elif step[0] == "world":
                         step[1](sim)
+                        await check_arrivals()
                     elif step[0] == "restart":
                         await close()
                         assemble()

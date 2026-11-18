@@ -60,6 +60,7 @@ class Task:
     on_ask: Callable[[Any], None] | None = None         # (sim) what happens between an approval question and the owner's tap
     faults: tuple = ()                                  # planned tool failures
     routines: bool = False                              # run scheduled routines with the real small model
+    watches: bool = False                               # give the agent watches, and check arriving mail against them with the real small model
     tick_s: int = 0                                     # simulated seconds each tool call takes
 
 

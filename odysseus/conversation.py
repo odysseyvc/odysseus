@@ -58,7 +58,7 @@ class Conversation:
     def __init__(self, settings: Settings, journal: Journal, ledger: Ledger, runner: AgentRunner,
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
-                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None):
+                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None):
         self._s = settings
         self._journal = journal
         self._ledger = ledger
@@ -67,6 +67,7 @@ class Conversation:
         self._now = now
         self._shown_version = -1     # the version of the profile the model last saw
         self._schedule = schedule
+        self._watches = watches
         self._delivered: list[str] = []   # what scheduled jobs sent the owner since the model last heard
         self._gate = gate
         self._apps = apps
@@ -126,6 +127,14 @@ class Conversation:
             return
 
         # Scheduled jobs can be listed and cancelled by the owner directly. No model is involved.
+        # What is being watched for can be listed and stopped by the owner directly. No model is involved.
+        if self._watches is not None and command == "/watches":
+            await chat.send("Watching for:\n" + self._watches.listing() + "\n\nTo stop one, send /unwatch and its id, for example /unwatch a1b2.")
+            return
+        if self._watches is not None and command.startswith("/unwatch"):
+            watch = self._watches.cancel(command[len("/unwatch"):].strip(), by="owner") if command[len("/unwatch"):].strip() else None
+            await chat.send(("Stopped watching: " + watch.describe()) if watch else "Send /unwatch followed by an id from /watches.")
+            return
         if self._schedule is not None and command == "/schedule":
             await chat.send("Scheduled:\n" + self._schedule.listing()
                             + "\n\nTo cancel one, send /cancel and its id, for example /cancel a1b2.")
@@ -142,7 +151,7 @@ class Conversation:
         if command in ("/start", "/help"):
             await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /new starts a fresh conversation. /status shows today's "
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
-                            "/schedule shows reminders and routines, and /cancel followed by an id removes one. "
+                            "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
@@ -358,6 +367,8 @@ class Conversation:
             self._memory.pop_changes()   # anything pending is not from this task
         if self._schedule is not None:
             self._schedule.pop_changes()
+        if self._watches is not None:
+            self._watches.pop_changes()
         if self._apps is not None:
             self._apps.pop_changes()
         if self._browser is not None:
@@ -423,6 +434,9 @@ class Conversation:
         if scheduled:
             line = "; ".join(t.rstrip(".") for t in scheduled)
             body += "\n\nSchedule: " + line + ("" if line.endswith("…") else ".")
+        watching = self._watches.pop_changes() if self._watches is not None else []
+        if watching:
+            body += "\n\nWatching: " + "; ".join(t.rstrip(".") for t in watching) + "."
         # Whether the reply actually left is recorded. Before this, a task could be logged as done and its
         # reply lost without a trace, which is exactly what could not be ruled out on the first day on a server.
         parts = split_message(body)

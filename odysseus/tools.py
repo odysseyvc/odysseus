@@ -30,6 +30,7 @@ from .memory import MEMORY_NOTE, MemoryError_, MemoryStore
 from .schedule import REPEATS, ScheduleError, ScheduleStore, parse_when
 from .search import SERVER, SearchSpec, make_search_handler
 from .taint import Taint
+from .watch import WatchError, WatchStore, describe_watch
 
 
 def _name(n: str) -> str:
@@ -42,6 +43,7 @@ SCHEDULE_TOOLS = tuple(_name(n) for n in ("schedule", "list_schedule", "cancel_s
 ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})
 SCHEDULE_TOOL = _name("schedule")
+WATCH_TOOL = _name("watch")
 
 
 def _schedule_decision(args: dict[str, Any]) -> str:
@@ -80,7 +82,8 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 
 
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
-              browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None, apps: Apps | None = None) -> Gate:
+              browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None, apps: Apps | None = None,
+              with_watches: bool = False) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 
     Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
@@ -105,6 +108,11 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(f"{a.get('query', '')} {a.get('objective', '')}") else ALLOW,
               lambda a: describe_search(a, taint))
     gate.rule(SCHEDULE_TOOL, _schedule_decision, lambda args: describe_routine(args, now, with_apps))
+    if with_watches:
+        # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
+        gate.rule(WATCH_TOOL, ASK, describe_watch)
+        gate.rule(_name("list_watches"), ALLOW)
+        gate.rule(_name("cancel_watch"), ALLOW)
     return gate
 
 
@@ -174,7 +182,8 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
-                     browser: Browser | None = None, anyapp: AnyApp | None = None):
+                     browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
+                     on_watch: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     m = make_memory_handlers(memory, journal)
     search_handler = make_search_handler(spec, journal)
@@ -250,6 +259,47 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                  {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(s["cancel_schedule"]),
         ]
     tools += list(app_tools.values())
+    if watches is not None:
+        async def watch(args: dict[str, Any]) -> dict[str, Any]:
+            try:
+                w = watches.add(args.get("text", ""), args.get("about", ""), args.get("repeat") or "once")
+            except WatchError as e:
+                journal.write("tool", name="watch", ok=False, error=str(e))
+                return _err(str(e))
+            journal.write("tool", name="watch", ok=True, id=w.id, about=w.about, repeat=w.repeat)
+            if on_watch is not None:
+                try:
+                    await on_watch()          # ask the connector to start sending the events this watch needs
+                except Exception as e:
+                    journal.write("error", where="watch.activate", error=type(e).__name__, message=str(e)[:200])
+                    return _ok("Watching: " + w.describe() + " But the connector could not be told to send events, so it may not fire. Tell the owner.")
+            return _ok("Watching: " + w.describe())
+
+        async def list_watches(args: dict[str, Any]) -> dict[str, Any]:
+            journal.write("tool", name="list_watches", ok=True)
+            return _ok(watches.listing())
+
+        async def cancel_watch(args: dict[str, Any]) -> dict[str, Any]:
+            w = watches.cancel(str(args.get("id", "")))
+            journal.write("tool", name="cancel_watch", ok=w is not None, id=args.get("id"))
+            return _ok("Cancelled: " + w.describe()) if w else _err(f"There is no watch with id {args.get('id')}.")
+
+        if gate is not None:
+            watch = gate.guarded(WATCH_TOOL, watch)       # lock 2
+        tools += [
+            tool("watch",
+                 "Ask to be told when something happens in the owner's mail or calendar, such as a reply from a named person arriving or a "
+                 "meeting being moved. `text` says what to tell the owner about, written to make sense with no other context. The owner must "
+                 "approve. Use `schedule` instead for anything that should happen at a time.",
+                 {"type": "object",
+                  "properties": {"text": {"type": "string", "description": "What to tell the owner about, e.g. 'Priya Nair replies about lunch on Friday'."},
+                                 "about": {"type": "string", "enum": ["mail", "calendar"]},
+                                 "repeat": {"type": "string", "enum": ["once", "every"], "description": "Default once: tell the owner the first time, then stop."}},
+                  "required": ["text", "about"]})(watch),
+            tool("list_watches", "List what is currently being watched for, with ids.", {"type": "object", "properties": {}})(list_watches),
+            tool("cancel_watch", "Stop watching for one thing, by its id.",
+                 {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(cancel_watch),
+        ]
     if anyapp is not None:
         h = anyapp.handlers()
         if gate is not None:
