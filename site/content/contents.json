@@ -126,8 +126,8 @@
           "n": 16,
           "slug": "a-second-channel",
           "title": "A second channel: WhatsApp",
-          "revised": "18 November 2026",
-          "summary": "WhatsApp calls the program where Telegram is asked, so this channel needs a door, and three checks to guard it. Built on Meta's own interface and tested without Meta; not yet connected."
+          "revised": "19 November 2026",
+          "summary": "WhatsApp calls the program where Telegram is asked, so this channel needs a door, and three checks to guard it. Sending works for real; receiving waits on a server the internet can reach."
         },
         {
           "n": 17,

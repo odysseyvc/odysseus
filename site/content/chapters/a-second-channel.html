@@ -8,7 +8,7 @@
 </ul></div>
 
 <div class="box caution"><div class="label">Status of this chapter</div>
-<p><strong>The channel is written and has never been connected to WhatsApp.</strong> <span class="g v">Verified</span> by ten unit tests and by a check that starts the real listener and calls it over HTTP with hand-signed deliveries. <span class="g u">Not tested</span>: any exchange with Meta's servers. Connecting it needs a Meta developer account, and a server that the internet can reach, which Odysseus does not yet have (Chapter 13).</p></div>
+<p><strong>Sending works for real. Receiving has never happened.</strong> <span class="g v">Verified</span>: three real messages were sent from the bot's WhatsApp number to the owner's phone and accepted by Meta: a sample template, an ordinary message written by the bot's own code, and an approval question with two buttons. The listener is verified by ten unit tests and by a check that starts it and calls it over HTTP with hand-signed deliveries. <span class="g u">Not tested</span>: anything arriving from WhatsApp. That needs a server the internet can reach, which Odysseus does not yet have (Chapter 13).</p></div>
 
 <h2 id="why">Why a second channel is cheap, and where it is not</h2>
 <p>Chapter 6 kept all decisions in one place and gave the channel a deliberately small job: carry text out, show a draft, and ask a question with two buttons. Telegram was the only thing that did that job. The owner asked for WhatsApp as well.</p>
@@ -56,6 +56,15 @@
 </tbody></table></div>
 <p>Chapter 15's research recorded users of one commercial assistant reporting WhatsApp bans. <span class="g s">Secondary</span> The first route was chosen. The cost is the set-up, and the 24-hour rule comes with it.</p>
 
+<h2 id="setup">What connecting it took</h2>
+<p>The code was an afternoon. The set-up at Meta took longer, and none of it could be done by a program acting alone. In order: a Facebook account; registration as a developer, with a code sent to a phone; a "business portfolio", which a new account was made to wait an hour before creating; an app, whose creation asked for the account's password again; acceptance of WhatsApp's own business terms; a test number; a token, issued through a pop-up window that only a person's click may open; the app's secret, shown only after the password a third time; and the owner's own number added as a permitted recipient, confirmed by a code sent to WhatsApp.</p>
+<p>Three things are worth knowing before starting.</p>
+<ul>
+<li><strong>The first message cannot be an ordinary one.</strong> Until the owner has written to the bot's number, only a pre-approved template may be sent. Meta provides a sample for the purpose. After the owner replies, the 24-hour window is open and the bot's own messages go through.</li>
+<li><strong>The token from the set-up page lasts about two hours.</strong> It is for trying things out. A bot that is meant to keep running needs a long-lived token, made for a "system user" in the business's settings.</li>
+<li><strong>A test number can write to five phone numbers</strong>, each of which must be added and confirmed by hand. For an assistant with one owner that is no limit at all.</li>
+</ul>
+
 <h2 id="tested">What is tested, and what is not</h2>
 <div class="tablewrap"><table>
 <caption>The state of the WhatsApp channel.</caption>
@@ -65,8 +74,9 @@
 <tr><td>Only the owner's number is listened to; a stranger gets no reply</td><td><span class="g v">Verified</span>, unit test</td></tr>
 <tr><td>A long approval question is shown whole, with the buttons last</td><td><span class="g v">Verified</span>, unit test</td></tr>
 <tr><td>A message delivered twice is handled once</td><td><span class="g v">Verified</span>, unit test</td></tr>
-<tr><td>The message formats match what WhatsApp sends and accepts</td><td><span class="g u">Not tested</span>: written from the documentation, never exchanged with Meta</td></tr>
-<tr><td>The buttons appear and work on a phone</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>Meta accepts the bot's ordinary messages and its approval questions with buttons</td><td><span class="g v">Verified</span>, one of each sent to the owner's phone</td></tr>
+<tr><td>What WhatsApp sends when the owner writes or taps a button matches what the code expects</td><td><span class="g u">Not tested</span>: written from the documentation, never received</td></tr>
+<tr><td>A tap on a button reaches the gate</td><td><span class="g u">Not tested</span> for real; unit test only</td></tr>
 <tr><td>Photos and documents sent on WhatsApp are fetched and read</td><td><span class="g u">Not tested</span> against Meta's file service</td></tr>
 <tr><td>Voice notes</td><td>Not built. The owner is told so in a reply.</td></tr>
 </tbody></table></div>
