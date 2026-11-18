@@ -52,7 +52,8 @@ async def main() -> int:
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
-                               settings.browser_use_api_key, settings.mistral_api_key))
+                               settings.browser_use_api_key, settings.mistral_api_key), full_content=settings.langfuse_full_content)
+    gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing)
     bot = Bot(settings.telegram_token)

@@ -32,3 +32,34 @@ def test_every_text_value_of_every_span_is_cleaned_before_it_is_sent():
     assert list(result.span_patches) == ["a"]
     assert result.span_patches["a"].set_attributes == {"input.value": f"key {REDACTED}"}
     assert t._mask(params=SimpleNamespace(spans={"b": spans["b"]})) is None
+
+
+def test_what_was_read_from_the_accounts_is_replaced_by_its_length_in_every_form():
+    import json
+    t = Tracing()
+    mail = 'From: Priya Nair <priya@example.com>\nSubject: Lunch\n\nAre you free on "Friday" at 12:30?'
+    t.hide(mail)
+    note = f"[{len(mail)} characters read from the owner's accounts; not recorded]"
+    inside_json = json.dumps({"role": "tool", "content": mail})
+    nested = json.dumps({"messages": inside_json})
+    for sent in (mail, inside_json, nested):
+        clean = t.clean("before " + sent + " after")
+        assert "Priya" not in clean and "12:30" not in clean and note in clean, sent[:40]
+    assert t.clean("The owner asked about lunch on Friday") == "The owner asked about lunch on Friday"
+
+
+def test_short_texts_are_left_alone_and_full_content_can_be_switched_on():
+    t = Tracing()
+    t.hide("No messages.")
+    assert t.clean("No messages.") == "No messages."
+    full = Tracing(full_content=True)
+    full.hide("x" * 200)
+    assert full.clean("x" * 200) == "x" * 200
+
+
+def test_the_gate_tells_tracing_what_was_read():
+    from odysseus.taint import Taint
+    seen, taint = [], Taint()
+    taint.listeners.append(seen.append)
+    taint.add("Booking reference QX7R2L for the flight on Friday")
+    assert seen == ["Booking reference QX7R2L for the flight on Friday"]

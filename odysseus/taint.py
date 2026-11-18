@@ -57,9 +57,15 @@ class Taint:
         self._shingles: set[str] = set()
         self._owner_tokens: set[str] = set()
         self._owner_shingles: set[str] = set()
+        self.listeners: list = []      # others who need to know what was read from the accounts (tracing.py)
 
     def add(self, text: str) -> None:
         """Remember something read from the owner's accounts."""
+        for listener in self.listeners:
+            try:
+                listener(text)
+            except Exception:
+                pass
         if len(self._tokens) + len(self._shingles) > MAX_FINGERPRINTS:
             return      # full: stop learning; what is already known still counts
         self._tokens |= _tokens(text)

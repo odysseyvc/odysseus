@@ -9,7 +9,7 @@
 </ul></div>
 
 <div class="box caution"><div class="label">Status of this chapter</div>
-<p><strong>The research is done and a first version is built and run.</strong> <span class="g v">Verified</span> 81 errands and scenarios, 567 runs under five conditions against the real model. Less than half of the design the research recommends exists yet; Section 15.9 lists what is missing. Figures quoted from published work were read by a research pass, not re-measured here, and are marked <span class="g s">Secondary</span>.</p></div>
+<p><strong>The research is done and a first version is built and run.</strong> <span class="g v">Verified</span> 81 errands and scenarios, 567 runs under five conditions against the real model. Less than half of the design the research recommends exists yet; Section 15.10 lists what is missing. Figures quoted from published work were read by a research pass, not re-measured here, and are marked <span class="g s">Secondary</span>.</p></div>
 
 <h2 id="evidence">Why a hand-written, still world misleads</h2>
 <p>Chapter 14 ended with a suite that scored 97% and a criticism: it only covers what its builders thought of, and the real world does not hold still. Before building anything else, the project asked what the best evaluations do about that. The published evidence says the criticism describes most evaluations, and that the effect is large. <span class="g s">Secondary</span></p>
@@ -154,10 +154,37 @@
 <p>One errand that had passed seven times out of seven now passed twice. It asked for "anything I've promised people by the end of the week". After the changes the agent looked in the sent mail for promises, found none, and said so. The check wanted Sam's request for comments, which is something Sam asked for and not something the owner promised. The errand was ambiguous and the earlier passes were luck. This is a ninth defect in the evaluation, found only because the two runs could be compared errand by errand. Its wording has been corrected.</p>
 <p>And the improvement is measured on the same errands that prompted the changes. That is the weakest kind of evidence there is: the program was changed until these cases passed. The sealed rewordings and seeds exist to answer whether the changes help on cases nobody looked at, and that run has not yet been made.</p>
 
+<h2 id="traces">The first piece of the other half: reading real use</h2>
+<p>Everything above widens what the builders thought of. None of it comes from use. The research was plain that real use is the only source of situations nobody imagined, and that the working method is unglamorous: keep a readable record of every real task, read a batch of them regularly, name each kind of failure, and turn each one into a test.</p>
+<p>The journal of Chapter 6 records every step, as lines in a file. That is enough to audit one task and poor for reading many. So every task is now also sent to a trace store, a service that keeps such records and shows them as a timeline: the owner's message, each tool call with its inputs, the reply, and how long each step took. A vendor's product (Langfuse) is used, through the instrumentation it recommends for the agent library, because storing and displaying traces is ordinary work that others have done well. It is optional and off unless two keys are set.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Trace</dt><dd>The record of one task from the owner's message to the reply, with every step in between.</dd>
+<dt>Score</dt><dd>A number or label attached to a trace so that traces can be sorted and filtered.</dd>
+</dl></div>
+<p>Each trace carries scores computed by code: whether the task ended normally, what it cost, how many steps it took and how long. Their purpose is to say which traces to read first. Nobody can read everything; the ones that did not finish, cost the most or took the most steps are where failures are.</p>
+<h3>What must not be in a trace</h3>
+<p>A trace store is one more place where the owner's private content is kept, and it belongs to another company. Two things are removed before anything is sent.</p>
+<ul>
+<li><strong>Secrets.</strong> Every key and token in the settings is removed wherever it appears, along with anything shaped like a card number or a model key. This is not hypothetical: the agent library is handed the model's key when it starts, and instrumentation that records "the options the agent was started with" would record the key.</li>
+<li><strong>What was read from the accounts.</strong> The text that the mail, calendar and app tools return is replaced by a note of its length. A trace shows that mail was read, how much, and what the agent did next. It does not show the mail. The same hook that fingerprints account content for the gate (Chapter 9) tells the tracing code what to keep out.</li>
+</ul>
+<p>The owner's own messages and the agent's replies are sent, because reading them is the point, and so is the memory block that begins each conversation (Chapter 7). A reply that quotes an email therefore carries that much of the email. A setting turns the full text back on for debugging.</p>
+<div class="box example"><div class="label">Worked example: checking a trace by reading it back</div>
+<p>One real task was run against the test world: "Read Priya's latest email about lunch. Reply with only the two days she offers." The trace was then fetched back from the store through its own interface and searched. <span class="g v">Verified</span></p>
+<ul>
+<li>It contained four steps: the task, the agent's turn, and the mail search with its inputs.</li>
+<li>It carried five scores.</li>
+<li>No key from the settings appeared anywhere in it.</li>
+<li>No sentence from Priya's email appeared in it. In its place was one note giving the length of what was read.</li>
+</ul>
+<p>The claim "secrets are removed" was tested by looking for them in what actually arrived, not by trusting the code that removes them.</p></div>
+<p>What exists so far is the record and the scores. The loop that makes it worth having does not exist yet: a regular reading of real traces, a named list of failure kinds, and a test written from each. <span class="g u">Not tested</span>, because there has been almost no real use to read.</p>
+
 <h2 id="missing">What this still cannot tell</h2>
 <p>The research described a design in ten parts. This chapter built roughly four of them. What is absent matters more than what is present.</p>
 <ul>
-<li><strong>The situations are still written by the builders.</strong> Conditions and invariants widen each errand, but the 81 starting points came from the same heads. Tasks drawn from real use, and tasks generated by search, are not built. <span class="g u">Not tested</span></li>
+<li><strong>The situations are still written by the builders.</strong> Conditions and invariants widen each errand, but the 81 starting points came from the same heads. A record of real use now exists (Section 15.9) and nothing has yet been drawn from it. Tasks generated by search are not built. <span class="g u">Not tested</span></li>
 <li><strong>The other people are scripts.</strong> Priya replies after two hours with a fixed sentence. Published work found that simulated people are too polite and too forthcoming, and make agents look better than real people do. <span class="g s">Secondary</span></li>
 <li><strong>Nothing lasts longer than two simulated days.</strong> Memory that drifts over months, commitments forgotten over weeks, and preferences that change are not measured.</li>
 <li><strong>No attacker adapts.</strong> Every planted instruction is fixed text. The evidence above says fixed attacks overstate safety by a very wide margin.</li>
@@ -175,6 +202,7 @@
 <tr><td>The 67 still-world errands pass 201 of 201 clean and 61 of 67 reworded with faults</td><td><span class="g v">Verified</span>, one seed per disturbed condition</td></tr>
 <tr><td>No approval, recipient, privacy or honesty invariant was broken in 567 runs</td><td><span class="g v">Verified</span>; the true rate may still be near 0.5%</td></tr>
 <tr><td>No planted instruction was acted on in 77 attempts</td><td><span class="g v">Verified</span>; fixed text only, written by the defenders</td></tr>
+<tr><td>A real trace arrives with its steps and scores, with no settings key and no mail text in it</td><td><span class="g v">Verified</span>, one task, read back from the store</td></tr>
 <tr><td>The fault plan resembles how real services fail</td><td><span class="g u">Not tested</span></td></tr>
 <tr><td>The second check on rewordings catches every bad one</td><td><span class="g u">Not tested</span></td></tr>
 <tr><td>The figures quoted from published work</td><td><span class="g s">Secondary</span></td></tr>
@@ -189,6 +217,7 @@
 <li>Report a property that was never broken as a count with a ceiling of about 3 divided by the number of runs.</li>
 <li>Expect a large share of failures to be the evaluation's own. Read each one.</li>
 <li>The most valuable finding here was about the program, not the model: it had been hiding every error from the model.</li>
+<li>Real use is the only source of situations nobody imagined. Keep a readable record of it, and keep secrets and private content out of that record.</li>
 </ul></div>
 
 <div class="box exercises"><div class="label">Check your understanding</div>

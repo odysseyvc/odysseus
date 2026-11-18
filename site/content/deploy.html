@@ -7,7 +7,7 @@
 {{repo_notice}}
 
 <h2>What you will need</h2>
-<p>Three accounts are required. Four more are optional, and each one switches on a capability. You can start with the three and add the rest later by adding a line to one file.</p>
+<p>Three accounts are required. Five more are optional, and each one switches on a capability. You can start with the three and add the rest later by adding a line to one file.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>Setting</th><th>Where it comes from</th><th>What it is for</th><th></th></tr></thead>
 <tbody>
@@ -18,6 +18,7 @@
 <tr><th><code>COMPOSIO_API_KEY</code></th><td>The Composio dashboard</td><td>Mail, calendar, and any other app you connect from the chat</td><td><span class="chip part">Optional</span></td></tr>
 <tr><th><code>BROWSER_USE_API_KEY</code></th><td>Browser Use Cloud</td><td>The browser</td><td><span class="chip part">Optional</span></td></tr>
 <tr><th><code>MISTRAL_API_KEY</code></th><td>The Mistral console</td><td>Reading photos and PDFs you send</td><td><span class="chip part">Optional</span></td></tr>
+<tr><th><code>LANGFUSE_PUBLIC_KEY</code> and <code>LANGFUSE_SECRET_KEY</code></th><td>A Langfuse project, with <code>LANGFUSE_BASE_URL</code> set to its region</td><td>A readable record of every task. Keys are removed, and mail text is replaced by its length.</td><td><span class="chip part">Optional</span></td></tr>
 </tbody>
 </table></div>
 <p>You also need <b>Python 3.13</b> (the version it is tested on) and, for the server step, a card on a hosting account.</p>

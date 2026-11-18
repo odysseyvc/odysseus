@@ -29,6 +29,7 @@ class Settings:
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
     langfuse_base_url: str = ""     # the Langfuse region or your own server; empty means Langfuse's default
+    langfuse_full_content: bool = False   # also record what mail, calendar and app tools returned (off: only its length)
     model: str = "claude-sonnet-5-5"
     background_model: str = "claude-haiku-5-5"   # runs scheduled routines
     tz: str = ""                 # IANA zone such as Asia/Kolkata; empty means the machine's own clock
@@ -83,6 +84,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),
+        langfuse_full_content=merged.get("LANGFUSE_FULL_CONTENT", "").strip().lower() in ("1", "true", "yes", "on"),
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() in ("1", "true", "yes", "on"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
         background_model=merged.get("ODYSSEUS_BACKGROUND_MODEL", "claude-haiku-5-5"),

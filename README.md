@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, reads your mail and calendar, work
 other apps, browses, and reads photos and PDFs you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in a day and has 191 automated tests. The parts
+**Status: early.** It was built in a day and has 194 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -22,6 +22,7 @@ been proven over weeks. The book in `site/content/chapters/` says for each part 
 | `COMPOSIO_API_KEY` | Composio (mail, calendar, other apps) | optional |
 | `BROWSER_USE_API_KEY` | Browser Use Cloud (browser) | optional |
 | `MISTRAL_API_KEY` | Mistral (reading photos and PDFs) | optional |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Langfuse (a readable record of every task) | optional |
 
 Python 3.13.
 
@@ -66,6 +67,8 @@ reminders fire in UTC.
   run signed in as you starts without asking. Set `ODYSSEUS_BROWSER_ASK_SIGNED_IN=1` to
   be asked first.
 - Your messages, mail and files pass through the vendors whose keys you supply.
+- With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
+  calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
 
 ## Layout
 
