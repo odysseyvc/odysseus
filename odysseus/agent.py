@@ -16,6 +16,7 @@ estimating their cost from the token counts each call reports.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -171,7 +172,8 @@ Preamble = Callable[[bool], str]
 class AgentRunner:
     def __init__(self, settings: Settings, journal: Journal, tool_server: Any,
                  client_factory: Callable[..., Any] = ClaudeSDKClient, *, model: str | None = None,
-                 system_prompt: str = SYSTEM_PROMPT, allowed_tools: frozenset[str] = ALLOWED_TOOLS, gate: Any = None):
+                 system_prompt: str = SYSTEM_PROMPT, allowed_tools: frozenset[str] = ALLOWED_TOOLS, gate: Any = None,
+                 persist: bool = False):
         self._model = model or settings.model
         self._system_prompt = system_prompt
         self._allowed = allowed_tools
@@ -188,11 +190,18 @@ class AgentRunner:
         self._running = False
         self._stopped = False
         self._limit: str | None = None
-        self.session_id: str | None = None
+        # The conversation outlives the program. Its id is kept in a small file beside the other data, and the agent
+        # library's own transcript is kept there too (CLAUDE_CONFIG_DIR below), so that on a server both are on the
+        # disk that survives an update. Before this, any restart began a new conversation without saying so.
+        self._session_file = settings.data_dir / "session.json"
+        self._transcripts = settings.data_dir / "agent"
+        self.session_id: str | None = self._load_session() if persist else None
+        self._persist = persist
         # The SDK reports cost as a running total for the whole session, not per task
         # (measured in the first live run). We keep the last total and work with differences.
         self._session_cost = 0.0
         self._blank = True   # True while the model has not yet been shown the memory in this context
+        self._resumed = self.session_id is not None
 
     def options(self) -> ClaudeAgentOptions:
         return ClaudeAgentOptions(
@@ -207,8 +216,32 @@ class AgentRunner:
             include_partial_messages=True,
             hooks={"PreCompact": [HookMatcher(hooks=[self._on_compact])]},
             resume=self.session_id,            # after a restart of the client, carry the conversation on
-            env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key},
+            env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key,
+                 **({"CLAUDE_CONFIG_DIR": str(self._transcripts.resolve())} if self._persist else {})},
         )
+
+    def _load_session(self) -> str | None:
+        try:
+            return json.loads(self._session_file.read_text(encoding="utf-8")).get("session_id") or None
+        except (OSError, ValueError):
+            return None
+
+    def _save_session(self) -> None:
+        if not self._persist:
+            return
+        try:
+            if self.session_id:
+                self._session_file.parent.mkdir(parents=True, exist_ok=True)
+                self._session_file.write_text(json.dumps({"session_id": self.session_id}), encoding="utf-8")
+            elif self._session_file.exists():
+                self._session_file.unlink()
+        except OSError as e:
+            self._journal.write("error", where="agent.session", error=type(e).__name__)
+
+    @property
+    def resumed(self) -> bool:
+        """True when this run of the program picked up a conversation from before it started."""
+        return self._resumed
 
     async def _on_compact(self, hook_input: Any, tool_use_id: Any, context: Any) -> dict[str, Any]:
         # The SDK is about to condense the conversation. What was shown at the start may not
@@ -226,7 +259,18 @@ class AgentRunner:
             if self.session_id is None:
                 self._blank = True
             client = self._factory(options=self.options())
-            await client.connect()
+            try:
+                await client.connect()
+            except Exception as e:
+                if self.session_id is None:
+                    raise
+                # The saved conversation could not be picked up (its transcript is gone or unreadable).
+                # Start a new one rather than fail every message from now on.
+                self._journal.write("error", where="agent.resume", error=type(e).__name__, message=str(e)[:200])
+                self.session_id, self._resumed, self._blank = None, False, True
+                self._save_session()
+                client = self._factory(options=self.options())
+                await client.connect()
             self._client = client
         return self._client
 
@@ -248,6 +292,8 @@ class AgentRunner:
         self.session_id = None
         self._session_cost = 0.0
         self._blank = True
+        self._resumed = False
+        self._save_session()
 
     async def stop(self) -> bool:
         """Ask the running task to end. Returns False when nothing is running."""
@@ -318,8 +364,9 @@ class AgentRunner:
         total = float(result.total_cost_usd or 0.0)
         continued = bool(result.session_id) and result.session_id == self.session_id
         cost = max(0.0, total - self._session_cost) if continued else total
-        if result.session_id:
+        if result.session_id and result.session_id != self.session_id:
             self.session_id = result.session_id
+            self._save_session()
         self._session_cost = max(total, self._session_cost) if continued else total
 
         if self._stopped:

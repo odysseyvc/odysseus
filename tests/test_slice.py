@@ -266,9 +266,11 @@ async def test_a_second_message_does_not_start_a_second_task(tmp_path):
     await x.conv.handle(OWNER, "first", x.chat)
     await asyncio.sleep(0.05)
     await x.conv.handle(OWNER, "second", x.chat)
-    assert len(x.clients[0].prompts) == 1 and "Still working" in x.chat.sent[-1]
+    assert len(x.clients[0].prompts) == 1 and "Noted" in x.chat.sent[-1], "it waits its turn; it is neither started nor thrown away"
     await x.conv.handle(OWNER, "stop", x.chat)
     await x.conv.wait()
+    assert any("Also dropped: 1 message that was waiting" in m for m in x.chat.sent), "stop means stop, and says what it dropped"
+    assert len(x.clients[0].prompts) == 1, "the message that was waiting never ran"
 
 
 # --- Budget ------------------------------------------------------------------

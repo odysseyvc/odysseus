@@ -1,0 +1,87 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Name the three ways the first design lost the owner's work, and what each cost.</li>
+<li>Explain why a message that arrives during a task should wait and not be refused.</li>
+<li>Say where a conversation lives between runs of the program, and what has to be kept for it to be picked up.</li>
+<li>Explain why a task interrupted by a restart is announced and not resumed.</li>
+<li>Say why "stop" must also drop what is waiting.</li>
+</ul></div>
+
+<div class="box caution"><div class="label">Status of this chapter</div>
+<p><strong>Built and tested, and not yet lived with.</strong> <span class="g v">Verified</span> by ten unit tests and by two restart scenarios in the evaluation of Chapter 15, run against the real model. <span class="g u">Not tested</span>: a real restart of the owner's own running bot with a task in flight, and a conversation kept for days.</p></div>
+
+<h2 id="lost">Three ways the first design lost work</h2>
+<p>Chapter 6 made two choices in the name of a small first slice. One task runs at a time, and a second message is turned away. The conversation lives in the running program's memory. An independent reading of the code later listed what those choices cost, and the evaluation of Chapter 15 showed one of them happening.</p>
+<div class="tablewrap"><table>
+<caption>What was lost, and when.</caption>
+<thead><tr><th>Situation</th><th>What the first design did</th><th>What the owner experienced</th></tr></thead>
+<tbody>
+<tr><th>A second message during a task</th><td>Replied "Still working on the last task" and discarded it</td><td>Having to remember to send it again. During an approval wait or a browser run, that could be ten or fifteen minutes.</td></tr>
+<tr><th>The program restarts between messages</th><td>Began a new conversation, silently</td><td>"Looks good, send it" answered with "send what?"</td></tr>
+<tr><th>The program restarts during a task</th><td>Nothing. The task and any approval question simply ceased to exist.</td><td>Silence, and no way to tell whether the thing was done</td></tr>
+</tbody></table></div>
+<p>A restart is not a rare accident. Every update to the program is one (Chapter 13), and so is every crash.</p>
+
+<h2 id="queue">Waiting a turn</h2>
+<p>A message that arrives while a task is running is now kept and answered with one line saying so. When the task ends, the waiting messages run one at a time in the order they arrived. Up to five can wait.</p>
+<p>Three details matter more than the mechanism.</p>
+<ul>
+<li><strong>Commands do not wait.</strong> "stop", /status and the rest are handled by code the moment they arrive, as before. A queue that could delay "stop" would be worse than no queue.</li>
+<li><strong>"Stop" drops what is waiting too, and says how many.</strong> An owner who types "stop" wants things to stop. If the waiting messages ran next, "stop" would have ended one task and started another.</li>
+<li><strong>A typed "yes" during an approval question is still only a message.</strong> It waits its turn like any other and approves nothing (Chapter 9).</li>
+</ul>
+<aside class="margin">Tasks still run one after another, not side by side. A long browser run still holds up what is behind it. Running work in the background is a separate change and is not built.</aside>
+
+<h2 id="session">Where a conversation lives</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Session</dt><dd>One conversation as the agent library sees it: the sequence of messages and tool results that the model is shown.</dd>
+<dt>Transcript</dt><dd>The library's own file of a session, from which the session can be picked up again.</dd>
+<dt>Resume</dt><dd>Starting the agent with the id of an earlier session, so that it continues that conversation and does not begin a new one.</dd>
+</dl></div>
+<p>The agent library already knew how to resume. It was never asked to, because the id of the session was held in a variable that vanished with the program. Two things are now kept beside the rest of Odysseus's data: a small file holding the session's id, and the library's transcript, which it is told to write there instead of in its usual place.</p>
+<p>The second of those is easy to miss. On a server, the library's usual place is inside the image, and an update replaces the image (Chapter 13). An id that pointed to a transcript that no longer exists would be worse than no id. Keeping both on the disk that survives an update is what makes the id worth keeping.</p>
+<p>If the saved session cannot be picked up, because its transcript is missing or damaged, the program starts a new conversation and carries on. The alternative would be failing on every message until someone noticed.</p>
+<p>A conversation that never ends has its own cost: it grows. The library condenses a long conversation by itself (Chapter 7), and the owner can now also send /new to begin again deliberately. Memory, reminders and connections are untouched by /new; only the back-and-forth is dropped.</p>
+
+<h2 id="notice">An interrupted task is announced, not resumed</h2>
+<p>When the program starts, it reads its own log for a task that was started and never finished. If there is one, the owner is told, with the first words of the request so they know which:</p>
+<div class="box example"><div class="label">Worked example: the notice after a restart</div>
+<p>The owner asked for a meeting to be moved. The question "Change this event and email the change to its guests?" was on their screen when the server was updated. On starting again, the program sends:</p>
+<p><em>I was restarted while I was working on something: "Move my 1:1 with Sam today to 4pm". It was not finished, and I have not carried on with it by myself. I had asked for your approval; that question no longer counts, so tapping it will do nothing. Ask me again if you still want it done.</em></p></div>
+<p>Why not simply carry on? Because the program cannot know how far the task got. Chapter 15 introduced the lost acknowledgement: an action that happened although its call reported failure. A restart is the same uncertainty at a larger scale. The email may have been sent in the last instant before the program stopped. Running the task again could send it twice. Telling the owner costs one message; a duplicate cannot be taken back.</p>
+<p>The old approval question is dead for a reason from Chapter 9. Approvals are held by the running program, and an approval covers exact inputs for one use. After a restart nothing holds them, so a tap on the old buttons finds nothing waiting. The notice says so, because a button that silently does nothing looks like a fault.</p>
+
+<h2 id="tested">What is tested, and what is not</h2>
+<div class="tablewrap"><table>
+<caption>The state of durability.</caption>
+<thead><tr><th>Claim</th><th>Grade</th></tr></thead>
+<tbody>
+<tr><td>Messages sent during a task run afterwards, in order; a sixth is refused</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>"Stop" ends the task, drops what was waiting and says how many</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>After a restart, "Looks good, send it" sends the email that was shown before the restart</td><td><span class="g v">Verified</span>, evaluation scenario with the real model, two runs. Before the change the agent could only ask what "it" was.</td></tr>
+<tr><td>A task with no end in the log is found, and the notice names it</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>The notice reaches the owner's phone after a real restart mid-task</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>A conversation kept for weeks stays usable and affordable</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>What a task costs is counted correctly across a restart</td><td><span class="g u">Not tested</span>. The library reports a running total for a session, and whether that total continues after a resume has not been measured.</td></tr>
+<tr><td>Tasks running side by side, or in the background</td><td>Not built</td></tr>
+</tbody></table></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>A message that arrives during a task waits its turn. Commands never wait, and "stop" empties the queue.</li>
+<li>A conversation survives a restart if two things are kept where data survives: the session's id and the library's transcript.</li>
+<li>If the saved conversation cannot be picked up, start a new one and carry on.</li>
+<li>A task interrupted by a restart is announced, not resumed: the program cannot know how far it got, and doing something twice cannot be undone.</li>
+<li>Approvals do not survive a restart, by design. The owner is told that the old buttons no longer count.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Check your understanding</div>
+<ol>
+<li>The session's id is kept on the disk that survives an update, and the transcript is left where the library normally writes it. What happens at the next update?
+<details><summary>Answer</summary><p>The update replaces the image, and the transcript with it. The program starts with an id that points to nothing. If that case is not handled, every message fails. Here it is handled by starting a new conversation, but the owner still loses the old one, which was the thing being protected.</p></details></li>
+<li>The owner sends three messages during a long task and then "stop". Which of the four things happen?
+<details><summary>Answer</summary><p>The running task is ended and the three waiting messages are dropped. The owner is told the task was stopped and that three waiting messages were dropped. None of the three runs.</p></details></li>
+<li>Give a case in which resuming an interrupted task automatically would do harm.
+<details><summary>Answer</summary><p>The task was "email Ravi about the tap". The email left, and the program was stopped before it recorded that. On starting again it sees a task with no end, runs it again, and Ravi gets the email twice. Nothing in the log could have told it the first one had gone.</p></details></li>
+</ol></div>

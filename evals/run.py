@@ -141,7 +141,8 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         apps.retry_wait_s = 0.05          # the pause between retries is real time; nothing in the simulation depends on it
         gate = make_gate(journal, clock.now, timeout_s=30, apps=apps)
         runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps), gate=gate,
-                             system_prompt=conversation_prompt(True))
+                             system_prompt=conversation_prompt(True),
+                             persist=any(step[0] == "restart" for step in script))     # kept on disk, as in real use, where a restart happens
         conv = Conversation(settings, journal, ledger, runner, memory, now=clock.now, schedule=schedule, gate=gate, apps=apps)
         chat.conv, chat.owner = conv, settings.owner_id
         if task.routines:

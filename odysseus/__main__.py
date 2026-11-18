@@ -24,6 +24,30 @@ from .tracing import Tracing
 from .whatsapp import WhatsApp, make_http, serve
 
 
+def unfinished(journal: Journal) -> dict | None:
+    """The task that was running when the program last stopped, if there was one: a start with no end after it."""
+    open_task = None
+    for r in journal.read():
+        if r["kind"] == "task_start":
+            open_task = {"preview": r.get("preview", ""), "asked": False}
+        elif r["kind"] == "task_end" and "routine" not in r:
+            open_task = None
+        elif r["kind"] == "gate" and r.get("verdict") == "asked" and open_task is not None:
+            open_task["asked"] = True
+        elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
+            open_task["asked"] = False
+    return open_task
+
+
+def restart_notice(task: dict, resumed: bool) -> str:
+    what = f': "{task["preview"]}"' if task.get("preview") else ""
+    text = f"I was restarted while I was working on something{what}. It was not finished, and I have not carried on with it by myself."
+    if task.get("asked"):
+        text += " I had asked for your approval; that question no longer counts, so tapping it will do nothing."
+    text += " Ask me again if you still want it done."
+    return text + ("" if resumed else " I also no longer have our earlier conversation, only what I remember about you.")
+
+
 async def main() -> int:
     try:
         settings = load()
@@ -49,7 +73,7 @@ async def main() -> int:
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
-                                                           with_files=ocr is not None, with_anyapp=anyapp is not None))
+                                                           with_files=ocr is not None, with_anyapp=anyapp is not None), persist=True)
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
@@ -75,7 +99,14 @@ async def main() -> int:
     scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
                           run_routine, now=now, on_delivered=conversation.record_delivery)
 
+    interrupted = unfinished(journal)      # read before this run of the program writes anything
     await runner.start()   # connect the agent loop now, so the first message is not slow
+    if interrupted is not None:
+        # A task was running when the program last stopped. Say so: before this, it vanished without a word.
+        try:
+            await notify.send(restart_notice(interrupted, runner.resumed))
+        except Exception as e:
+            journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
                   files=ocr is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
     if whatsapp is not None:

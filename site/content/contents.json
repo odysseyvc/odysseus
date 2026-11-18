@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 204
+    "tests": 214
   },
   "parts": [
     {
@@ -128,6 +128,13 @@
           "title": "A second channel: WhatsApp",
           "revised": "18 November 2026",
           "summary": "WhatsApp calls the program where Telegram is asked, so this channel needs a door, and three checks to guard it. Built on Meta's own interface and tested without Meta; not yet connected."
+        },
+        {
+          "n": 17,
+          "slug": "not-losing-its-place",
+          "title": "Not losing its place",
+          "revised": "18 November 2026",
+          "summary": "Three ways the first design lost the owner's work, and what replaced them: messages that wait their turn, a conversation that survives a restart, and a plain notice when a restart interrupts a task."
         }
       ]
     }

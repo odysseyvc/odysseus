@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from datetime import datetime
 from typing import Any, Callable, Protocol
 
@@ -22,6 +23,7 @@ from .gate import Gate
 from .schedule import ScheduleStore
 
 STOP_WORDS = {"stop", "/stop", "cancel", "/cancel"}
+MAX_WAITING = 5      # messages that can wait behind a running task
 TELEGRAM_LIMIT = 4096
 DRAFT_INTERVAL_S = 0.8   # Telegram asks for about one message a second per chat
 
@@ -65,6 +67,7 @@ class Conversation:
         self._ocr = ocr
         self._anyapp = anyapp
         self._task: asyncio.Task | None = None
+        self._waiting: deque[tuple[str, Chat]] = deque()      # messages that arrived while a task was running
         self._draft_seq = 0
         self._tracing = tracing
         self._conversation_id = f"conversation-{int(time.time())}"     # groups this run's tasks together in the trace viewer
@@ -129,7 +132,7 @@ class Conversation:
             await self._stop(chat)
             return
         if command in ("/start", "/help"):
-            await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /status shows today's "
+            await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /new starts a fresh conversation. /status shows today's "
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
@@ -149,9 +152,26 @@ class Conversation:
             await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f} of ${self._s.daily_usd:.2f}.")
             return
 
-        # 3. One task at a time in this version.
+        # A new conversation, with nothing carried over. Memory, reminders and connections are untouched.
+        if command == "/new":
+            if self.busy:
+                await chat.send("I'm in the middle of a task. Send stop first, then /new.")
+                return
+            await self._runner.forget_session()
+            self._shown_version = -1
+            self._journal.write("new_conversation")
+            await chat.send("Started a new conversation. I still have what I remember about you, your reminders and your connections; "
+                            "I no longer have what we said before.")
+            return
+
+        # 3. One task runs at a time. A message that arrives meanwhile waits its turn; it is not thrown away.
         if self.busy:
-            await chat.send("Still working on the last task. Send stop to end it.")
+            if len(self._waiting) >= MAX_WAITING:
+                await chat.send(f"I already have {MAX_WAITING} messages waiting behind the current task. Send stop to drop them all.")
+                return
+            self._waiting.append((text, chat))
+            self._journal.write("queued", waiting=len(self._waiting))
+            await chat.send("Noted. I'll do this as soon as the current task is finished. Send stop to end everything.")
             return
 
         # 4. The daily budget is checked before any model call is made.
@@ -160,7 +180,18 @@ class Conversation:
             await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started this.")
             return
 
-        self._task = asyncio.create_task(self._run(text, chat))
+        self._task = asyncio.create_task(self._work(text, chat))
+
+    async def _work(self, text: str, chat: Chat) -> None:
+        """Run a task, then whatever arrived while it was running, one at a time, in the order it arrived."""
+        await self._run(text, chat)
+        while self._waiting:
+            text, chat = self._waiting.popleft()
+            if self._ledger.spent_today() >= self._s.daily_usd:
+                self._journal.write("refused", reason="daily_budget")
+                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started a message that was waiting.")
+                continue
+            await self._run(text, chat)
 
     async def handle_file(self, user_id: int, data: bytes | None, name: str, mime: str | None, size: int, caption: str, chat: Chat) -> None:
         """The owner sent a photo or a document. Read its text, then treat it as a message that includes that text.
@@ -172,9 +203,6 @@ class Conversation:
             return                      # a stranger's file is never downloaded or read
         if self._ocr is None:
             await chat.send("I can't read files yet: no text-recognition key is in my settings.")
-            return
-        if self.busy:
-            await chat.send("Still working on the last task. Send stop to end it, then send the file again.")
             return
         try:
             kind = resolve_type(mime, name)
@@ -212,7 +240,11 @@ class Conversation:
         if task is None or task.done():
             await chat.send("Nothing is running.")
             return
-        self._journal.write("stop_requested")
+        self._journal.write("stop_requested", waiting=len(self._waiting))
+        dropped = len(self._waiting)
+        self._waiting.clear()            # stop means stop: what was waiting is dropped too, and the owner is told
+        if dropped:
+            await chat.send(f"Also dropped: {dropped} message{'s' if dropped != 1 else ''} that {'were' if dropped != 1 else 'was'} waiting.")
         if self._gate is not None:
             self._gate.cancel_all()      # anything waiting for an answer is treated as declined
         if self._browser is not None:
@@ -255,7 +287,8 @@ class Conversation:
             self._gate.set_asker(ask_owner)
         started = time.monotonic()
         last_draft = 0.0
-        self._journal.write("task_start", chars=len(prompt))
+        # The first words are kept so that, after a restart, the owner can be told what was interrupted.
+        self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80])
 
         async def on_text(text_so_far: str) -> None:
             nonlocal last_draft
