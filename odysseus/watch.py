@@ -11,9 +11,11 @@ Three parts, each kept small:
                 this program opens. Nothing has to be able to reach the program, so this
                 works on a laptop as well as on a server.
   the triage    for each event, the small model is asked one narrow question: does this
-                satisfy any of the things the owner asked to be told about? It runs on the
-                read-only agent that routines use. It can look at mail and calendar. It
-                cannot send, change, remember or schedule anything.
+                satisfy any of the things the owner asked to be told about? It runs on an
+                agent of its own (routines.make_triage_runner) that can look at the owner's
+                mail and calendar and do nothing else: no web search, no memory, no sending,
+                changing or scheduling. The first version of this ran on the routine agent,
+                which also had web search; an audit caught that, and it was removed.
   the telling   if it does, the owner gets a message. If it does not, nothing is said.
 
 What keeps this safe and cheap:
@@ -202,10 +204,11 @@ class Chat(Protocol):
 class Watcher:
     def __init__(self, store: WatchStore, backend: TriggerBackend | None, triage: Callable[[str], Awaitable[tuple[str, str, float]]],
                  chat: Chat, journal: Journal, ledger: Ledger, daily_usd: float, now: Callable[[], datetime] = datetime.now,
-                 on_delivered: Callable[[str], None] | None = None):
+                 on_delivered: Callable[[str], None] | None = None, on_read: Callable[[str], None] | None = None):
         self._store, self._backend, self._triage, self._chat = store, backend, triage, chat
         self._journal, self._ledger, self._daily_usd, self._now = journal, ledger, daily_usd, now
         self._on_delivered = on_delivered or (lambda text: None)
+        self._on_read = on_read or (lambda text: None)       # what an event carried is private content like any other mail
         self._seen: deque[str] = deque(maxlen=500)
         self._runs: deque[datetime] = deque()
         self._lock = asyncio.Lock()         # one triage at a time: they share one agent
@@ -266,6 +269,7 @@ class Watcher:
             self._journal.write("event", trigger=slug, outcome="ignored")      # nothing is watching: no model, no cost
             return "ignored"
         about, text = described
+        self._on_read(text)
         now = self._now()
         while self._runs and now - self._runs[0] > timedelta(hours=1):
             self._runs.popleft()
@@ -283,7 +287,9 @@ class Watcher:
                 m = re.match(r"\s*\[([0-9a-f]{4})\]\s*(.+)", line)
                 if m and m.group(1) in by_id and m.group(1) not in told:
                     watch = by_id[m.group(1)]
-                    message = f"{m.group(2).strip()[:900]}\n\n(Watch [{watch.id}]: {watch.text[:120]})"
+                    # A link is never passed on: the words came from a model that had just read a stranger's message.
+                    said = re.sub(r"(?i)\b(?:https?://|www\.)\S+", "[link removed]", m.group(2).strip())[:900]
+                    message = f"{said}\n\n(Watch [{watch.id}]: {watch.text[:120]})"
                     await self._chat.send(message)
                     self._on_delivered(message)
                     told.append(watch.id)

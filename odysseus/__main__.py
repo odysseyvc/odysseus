@@ -16,7 +16,7 @@ from .conversation import Conversation
 from .journal import Journal, Ledger
 from .memory import MemoryStore
 from .ocr import MistralOcr
-from .routines import make_routine_runner
+from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
 from .tools import make_gate, make_tool_server
@@ -112,10 +112,10 @@ async def main() -> int:
     watcher = triage = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
-        triage = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), memory, now,
-                                     with_apps=True)
+        triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), now)
         watcher = box["watcher"] = Watcher(watches, ComposioTriggers(settings.composio_api_key, f"odysseus-{settings.owner_id}"), triage, notify,
-                                           journal, ledger, settings.daily_usd, now=now, on_delivered=conversation.record_delivery)
+                                           journal, ledger, settings.daily_usd, now=now, on_delivered=conversation.record_delivery,
+                                           on_read=lambda text: (gate.taint.add(text), tracing.hide(text)))
         if watches.watches():           # something is being watched for: make sure events are coming, and listen
             try:
                 await asyncio.to_thread(watcher.activate)

@@ -172,3 +172,34 @@ async def test_setting_a_watch_needs_the_owners_approval_and_the_question_says_w
     assert "until it happens once" in describe_watch(args) and "every time" in describe_watch({**args, "repeat": "every"})
     with pytest.raises(WatchError):
         describe_watch({"text": "x", "about": "weather"})
+
+
+# --- the agent that reads strangers' mail is given as little as possible ---------------------------------
+
+def test_the_triage_agent_can_read_mail_and_calendar_and_nothing_else(tmp_path):
+    from dataclasses import replace
+    from odysseus.config import Settings
+    from odysseus.routines import TRIAGE_PROMPT, make_triage_runner
+    settings = replace(Settings(telegram_token="t", owner_id=1, anthropic_api_key="k", exa_api_key="e"), data_dir=tmp_path)
+    triage = make_triage_runner(settings, Journal(tmp_path / "j.jsonl"), None, lambda: NOW)
+    allowed = set(triage.runner.options().allowed_tools)
+    assert allowed == {"mcp__odysseus__mail_search", "mcp__odysseus__mail_read", "mcp__odysseus__calendar_list"}
+    assert not any("web_search" in t or "recall" in t or "remember" in t for t in allowed), "nothing it reads can be carried out or written down"
+    assert "ROUTINE INSTRUCTIONS" not in TRIAGE_PROMPT and "at the owner's request" not in TRIAGE_PROMPT
+    assert "written by other people" in TRIAGE_PROMPT and "cannot search the web" in TRIAGE_PROMPT
+
+
+async def test_a_link_in_what_the_triage_agent_says_is_never_passed_on(tmp_path):
+    x = rig(tmp_path, reply=lambda store: f"[{store.watches()[0].id}] Priya replied. Confirm at https://quick-mailer.example.net/pay?id=7 or www.pay-now.example today.")
+    x.store.add("Priya replies about lunch", "mail")
+    assert await x.watcher.on_event(mail_event()) == "told"
+    assert "http" not in x.chat.sent[0] and "pay-now" not in x.chat.sent[0] and x.chat.sent[0].count("[link removed]") == 2
+
+
+async def test_what_an_event_carried_is_remembered_as_private_content(tmp_path):
+    x = rig(tmp_path)
+    seen = []
+    x.watcher._on_read = seen.append
+    x.store.add("Priya replies", "mail")
+    await x.watcher.on_event(mail_event(text="Booking reference QX7R2L for Friday."))
+    assert len(seen) == 1 and "QX7R2L" in seen[0]

@@ -45,7 +45,7 @@ from odysseus.config import load  # noqa: E402
 from odysseus.conversation import Conversation  # noqa: E402
 from odysseus.journal import Journal, Ledger  # noqa: E402
 from odysseus.memory import MemoryStore  # noqa: E402
-from odysseus.routines import make_routine_runner  # noqa: E402
+from odysseus.routines import make_routine_runner, make_triage_runner  # noqa: E402
 from odysseus.schedule import Scheduler, ScheduleStore  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
 from odysseus.watch import Watcher, WatchStore  # noqa: E402
@@ -163,8 +163,7 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         watcher = triage = None
         if store is not None:
             # Arriving mail is checked against the watches by the real small model, as it is in real use.
-            triage = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), memory,
-                                         clock.now, with_apps=True)
+            triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), clock.now)
             watcher = Watcher(store, None, triage, Sink(), journal, ledger, settings.daily_usd, now=clock.now, on_delivered=conv.record_delivery)
             sim.mail_listeners[:] = [arrived.append]
         live.update(watcher=watcher, triage=triage)

@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 232
+    "tests": 235
   },
   "parts": [
     {
@@ -147,7 +147,7 @@
           "n": 19,
           "slug": "being-told",
           "title": "Being told: watches",
-          "revised": "18 November 2026",
+          "revised": "20 November 2026",
           "summary": "\"Tell me when Priya replies.\" The connector reports each new email or calendar change, a read-only small model judges it against what the owner asked for, and code does the telling. Run in the simulated world; not yet fired by a real email."
         }
       ]
