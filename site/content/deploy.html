@@ -85,6 +85,16 @@ fly volumes create odysseus_data --app your-app-name --region sin --size 1</code
 <div class="cmd"><pre><code>fly status
 fly logs</code></pre></div>
 <p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> We reported our first deployment as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
+<h3>Optional: WhatsApp as a second channel</h3>
+<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. Chapter 16 of the book explains what that changes. We have built and tested this channel without Meta and have not yet connected it, so treat these steps as untried.</p>
+<ol>
+<li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions.</li>
+<li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
+<li>Set <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_APP_SECRET</code>, <code>OWNER_WHATSAPP</code> (your number with country code) and <code>WHATSAPP_VERIFY_TOKEN</code> (any phrase you choose) as secrets.</li>
+<li>Uncomment the <code>[http_service]</code> section at the end of <code>fly.toml</code> and deploy.</li>
+<li>In the Meta app, register the webhook address <code>https://your-app-name.fly.dev/whatsapp</code> with the same phrase, and subscribe to <code>messages</code>.</li>
+</ol>
+<div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>
 <h3>Updating later</h3>
 <p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update.</p>
 </div></div>

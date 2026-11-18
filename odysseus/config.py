@@ -26,6 +26,14 @@ class Settings:
     browser_use_api_key: str = ""  # optional: without it, there is no browser
     browser_ask_signed_in: bool = False   # ask the owner before a browser run that is signed in as them
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
+    # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
+    whatsapp_token: str = ""          # a permanent access token for the Meta app
+    whatsapp_phone_id: str = ""       # the id of the WhatsApp number the bot sends from
+    whatsapp_app_secret: str = ""     # the Meta app's secret, which signs every delivery
+    whatsapp_verify_token: str = ""   # any phrase you choose; Meta repeats it once when the address is registered
+    owner_whatsapp: str = ""          # your own WhatsApp number with country code; only this number is listened to
+    whatsapp_port: int = 8080         # the port the program listens on for Meta's deliveries
+    notify_on: str = "telegram"       # where reminders and routines are sent: telegram or whatsapp
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
     langfuse_base_url: str = ""     # the Langfuse region or your own server; empty means Langfuse's default
@@ -81,6 +89,13 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         composio_api_key=merged.get("COMPOSIO_API_KEY", ""),
         browser_use_api_key=merged.get("BROWSER_USE_API_KEY", ""),
         mistral_api_key=merged.get("MISTRAL_API_KEY", ""),
+        whatsapp_token=merged.get("WHATSAPP_TOKEN", ""),
+        whatsapp_phone_id=merged.get("WHATSAPP_PHONE_ID", ""),
+        whatsapp_app_secret=merged.get("WHATSAPP_APP_SECRET", ""),
+        whatsapp_verify_token=merged.get("WHATSAPP_VERIFY_TOKEN", ""),
+        owner_whatsapp=merged.get("OWNER_WHATSAPP", ""),
+        whatsapp_port=int(merged.get("WHATSAPP_PORT", 8080)),
+        notify_on=merged.get("ODYSSEUS_NOTIFY_ON", "telegram").strip().lower(),
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),

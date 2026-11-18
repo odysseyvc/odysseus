@@ -21,6 +21,7 @@ from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
 from .tools import make_gate, make_tool_server
 from .tracing import Tracing
+from .whatsapp import WhatsApp, make_http, serve
 
 
 async def main() -> int:
@@ -52,21 +53,33 @@ async def main() -> int:
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
-                               settings.browser_use_api_key, settings.mistral_api_key), full_content=settings.langfuse_full_content)
+                               settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
+                               settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing)
     bot = Bot(settings.telegram_token)
 
+    # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.
+    whatsapp = close_http = door = None
+    if settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp:
+        http, close_http = make_http(settings.whatsapp_token)
+        whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
+                            app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id)
+    # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
+    notify = whatsapp.chat() if whatsapp is not None and settings.notify_on == "whatsapp" else TelegramChat(bot, settings.owner_id)
+
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
     run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps),
                                       memory, now, with_apps=apps is not None)
-    scheduler = Scheduler(schedule, TelegramChat(bot, settings.owner_id), journal, ledger, settings.daily_usd,
+    scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
                           run_routine, now=now, on_delivered=conversation.record_delivery)
 
     await runner.start()   # connect the agent loop now, so the first message is not slow
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, tracing=tracing.on)
+                  files=ocr is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
+    if whatsapp is not None:
+        door = await serve(whatsapp, settings.whatsapp_port)
     ticking = asyncio.create_task(scheduler.run_forever())
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
@@ -77,6 +90,10 @@ async def main() -> int:
         await runner.close()
         await run_routine.runner.close()
         await bot.session.close()
+        if door is not None:
+            await door.cleanup()
+        if close_http is not None:
+            await close_http()
         tracing.close()
     return 0
 

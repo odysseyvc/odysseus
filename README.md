@@ -1,11 +1,11 @@
 # Odysseus
 
-A personal AI agent you message on Telegram and run yourself, with your own keys. It
+A personal AI agent you message on Telegram (and, optionally, WhatsApp) and run yourself, with your own keys. It
 searches the web, remembers, sends reminders, reads your mail and calendar, works in
 other apps, browses, and reads photos and PDFs you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in a day and has 194 automated tests. The parts
+**Status: early.** It was built in a day and has 204 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has

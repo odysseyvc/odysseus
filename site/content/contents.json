@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 194
+    "tests": 204
   },
   "parts": [
     {
@@ -121,6 +121,13 @@
           "summary": "What the research on evaluation found, and the first version built from it: a world with time, events, other people and failing tools; properties checked on every run; every errand run reworded and under failure. Errands that passed every time as written failed one time in eleven.",
           "slug": "a-world-that-does-not-hold-still",
           "revised": "18 November 2026"
+        },
+        {
+          "n": 16,
+          "slug": "a-second-channel",
+          "title": "A second channel: WhatsApp",
+          "revised": "18 November 2026",
+          "summary": "WhatsApp calls the program where Telegram is asked, so this channel needs a door, and three checks to guard it. Built on Meta's own interface and tested without Meta; not yet connected."
         }
       ]
     }

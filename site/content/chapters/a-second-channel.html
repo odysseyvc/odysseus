@@ -1,0 +1,91 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Explain the difference between a channel the program asks and a channel that calls the program, and why the second needs a door.</li>
+<li>Name the three checks that stand at that door and what each stops.</li>
+<li>Describe the 24-hour rule and what it means for an assistant that speaks first.</li>
+<li>Say why adding a channel changed almost nothing else in the program.</li>
+<li>Give the reasons for using the platform's own interface and not an unofficial library.</li>
+</ul></div>
+
+<div class="box caution"><div class="label">Status of this chapter</div>
+<p><strong>The channel is written and has never been connected to WhatsApp.</strong> <span class="g v">Verified</span> by ten unit tests and by a check that starts the real listener and calls it over HTTP with hand-signed deliveries. <span class="g u">Not tested</span>: any exchange with Meta's servers. Connecting it needs a Meta developer account, and a server that the internet can reach, which Odysseus does not yet have (Chapter 13).</p></div>
+
+<h2 id="why">Why a second channel is cheap, and where it is not</h2>
+<p>Chapter 6 kept all decisions in one place and gave the channel a deliberately small job: carry text out, show a draft, and ask a question with two buttons. Telegram was the only thing that did that job. The owner asked for WhatsApp as well.</p>
+<p>Because of that early separation, nothing about who may speak, what a "stop" does, the gate, memory or the schedule had to change. A WhatsApp message from the owner reaches the same conversation code as a Telegram one. The new file is about 170 lines and contains no decisions.</p>
+<p>What did change is the shape of the connection, and that has consequences for safety.</p>
+
+<h2 id="door">A channel that calls you needs a door</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Polling</dt><dd>The program asks the service "anything new?" over a connection it opened itself. Telegram works this way here. Nothing on the internet can start a conversation with the program.</dd>
+<dt>Webhook</dt><dd>The service calls an address the program owns whenever something happens. WhatsApp works only this way. The program must listen at an address the internet can reach.</dd>
+<dt>Signature</dt><dd>A value sent with a message that could only have been computed by someone holding a shared secret. It proves who sent the message and that it was not altered.</dd>
+</dl></div>
+<p>Chapter 13 was able to say that the server "opens no port to the internet", and that a server with no door needs no guard. WhatsApp ends that. With this channel switched on, the program listens on a port, and anyone who finds the address can send it anything.</p>
+<p>So three checks stand at the door, and a delivery must pass all three before any of it is acted on.</p>
+<div class="tablewrap"><table>
+<caption>The three checks, in the order they are applied.</caption>
+<thead><tr><th>Check</th><th>What is checked</th><th>What it stops</th></tr></thead>
+<tbody>
+<tr><th>The handshake</th><td>When the address is registered, Meta sends back a phrase the owner chose. It must match.</td><td>Someone else registering the owner's address as theirs</td></tr>
+<tr><th>The signature</th><td>Every delivery carries a signature computed from its exact bytes and the app's secret. The program computes it again and compares.</td><td>Anyone but Meta sending a delivery, and any change to one on the way</td></tr>
+<tr><th>The sender</th><td>The number the message came from must be the owner's.</td><td>Any other WhatsApp user who messages the bot's number</td></tr>
+</tbody></table></div>
+<p>A delivery that fails the signature is dropped without being read. A message from another number gets no reply at all, as with Telegram, so that a stranger cannot even learn that something is there.</p>
+<aside class="margin">Meta's documentation calls checking the signature "optional but recommended". For a program that can send mail from its owner's account, it is not optional.</aside>
+<p>Two smaller points follow from the same shape. Meta retries a delivery for up to 36 hours if it is not acknowledged, so the same message can arrive twice; the program remembers recent message ids and handles each once. And Meta expects an answer at once, so the delivery is acknowledged immediately and the work is done afterwards.</p>
+
+<h2 id="window">The 24-hour rule</h2>
+<p>WhatsApp allows a business number to send ordinary messages to a person only for 24 hours after that person last wrote. Each message from the person restarts the clock. Outside that window, only a pre-approved template may be sent, and those are charged per message. <span class="g v">Verified</span> in Meta's documentation, November 2026.</p>
+<p>For a program that only answers, this rule is invisible. For an assistant that speaks first (Chapter 8), it is a real limit: a reminder set on Monday for Thursday falls outside the window unless the owner happens to have written since Wednesday.</p>
+<p>Templates are not built here. So the honest state is this: on WhatsApp, a reminder or routine is delivered if the owner has written in the last 24 hours and is refused by WhatsApp otherwise. The refusal is logged, never silent, and by default reminders and routines are sent on Telegram, where no such rule applies. A setting sends them to WhatsApp instead.</p>
+
+<h2 id="buttons">Approval, on a different screen</h2>
+<p>The gate's rule from Chapter 9 is that only a button counts as approval, and that the owner must have been shown everything the button covers. WhatsApp has reply buttons, with a limit: a button message holds 1,024 characters, a quarter of what Telegram allows.</p>
+<p>An approval question longer than that is sent as ordinary messages first, with the two buttons on the last part. The buttons carry only the approval's id; what will run is held by the gate, as before. A typed "yes" on WhatsApp is an ordinary message, as it is on Telegram.</p>
+
+<h2 id="buy">Three ways to reach WhatsApp, and why this one</h2>
+<div class="tablewrap"><table>
+<caption>The options that were considered.</caption>
+<thead><tr><th>Route</th><th>For</th><th>Against</th></tr></thead>
+<tbody>
+<tr><th>Meta's own Cloud API</th><td>Official; no company in between; a test number is provided</td><td>Needs a Meta developer account and a public address</td></tr>
+<tr><th>A messaging provider that resells it</th><td>Simpler sign-up at some providers</td><td>One more company holding every message, and a fee on top</td></tr>
+<tr><th>An unofficial library that imitates the phone app</th><td>No business account; no 24-hour rule</td><td>Against WhatsApp's terms. Accounts are banned for it, and it is the owner's personal number that would be lost.</td></tr>
+</tbody></table></div>
+<p>Chapter 15's research recorded users of one commercial assistant reporting WhatsApp bans. <span class="g s">Secondary</span> The first route was chosen. The cost is the set-up, and the 24-hour rule comes with it.</p>
+
+<h2 id="tested">What is tested, and what is not</h2>
+<div class="tablewrap"><table>
+<caption>The state of the WhatsApp channel.</caption>
+<thead><tr><th>Claim</th><th>Grade</th></tr></thead>
+<tbody>
+<tr><td>A delivery with a wrong or missing signature is rejected; one changed byte breaks it</td><td><span class="g v">Verified</span>, unit test and a real HTTP call to the running listener</td></tr>
+<tr><td>Only the owner's number is listened to; a stranger gets no reply</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>A long approval question is shown whole, with the buttons last</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>A message delivered twice is handled once</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>The message formats match what WhatsApp sends and accepts</td><td><span class="g u">Not tested</span>: written from the documentation, never exchanged with Meta</td></tr>
+<tr><td>The buttons appear and work on a phone</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>Photos and documents sent on WhatsApp are fetched and read</td><td><span class="g u">Not tested</span> against Meta's file service</td></tr>
+<tr><td>Voice notes</td><td>Not built. The owner is told so in a reply.</td></tr>
+</tbody></table></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>Keeping every decision out of the channel made a second channel a small file.</li>
+<li>A channel that calls the program needs an address the internet can reach. That is a door, and it needs guarding.</li>
+<li>Three checks: the handshake, the signature on every delivery, and the sender's number.</li>
+<li>WhatsApp lets a business number write freely only for 24 hours after the person last wrote. An assistant that speaks first runs into this.</li>
+<li>Use the platform's own interface. Imitating the phone app risks the owner's own number.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Check your understanding</div>
+<ol>
+<li>The signature check is removed "to make testing easier" and never put back. Describe an attack.
+<details><summary>Answer</summary><p>Anyone who learns the address sends a delivery shaped like a WhatsApp message, with the owner's number in the "from" field. The sender check passes, because the number is whatever the attacker wrote. The program now takes instructions from a stranger as if they were the owner's. The signature is what makes the "from" field believable.</p></details></li>
+<li>The owner sets a reminder on Monday for Thursday at 9am and chooses to receive reminders on WhatsApp. They last wrote on Tuesday. What happens on Thursday?
+<details><summary>Answer</summary><p>The 24-hour window closed on Wednesday. WhatsApp refuses the message. The program logs the refusal and the reminder is recorded as failed. Nothing arrives on WhatsApp. This is why reminders go to Telegram unless the owner chooses otherwise.</p></details></li>
+<li>Why is a delivery acknowledged before it is handled, and what does that make necessary?
+<details><summary>Answer</summary><p>Meta expects a quick answer and retries when it does not get one; a task can take a minute. Acknowledging first avoids retries of slow tasks. But a retry can still happen if the acknowledgement is lost, so the program must recognise a message it has already seen and not act on it twice.</p></details></li>
+</ol></div>
