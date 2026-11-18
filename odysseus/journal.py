@@ -1,8 +1,8 @@
 """The log and the spending ledger.
 
 Every step the agent takes is appended to one file as a line of JSON. The
-ledger is derived from the same file, so what was spent can always be checked
-against what was done.
+ledger is derived from the same file and from nothing else, so what was spent
+can always be checked against what was done.
 """
 from __future__ import annotations
 
@@ -21,12 +21,15 @@ class Journal:
         self.path = path
         self._clock = clock
         self._echo = echo
+        self.listeners: list[Callable[[dict[str, Any]], None]] = []     # told of every record as it is written (the ledger)
         path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(self, kind: str, **fields: Any) -> None:
         record = {"ts": round(self._clock(), 3), "kind": kind, **fields}
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        for listener in self.listeners:
+            listener(record)
         if self._echo:
             shown = " ".join(f"{k}={fields[k]}" for k in self.ECHO_FIELDS if k in fields)
             print(f"odysseus {kind} {shown}".rstrip(), flush=True)
@@ -43,19 +46,64 @@ class Journal:
         return out
 
 
-class Ledger:
-    """Money spent per calendar day, rebuilt from the journal at start-up."""
+# What the services that do not report a price per call are assumed to cost. These two are estimates from the
+# makers' public price lists, not measured, and should be checked against an invoice.
+OCR_USD_PER_PAGE = 0.002
+VOICE_USD_PER_MINUTE = 0.003
 
-    def __init__(self, journal: Journal, today: Callable[[], date] = date.today):
+
+def cost_of(rec: dict[str, Any]) -> float:
+    """What one journal record cost, in dollars. This function is the whole definition of the ledger.
+
+    task_end   a conversation task or a routine: the model's cost as the agent library reported it, plus any browser run
+    event      one check of an incoming event against the watches
+    tool       a web search, at the price the search service reported for that call
+    file       a file read by the text-recognition service (estimated per page)
+    voice      a voice note transcribed (estimated per minute)
+
+    The connector for mail, calendar and apps is billed by subscription, not per call, and is not counted.
+    """
+    kind = rec.get("kind")
+    try:
+        if kind in ("task_end", "event"):
+            return float(rec.get("cost_usd") or 0.0)
+        if kind == "tool" and rec.get("name") == "web_search":
+            return float(rec.get("cost_usd") or 0.0)
+        if kind == "file" and rec.get("ok") and rec.get("pages"):
+            return float(rec["pages"]) * OCR_USD_PER_PAGE
+        if kind == "voice" and rec.get("ok"):
+            return float(rec.get("seconds") or 0) / 60 * VOICE_USD_PER_MINUTE
+    except (TypeError, ValueError):
+        pass
+    return 0.0
+
+
+class Ledger:
+    """Money spent per calendar day: every costed record in the journal, from the start of the file and as each is written.
+
+    `tz` is the owner's time zone, so that "today" ends at the owner's midnight and not the machine's.
+    """
+
+    def __init__(self, journal: Journal, today: Callable[[], date] | None = None, tz: str = ""):
         self._journal = journal
-        self._today = today
+        self._zone = None
+        if tz:
+            from zoneinfo import ZoneInfo
+            self._zone = ZoneInfo(tz)
+        self._today = today or (lambda: datetime.now(self._zone).date())
         self._by_day: dict[str, float] = {}
         for rec in journal.read():
-            if rec.get("kind") == "task_end" and rec.get("cost_usd"):
-                day = datetime.fromtimestamp(rec["ts"]).date().isoformat()
-                self._by_day[day] = self._by_day.get(day, 0.0) + float(rec["cost_usd"])
+            self._count(rec)
+        journal.listeners.append(self._count)
+
+    def _count(self, rec: dict[str, Any]) -> None:
+        usd = cost_of(rec)
+        if usd:
+            day = datetime.fromtimestamp(rec["ts"], self._zone).date().isoformat()
+            self._by_day[day] = self._by_day.get(day, 0.0) + usd
 
     def add(self, usd: float) -> None:
+        """Count money that has no journal record of its own. The program itself no longer calls this."""
         day = self._today().isoformat()
         self._by_day[day] = self._by_day.get(day, 0.0) + usd
 

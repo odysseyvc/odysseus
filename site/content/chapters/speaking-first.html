@@ -84,7 +84,7 @@ routine  due 08:00  delivered  $0.0018</code></pre>
 <p>A routine is refused before it starts if the day's budget is already spent, and that refusal is a failure like any other: recorded and announced. Reminders are unaffected, since they cost nothing.</p>
 
 <h2 id="owner">What the owner sees and controls</h2>
-<p>Setting a job is a change the model makes on the owner's behalf. As first built, every job was handled as memory was in Chapter 7: allowed without a question, and reported by code afterwards. Reminders still are. Since Chapter 9, setting up a routine asks the owner first. When a task has added or cancelled a job, the program appends a line to the reply that the model did not write, giving the job's identifier, kind, time and the start of its text.</p>
+<p>Setting a job is a change the model makes on the owner's behalf. As first built, every job was handled as memory was in Chapter 7: allowed without a question, and reported by code afterwards. Reminders still are, unless the task has read mail, a web page or a file first (Chapter 20). Since Chapter 9, setting up a routine asks the owner first. When a task has added or cancelled a job, the program appends a line to the reply that the model did not write, giving the job's identifier, kind, time and the start of its text.</p>
 <p>The owner has two commands that go nowhere near the model. <code>/schedule</code> lists every job in full. <code>/cancel</code> followed by an identifier removes one.</p>
 <p>The last piece connects the two agents. A routine runs apart from the conversation, so when the owner replies to what it sent, the conversation's model would have no idea what "that" refers to. The program therefore keeps what scheduled jobs have sent, and places it in front of the model with the owner's next message, once.</p>
 
@@ -114,7 +114,7 @@ routine  due 08:00  delivered  $0.0018</code></pre>
 <li>Whether the model gets awkward times right: "next Friday", "the last day of the month", a time just after midnight.</li>
 <li>A routine reading a hostile page. Its tools limit the damage, and no attempt has been made.</li>
 <li>What happens if a reminder is sent and the program crashes before recording it. The message would be sent again on restart. One duplicate was judged better than one missing reminder.</li>
-<li>When this chapter was written the program ran on the owner's own machine, where a scheduler runs only while that machine is awake. It has since been moved to an always-on server (Chapter 13), where no scheduled job has yet fired.</li>
+<li>When this chapter was written the program ran on the owner's own machine, where a scheduler runs only while that machine is awake. It was moved to an always-on server for a few minutes (Chapter 13) and is back on that machine until the server is paid for. No scheduled job has yet fired at its real time on either.</li>
 </ul>
 
 <div class="box summary"><div class="label">Summary</div>

@@ -68,6 +68,8 @@ class OwnerChat:
     def __init__(self, task: Task, sim: Sim):
         self.sent: list[str] = []
         self.asks: list[str] = []
+        self.own_asks: list[str] = []      # questions about the assistant's own memory and reminders
+        self.said: list[str] = []          # the owner's messages so far, shared with the run
         self._taps = task.tap.split(",")      # one answer per question, in order; the last one repeats
         self._task, self._sim = task, sim
         self.conv = None
@@ -80,9 +82,23 @@ class OwnerChat:
         pass
 
     async def ask(self, text: str, approval_id: str) -> None:
+        conv = self.conv
+        if text.startswith(OWN_FILES):
+            # A question about the assistant's own memory or reminders, asked because it had read something first. The
+            # stand-in owner answers as a real one would: yes if they asked for something to be remembered or to be
+            # reminded, no if they did not. These are counted apart, so an errand's expected questions are unchanged.
+            self.own_asks.append(text)
+            # Judged from the errand as written, not as reworded: "give me a nudge" asks for a reminder as surely as "remind me".
+            asked_for = " ".join([self._task.say, *self._task.then, *(str(s[1]) for s in self._task.script if s[0] == "say")]).lower()
+            wanted = any(w in asked_for for w in ("remember", "remind", "note", "keep in mind", "don't forget", "save"))
+
+            async def answer_own():
+                await asyncio.sleep(0.1)
+                await conv.handle_decision(self.owner, approval_id, wanted)
+            asyncio.get_running_loop().create_task(answer_own())
+            return
         self.asks.append(text)
         answer = self._taps[min(len(self.asks), len(self._taps)) - 1]
-        conv = self.conv
 
         async def tap():
             await asyncio.sleep(0.3)
@@ -90,6 +106,9 @@ class OwnerChat:
                 self._task.on_ask(self._sim)      # the world may change between the question and the tap
             await conv.handle_decision(self.owner, approval_id, answer == "approve")
         asyncio.get_running_loop().create_task(tap())
+
+
+OWN_FILES = ("Save this to what I remember about you?", "Write this in my dated notes?", "Set this reminder?")
 
 
 async def claims_done(settings, say: str, reply: str, action: str) -> bool:
@@ -130,7 +149,7 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
     chat = OwnerChat(task, sim)
     delivered: list[str] = []
     delivered_at: list[datetime] = []
-    said: list[str] = []
+    said: list[str] = chat.said
     started = time.monotonic()
     status, cost = "done", 0.0
     script = list(task.script) or [("say", task.say), *(("say", t) for t in task.then)]
@@ -142,7 +161,7 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         apps.retry_wait_s = 0.05          # the pause between retries is real time; nothing in the simulation depends on it
         store = WatchStore(folder / "watches.db", now=clock.now) if task.watches else None
         sim.watch_store = store
-        gate = make_gate(journal, clock.now, timeout_s=30, apps=apps, with_watches=store is not None)
+        gate = make_gate(journal, clock.now, timeout_s=30, apps=apps, with_watches=store is not None, taint_file=folder / "taint.bin")
         runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, watches=store), gate=gate,
                              system_prompt=conversation_prompt(True, with_watches=store is not None),
                              persist=any(step[0] == "restart" for step in script))     # kept on disk, as in real use, where a restart happens

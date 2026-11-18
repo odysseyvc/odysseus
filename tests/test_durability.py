@@ -145,11 +145,13 @@ async def test_the_conversation_id_is_kept_on_disk_and_picked_up_by_the_next_run
     assert runner_at(tmp_path).session_id is None, "/new is remembered too"
 
 
-def test_a_runner_that_is_not_asked_to_persist_writes_nothing(tmp_path):
+def test_a_runner_that_is_not_asked_to_persist_saves_no_conversation_but_still_keeps_transcripts_in_the_data_folder(tmp_path):
     r = runner_at(tmp_path, persist=False)
     r.session_id = "sess-1"
     r._save_session()
-    assert not (tmp_path / "session.json").exists() and "CLAUDE_CONFIG_DIR" not in r.options().env
+    assert not (tmp_path / "session.json").exists()
+    # Routines and triage read mail too. Their transcripts must not land in a folder outside the one the owner chose.
+    assert r.options().env["CLAUDE_CONFIG_DIR"] == str((tmp_path / "agent").resolve())
 
 
 def test_a_damaged_session_file_means_a_new_conversation_not_a_crash(tmp_path):
@@ -168,11 +170,31 @@ def test_a_task_with_no_end_in_the_log_was_interrupted(tmp_path):
     j.write("task_start", chars=30, preview="Move my 1:1 with Sam to 4pm")
     j.write("gate", tool="mcp__odysseus__calendar_change", verdict="asked", approval="ab12")
     task = unfinished(j)
-    assert task == {"preview": "Move my 1:1 with Sam to 4pm", "asked": True}
+    assert task == {"preview": "Move my 1:1 with Sam to 4pm", "asked": True, "waiting": []}
     notice = restart_notice(task, resumed=True)
     assert '"Move my 1:1 with Sam to 4pm"' in notice and "not finished" in notice and "no longer counts" in notice
     assert "no longer have our earlier conversation" not in notice
     assert "no longer have our earlier conversation" in restart_notice(task, resumed=False)
+
+
+def test_messages_that_were_waiting_when_the_program_stopped_are_named_in_the_notice(tmp_path):
+    j = Journal(tmp_path / "journal.jsonl")
+    j.write("task_start", chars=30, preview="Summarise my inbox")
+    j.write("queued", waiting=1, q=1, preview="Remind me to call Sam at 5")
+    j.write("queued", waiting=2, q=2, preview="What is on tomorrow?")
+    j.write("queued", waiting=3, q=3, preview="Book the dentist")
+    j.write("dequeued", q=1)                    # this one was reached before the stop
+    task = unfinished(j)
+    assert task["waiting"] == ["What is on tomorrow?", "Book the dentist"]
+    notice = restart_notice(task, resumed=True)
+    assert "2 messages you sent were waiting behind it and were lost" in notice and '"Book the dentist"' in notice
+    j.write("start")                            # the program came back and said so
+    assert unfinished(j) is None, "what was lost is reported once, not at every later restart"
+    j.write("task_start", chars=5, preview="One")
+    j.write("queued", waiting=1, q=1, preview="Two")
+    j.write("queue_cleared", dropped=1)         # the owner sent stop: nothing was lost unknowingly
+    j.write("task_end", status="stopped", cost_usd=0.0)
+    assert unfinished(j) is None
 
 
 def test_a_routine_ending_does_not_hide_an_interrupted_conversation_task(tmp_path):

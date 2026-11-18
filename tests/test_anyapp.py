@@ -137,24 +137,39 @@ async def test_reading_an_app_needs_no_question(tmp_path):
     assert x.anyapp.pop_changes() == []
 
 
-async def test_the_first_change_in_an_app_asks_and_then_covers_that_app_for_the_task_only(tmp_path):
+async def test_every_change_in_an_app_is_asked_about_by_itself(tmp_path):
     x = rig(tmp_path, connected=True)
     first, second = call(APPEND, spreadsheetId="s1", values=[["a"]]), call("GOOGLESHEETS_VALUES_UPDATE", range="A1", values=[["b"]])
     assert (await x.run(first))["is_error"] is True and x.backend.calls == [], "no approval, no change"
     asked = approving(x)
     out = await x.gate.permission(APP_RUN, first)
-    assert "Let me add and edit things in Googlesheets for this task?" in asked[0] and APPEND in asked[0] and '"spreadsheetId": "s1"' in asked[0]
+    assert asked[0].startswith("Do this in Googlesheets?") and APPEND in asked[0] and '"spreadsheetId": "s1"' in asked[0]
     await x.run(out.updated_input)
-    assert isinstance(await x.gate.permission(APP_RUN, second), PermissionResultAllow) and len(asked) == 1, "the second change is not asked about"
-    await x.run(second)
+    assert (await x.run(dict(second)))["is_error"] is True, "one approval does not cover the next change in the same app"
+    out = await x.gate.permission(APP_RUN, second)
+    assert len(asked) == 2 and "GOOGLESHEETS_VALUES_UPDATE" in asked[1], "the second change is asked about too"
+    await x.run(out.updated_input)
     assert [c[0] for c in x.backend.calls] == [APPEND, "GOOGLESHEETS_VALUES_UPDATE"]
     assert x.anyapp.pop_changes() == [f"ran {APPEND} in Googlesheets", "ran GOOGLESHEETS_VALUES_UPDATE in Googlesheets"]
-    other = call("NOTION_CREATE_NOTION_PAGE", title="x")
+    # An action whose name is on no list (the hole in the earlier design: one approval used to cover it) asks as well.
+    unlisted = call("GOOGLESHEETS_VOID_SPREADSHEET", spreadsheetId="s1")
+    assert x.gate.decide(APP_RUN, unlisted) == "ask"
     x.gate.set_asker(None)
-    assert isinstance(await x.gate.permission(APP_RUN, other), PermissionResultDeny), "approval for one app does not cover another"
-    x.anyapp.end_task()
-    assert (await x.run(dict(second)))["is_error"] is True, "and it does not outlive the task"
-    assert (await x.run(dict(first)))["is_error"] is True, "nor does a used approval come back"
+    assert isinstance(await x.gate.permission(APP_RUN, unlisted), PermissionResultDeny)
+    assert (await x.run(dict(first)))["is_error"] is True, "a used approval does not come back"
+
+
+async def test_a_read_in_an_app_that_carries_details_from_the_mailbox_is_asked_about(tmp_path):
+    x = rig(tmp_path, connected=True)
+    from odysseus.taint import Taint
+    x.anyapp.taint = Taint()
+    search = call("SERPAPI_SEARCH", query="who owns account 4471-2290-18 at Northside")
+    assert x.gate.decide(APP_RUN, search) == "allow", "nothing private is known yet"
+    x.anyapp.taint.add("Your account 4471-2290-18 is overdue.")
+    assert x.gate.decide(APP_RUN, search) == "ask"
+    asked = approving(x)
+    await x.gate.permission(APP_RUN, search)
+    assert asked[0].startswith("Send these details to Serpapi?") and "4471229018" in asked[0]
 
 
 async def test_sending_sharing_and_deleting_ask_every_time_even_after_changes_are_approved(tmp_path):

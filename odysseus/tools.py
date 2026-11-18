@@ -46,10 +46,39 @@ SCHEDULE_TOOL = _name("schedule")
 WATCH_TOOL = _name("watch")
 
 
-def _schedule_decision(args: dict[str, Any]) -> str:
-    # A reminder is a fixed message to the owner: allowed. A routine commits the owner to
-    # repeated unattended runs that cost money: the owner is asked first.
-    return ASK if str(args.get("kind", "")).strip().lower() == "routine" else ALLOW
+def _after_reading(taint: Taint, text: str) -> list[str]:
+    """Why a write to Odysseus's own memory or schedule should be put to the owner: what was read in this task that
+    other people wrote, plus anything in the text itself that is recognised as coming from the owner's accounts."""
+    why = sorted(taint.sources)
+    if not why and taint.leaked(text):
+        why = ["your mail, calendar or apps (earlier in this conversation)"]
+    return why
+
+
+def _list(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def describe_memory(args: dict[str, Any], taint: Taint, what: str = "Save this to what I remember about you?") -> str:
+    text = " ".join(str(args.get("text", "")).split())
+    if not text:
+        raise MemoryError_("There is nothing to save.")
+    replaces = f"\n\nIt replaces entry [{args['replaces']}]." if args.get("replaces") else ""
+    return (f"{what}\n\n{text}{replaces}\n\nI am asking because during this task I read {_list(_after_reading(taint, text))}, "
+            "which other people wrote. What I remember is shown to me in every later conversation.")
+
+
+def describe_reminder(args: dict[str, Any], taint: Taint, now=None) -> str:
+    from datetime import datetime
+    when = parse_when(args.get("when", ""), (now or datetime.now)())
+    repeat = (args.get("repeat") or "once").strip().lower()
+    if repeat not in REPEATS:
+        raise ScheduleError("unknown repeat")
+    text = " ".join(str(args.get("text", "")).split())
+    if not text:
+        raise ScheduleError("There is nothing to schedule.")
+    return (f"Set this reminder?\n\n{when:%a %d %b %Y at %H:%M}" + ("" if repeat == "once" else f", repeating {repeat}")
+            + f"\n{text}\n\nI am asking because during this task I read {_list(_after_reading(taint, text))}, which other people wrote.")
 
 
 def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False) -> str:
@@ -83,18 +112,21 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None, apps: Apps | None = None,
-              with_watches: bool = False) -> Gate:
+              with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 
     Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
     and so that what is read from the accounts is remembered for the check on what leaves through search.
+    `taint_file` is where that record is kept between runs of the program.
     """
     gate = Gate(journal, timeout_s)
-    taint = gate.taint = Taint()
+    taint = gate.taint = Taint(taint_file, on_full=lambda: journal.write("taint", outcome="full", note="oldest fingerprints are now being dropped"))
     with_apps = with_apps or apps is not None
     if apps is not None:
         apps.taint = taint
-    if with_browser:
+    if browser is not None:
+        browser.taint = taint
+    if with_browser or browser is not None:
         browser_mod.add_rules(gate, browser_ask_signed_in, taint)
     if anyapp is not None:
         anyapp.taint = taint
@@ -102,12 +134,30 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     if with_apps:
         from datetime import datetime
         apps_mod.add_rules(gate, now or datetime.now, apps)
-    for name in (*MEMORY_TOOLS, _name("list_schedule"), _name("cancel_schedule")):
+    for name in (_name("forget"), _name("recall"), _name("list_schedule"), _name("cancel_schedule")):
         gate.rule(name, ALLOW)
+    # Saving to memory writes only to Odysseus's own files, so it needs no question when the task has read nothing
+    # but the owner's own words. Once mail, a web page, a file or anything else other people wrote has been read in
+    # the task, the model may be repeating what it read, and memory is shown in every later conversation: the owner is asked.
+    gate.rule(_name("remember"), lambda a: ASK if _after_reading(taint, str(a.get("text", ""))) else ALLOW,
+              lambda a: describe_memory(a, taint))
+    gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text", ""))) else ALLOW,
+              lambda a: describe_memory(a, taint, "Write this in my dated notes?"))
     # A search is allowed unless it carries details read from the owner's accounts (taint.py); then the owner is asked.
     gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(f"{a.get('query', '')} {a.get('objective', '')}") else ALLOW,
               lambda a: describe_search(a, taint))
-    gate.rule(SCHEDULE_TOOL, _schedule_decision, lambda args: describe_routine(args, now, with_apps))
+
+    def schedule_decision(a: dict[str, Any]) -> str:
+        # A routine commits the owner to repeated unattended runs that cost money: always asked. A reminder is a fixed
+        # message to the owner: allowed, unless the task has read something other people wrote, for the same reason as memory.
+        routine = str(a.get("kind", "")).strip().lower() == "routine"
+        return ASK if routine or _after_reading(taint, str(a.get("text", ""))) else ALLOW
+
+    def schedule_question(a: dict[str, Any]) -> str:
+        if str(a.get("kind", "")).strip().lower() == "routine":
+            return describe_routine(a, now, with_apps)
+        return describe_reminder(a, taint, now)
+    gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
         gate.rule(WATCH_TOOL, ASK, describe_watch)
@@ -188,6 +238,23 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     m = make_memory_handlers(memory, journal)
     search_handler = make_search_handler(spec, journal)
     if gate is not None:
+        taint = getattr(gate, "taint", None)
+        if taint is not None:
+            found = search_handler
+
+            async def search_handler(args: dict[str, Any]) -> dict[str, Any]:
+                taint.saw("web search results")       # from here on in this task, the model has read what strangers wrote
+                return await found(args)
+
+            def with_source(name: str, handler):
+                async def wrapped(args: dict[str, Any]) -> dict[str, Any]:
+                    if taint.sources:       # where a saved fact may have come from is kept in the log
+                        journal.write("provenance", name=name, after_reading=sorted(taint.sources))
+                    return await handler(args)
+                return wrapped
+            m["remember"], m["note"] = with_source("remember", m["remember"]), with_source("note", m["note"])
+        m["remember"] = gate.guarded(_name("remember"), m["remember"])      # lock 2
+        m["note"] = gate.guarded(_name("note"), m["note"])
         search_handler = gate.guarded(SEARCH_TOOL, search_handler)     # lock 2, for a search that carries private details
     elif apps is not None:
         # An unattended routine has nobody to ask, so a search carrying details from the accounts is simply refused.

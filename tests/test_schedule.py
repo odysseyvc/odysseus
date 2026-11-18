@@ -154,12 +154,45 @@ async def test_after_downtime_a_missed_reminder_is_sent_once_and_marked_late(tmp
     assert await x.sched.tick() == 0
 
 
-async def test_a_reminder_that_cannot_be_sent_is_recorded_as_failed(tmp_path):
+async def test_a_reminder_that_cannot_be_sent_is_kept_and_tried_again_before_it_is_called_failed(tmp_path):
     x = rig(tmp_path, chat=FailingChat())
     x.store.add("reminder", "Call the dentist", "2026-11-17T10:00")
     await x.sched.tick()
-    assert outcomes(x) == ["failed"] and "ConnectionError" in x.store.runs()[0]["detail"]
-    assert "error" in [r["kind"] for r in x.journal.read()], "the failed announcement is logged too"
+    assert outcomes(x) == [] and len(x.store.jobs()) == 1, "not delivered, and not deleted either"
+    assert x.store.jobs()[0].next_run == T0 + timedelta(minutes=1)
+    assert await x.sched.tick() == 0, "not tried again until that minute has passed"
+    for wait in (1, 5, 15, 30):
+        x.clock.advance(minutes=wait)
+        await x.sched.tick()
+    assert outcomes(x) == ["failed"] and "ConnectionError" in x.store.runs()[0]["detail"] and x.store.jobs() == []
+    kinds = [(r["kind"], r.get("outcome")) for r in x.journal.read()]
+    assert kinds.count(("scheduled_run", "retrying")) == 4 and ("error", None) in kinds, "the failed announcement is logged too"
+
+
+async def test_a_reminder_that_fails_once_is_delivered_on_the_next_try_and_says_it_is_late(tmp_path):
+    x = rig(tmp_path)
+    real, state = x.chat.send, {"fail": True}
+
+    async def flaky(text):
+        if state.pop("fail", False):
+            raise ConnectionError("network down")
+        await real(text)
+    x.chat.send = flaky
+    x.store.add("reminder", "Call the dentist", "2026-11-17T10:00", "daily")
+    await x.sched.tick()
+    x.clock.advance(minutes=6)
+    await x.sched.tick()
+    assert len(x.chat.sent) == 1 and "Call the dentist" in x.chat.sent[0] and "late because I could not send it then" in x.chat.sent[0]
+    assert outcomes(x) == ["delivered"] and x.store.jobs()[0].next_run == T0 + timedelta(days=1), "its daily rhythm is kept"
+
+
+async def test_a_message_the_first_channel_refuses_goes_out_on_the_second(tmp_path):
+    x = rig(tmp_path, chat=FailingChat())
+    other = FakeChat()
+    x.sched._fallback = other
+    x.store.add("reminder", "Call the dentist", "2026-11-17T10:00")
+    await x.sched.tick()
+    assert other.sent == ["Reminder: Call the dentist"] and outcomes(x) == ["delivered"]
 
 
 # --- Routines: the three outcomes ----------------------------------------------

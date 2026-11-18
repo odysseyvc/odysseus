@@ -19,7 +19,11 @@ Two rules of WhatsApp's shape what is possible:
   the 24-hour window   free-form messages can be sent only for 24 hours after the owner last
                        wrote. A reminder that falls outside the window is refused by WhatsApp.
                        Sending outside it needs message templates approved by Meta, which are
-                       not built here. The failure is logged, never silent.
+                       not built here. The failure is logged, and a reminder or routine that
+                       WhatsApp refuses is sent on Telegram instead (schedule.py).
+  late deliveries      Meta retries a delivery for up to 36 hours if the program cannot be
+                       reached. A message that arrives more than ten minutes after it was sent
+                       is not acted on: the owner is told, and can send it again.
   voice notes          are fetched and handed to the same code that handles Telegram's (voice.py).
   buttons              an approval question carries Approve and Decline as reply buttons. A
                        button message holds 1,024 characters, so a longer question is sent as
@@ -31,6 +35,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import time
 from collections import deque
 from typing import Any, Awaitable, Callable
 
@@ -40,7 +45,7 @@ from .ocr import MAX_BYTES
 
 GRAPH = "https://graph.facebook.com/v27.0"
 TEXT_LIMIT, BUTTON_BODY_LIMIT = 4096, 1024
-VOICE_NOTE = "I can't listen to voice notes yet. Please type it."
+STALE_AFTER_S = 600       # a message older than this when it arrives is reported, not acted on
 OTHER_NOTE = "I can only read text, photos and documents on WhatsApp for now."
 
 # (method, url, json body or None) -> (status, parsed json or raw bytes)
@@ -96,8 +101,11 @@ class WhatsApp:
     """Receives what Meta delivers, checks it, and hands the owner's messages to the conversation."""
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, phone_id: str, owner_number: str,
-                 app_secret: str, verify_token: str, owner_id: int):
+                 app_secret: str, verify_token: str, owner_id: int, clock: Callable[[], float] = time.time):
         self._conv, self._journal, self._http = conversation, journal, http
+        self._clock = clock
+        self._unsigned, self._unsigned_logged = 0, 0.0      # unsigned posts since the last log line, and when that was
+        self._late_told = 0.0
         self._phone_id, self._owner, self._secret, self._verify, self._owner_id = phone_id, digits(owner_number), app_secret, verify_token, owner_id
         self._seen: deque[str] = deque(maxlen=500)      # Meta retries for 36 hours, so the same message can arrive twice
         self._tasks: set[asyncio.Task] = set()
@@ -115,7 +123,12 @@ class WhatsApp:
     def receive(self, raw: bytes, signature: str) -> int:
         """Check a delivery and start handling it. Returns the status to answer with, at once: Meta must not be kept waiting."""
         if not signature_ok(self._secret, raw, signature):
-            self._journal.write("dropped", what="whatsapp delivery with a bad signature")
+            # Anyone on the internet can post here. Each such post used to add a line to the journal, which is read whole
+            # at start-up: a way for a stranger to fill the disk. Now they are counted, and one line a minute is written.
+            self._unsigned += 1
+            if self._clock() - self._unsigned_logged >= 60:
+                self._journal.write("dropped", what="whatsapp deliveries with a bad signature", count=self._unsigned)
+                self._unsigned, self._unsigned_logged = 0, self._clock()
             return 403
         try:
             payload = json.loads(raw)
@@ -141,6 +154,19 @@ class WhatsApp:
                 self._journal.write("dropped", what="whatsapp message from a number that is not the owner's")
                 return
             chat, kind = self.chat(), m.get("type")
+            try:
+                age = self._clock() - int(m.get("timestamp") or 0) if m.get("timestamp") else 0
+            except (TypeError, ValueError):
+                age = 0
+            if age > STALE_AFTER_S:
+                # Delivered long after it was sent, most likely because the program could not be reached. An hours-old
+                # instruction is not run as if it had just been given.
+                self._journal.write("dropped", what="whatsapp message that arrived late", minutes=int(age // 60))
+                if self._clock() - self._late_told >= 60:
+                    self._late_told = self._clock()
+                    await chat.send("Something you sent earlier has only just reached me, because I could not be reached at the time. "
+                                    "I have not acted on it. Send it again if you still want it.")
+                return
             if kind == "text":
                 await self._conv.handle(self._owner_id, (m.get("text") or {}).get("body", ""), chat)
             elif kind == "interactive":

@@ -310,6 +310,9 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
 
 # --- the tools -------------------------------------------------------------------
 
+CALL_TIMEOUT_S = 60      # a call to the connector that has not answered by then is treated as failed
+
+
 class Apps:
     def __init__(self, backend: AppBackend, journal: Journal, now: Callable[[], datetime] = datetime.now, tz: str = ""):
         self._b, self._journal, self._now, self._tz = backend, journal, now, tz
@@ -369,8 +372,8 @@ class Apps:
         reading = tool in ("mail_search", "mail_read", "calendar_list")
         for attempt in range(3 if reading else 1):
             try:
-                data = await asyncio.to_thread(self._b.execute, slug, arguments)
-            except Exception as e:
+                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments), CALL_TIMEOUT_S)
+            except (Exception, asyncio.TimeoutError) as e:
                 self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", attempt=attempt + 1)
                 if reading and attempt < 2:
                     await asyncio.sleep(self.retry_wait_s * (attempt + 1))
@@ -384,6 +387,32 @@ class Apps:
                 raise AppError(said) from e
             self._journal.write("tool", name=tool, ok=True)
             return data
+
+    async def _fresh(self, event_id: str) -> dict[str, Any]:
+        """The event as the calendar shows it now, checked against what was listed earlier.
+
+        Whether a change needs the owner's approval is decided from the program's copy of the event (does it have
+        guests?). Other people change the calendar meanwhile: a guest added since the last listing would be emailed
+        without the owner being asked. So the event is read again here, just before anything is changed. If it is
+        not as it was, nothing is done, the copy is brought up to date, and the model is told to look again; its
+        next request is then judged, and described to the owner, from what is true now.
+        """
+        before = self.event(event_id)
+        if before is None or before["start"] is None:
+            return before
+        data = await self._call("calendar_list", "GOOGLECALENDAR_EVENTS_LIST", {
+            "calendarId": "primary", "timeMin": self._rfc3339(before["start"] - timedelta(minutes=1)),
+            "timeMax": self._rfc3339(before["end"] + timedelta(minutes=1)), "singleEvents": True, "orderBy": "startTime", "maxResults": 40})
+        self._events.pop(event_id, None)
+        self._remember_events(data)
+        now = self.event(event_id)
+        if now is None:
+            raise AppError("That event is no longer where it was when the calendar was last listed: it has been moved or removed. "
+                           "Nothing was changed. List the calendar again and work from what it shows now.")
+        if (sorted(now["guests"]), now["start"], now["end"]) != (sorted(before["guests"]), before["start"], before["end"]):
+            raise AppError("That event has changed since the calendar was last listed (its time or its guests). Nothing was changed. "
+                           "It has been read again; look at the calendar and, if the request still makes sense, ask again.")
+        return now
 
     def _zone(self) -> str:
         if self._tz:
@@ -478,6 +507,8 @@ class Apps:
             return "Created."
 
         async def calendar_change(a):
+            _planned_change(a, self._now, self)             # refuses a request that makes no sense, before anything is read
+            await self._fresh(str(a["event_id"]).strip())
             event, title, start, minutes = _planned_change(a, self._now, self)
             end = start + timedelta(minutes=minutes)
             event_id = str(a["event_id"]).strip()
@@ -496,8 +527,8 @@ class Apps:
 
         async def calendar_delete(a):
             event_id = str(a.get("event_id", "")).strip()
-            event = self.event(event_id)
             describe_delete(a, self)
+            event = await self._fresh(event_id)             # what the owner approved must still be what is there
             await self._call("calendar_delete", "GOOGLECALENDAR_DELETE_EVENT",
                              {"calendar_id": "primary", "event_id": event_id, "send_updates": "all" if event["guests"] else "none"})
             self._pending.append(f"deleted \"{_clip(event['title'], 60)}\"" + (f" on {event['start']:%a %d %b %Y at %H:%M}" if event["start"] else "")

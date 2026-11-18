@@ -13,6 +13,12 @@ Every run ends as exactly one of three recorded outcomes:
   quiet      a routine decided there was nothing worth saying
   failed     it could not be done; the owner is told, so silence never means failure
 
+A reminder that cannot be sent (the network is down, or WhatsApp refuses it because the
+owner has not written for 24 hours) is not thrown away. It is tried on the second channel
+if there is one, and otherwise again after 1, 5, 15 and 30 minutes, and only then recorded
+as failed. A reminder is sent before it is recorded as delivered, so a crash between the
+two means it is sent twice, never lost.
+
 Times are local wall-clock times without a zone ("2026-11-18T09:00"), taken from
 the same clock that stamps the owner's messages.
 """
@@ -33,6 +39,7 @@ MAX_JOBS = 50
 MAX_TEXT = 600
 NO_REPLY = "NO_REPLY"       # what a routine answers when there is nothing worth sending
 LATE_AFTER = timedelta(minutes=5)
+RETRY_AFTER = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=15), timedelta(minutes=30))
 
 
 class ScheduleError(Exception):
@@ -133,6 +140,10 @@ class ScheduleStore:
             self._pending.append("cancelled " + job.describe(limit=140))
         return job
 
+    def postpone(self, job: Job, until: datetime) -> None:
+        """Try this job again later, without recording a run."""
+        self._db.execute("update jobs set next_run = ? where id = ?", (until.isoformat(), job.id))
+
     def finish(self, job: Job, outcome: str, detail: str = "", cost_usd: float = 0.0) -> None:
         """Record one run and move the job on: to its next time, or out of the table."""
         now = self._now()
@@ -168,11 +179,22 @@ RunRoutine = Callable[[str], Awaitable[tuple[str, str, float]]]
 class Scheduler:
     def __init__(self, store: ScheduleStore, chat: Chat, journal: Journal, ledger: Ledger, daily_usd: float,
                  run_routine: RunRoutine, now: Callable[[], datetime] = datetime.now,
-                 on_delivered: Callable[[str], None] | None = None, tick_s: float = 20.0):
+                 on_delivered: Callable[[str], None] | None = None, tick_s: float = 20.0, fallback: Chat | None = None):
         self._store, self._chat, self._journal, self._ledger = store, chat, journal, ledger
         self._daily_usd, self._run_routine, self._now = daily_usd, run_routine, now
         self._on_delivered = on_delivered or (lambda text: None)
         self._tick_s = tick_s
+        self._fallback = fallback                        # a second channel, used when the first refuses a message
+        self._retries: dict[str, tuple[int, datetime]] = {}     # job id -> (tries so far, when it was first due)
+
+    async def _send(self, text: str) -> None:
+        try:
+            await self._chat.send(text)
+        except Exception as e:
+            if self._fallback is None:
+                raise
+            self._journal.write("error", where="scheduler.send", error=type(e).__name__, message=str(e)[:200], fallback=True)
+            await self._fallback.send(text)
 
     async def run_forever(self) -> None:
         while True:
@@ -190,24 +212,35 @@ class Scheduler:
         return len(due)
 
     async def _run(self, job: Job) -> None:
-        late = self._now() - job.next_run > LATE_AFTER
-        suffix = f" (This was due at {job.next_run:%H:%M on %a %d %b} and is late because I was not running.)" if late else ""
+        tries, due = self._retries.get(job.id, (0, job.next_run))
+        late = self._now() - due > LATE_AFTER
+        why = "I could not send it then" if tries else "I was not running"
+        suffix = f" (This was due at {due:%H:%M on %a %d %b} and is late because {why}.)" if late else ""
         outcome, detail, cost = "failed", "", 0.0
         try:
             if job.kind == "reminder":
-                await self._chat.send(f"Reminder: {job.text}{suffix}")
+                await self._send(f"Reminder: {job.text}{suffix}")
                 self._on_delivered(f"Reminder: {job.text}")
                 outcome = "delivered"
             else:
                 outcome, detail, cost = await self._routine(job, suffix)
         except Exception as e:
             outcome, detail = "failed", f"{type(e).__name__}: {e}"
+        if outcome == "failed" and job.kind == "reminder" and tries < len(RETRY_AFTER):
+            # The message did not leave. Keep the reminder and try again shortly; do not delete it.
+            self._retries[job.id] = (tries + 1, due)
+            self._store.postpone(job, self._now() + RETRY_AFTER[tries])
+            self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome="retrying", detail=detail[:200], attempt=tries + 1)
+            return
+        self._retries.pop(job.id, None)
+        if tries:       # the job's place in its rhythm is counted from when it was really due
+            job.next_run = due
         self._store.finish(job, outcome, detail, cost)
         self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome=outcome, detail=detail[:200],
                             cost_usd=cost, late=late)
         if outcome == "failed":
             try:    # silence must never mean failure
-                await self._chat.send(f"A scheduled {job.kind} failed and was not carried out: \"{job.text[:120]}\". Reason: {detail or 'unknown'}.")
+                await self._send(f"A scheduled {job.kind} failed and was not carried out: \"{job.text[:120]}\". Reason: {detail or 'unknown'}.")
             except Exception as e:
                 self._journal.write("error", where="scheduler.announce", error=type(e).__name__)
 
@@ -215,8 +248,7 @@ class Scheduler:
         if self._ledger.spent_today() >= self._daily_usd:
             return "failed", f"today's budget of ${self._daily_usd:.2f} is used up", 0.0
         status, text, cost = await self._run_routine(job.text)
-        self._ledger.add(cost)
-        self._journal.write("task_end", status=status, cost_usd=cost, routine=job.id)
+        self._journal.write("task_end", status=status, cost_usd=cost, routine=job.id)      # the ledger counts this line
         text = (text or "").strip()
         if status != "done":
             return "failed", f"the routine ended as '{status}'", cost
@@ -224,6 +256,6 @@ class Scheduler:
             return "failed", "the routine produced nothing", cost
         if text.strip(" .\"'`").upper() == NO_REPLY:
             return "quiet", "", cost
-        await self._chat.send(f"{text}\n\n(Scheduled routine [{job.id}]){suffix}")
+        await self._send(f"{text}\n\n(Scheduled routine [{job.id}]){suffix}")
         self._on_delivered(text)
         return "delivered", "", cost

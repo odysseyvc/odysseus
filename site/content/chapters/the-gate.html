@@ -136,7 +136,7 @@ context, and the source name with its URL. ...
 <dl class="terms">
 <dt>Fingerprint</dt><dd>A piece of text distinctive enough to recognise later: an email address, a number of six or more digits, a code mixing letters and digits such as a booking reference, or any run of six consecutive words.</dd>
 </dl></div>
-<p>Everything the mail, calendar and app tools return is fingerprinted as it is read. Before a search query or a browser task leaves, it is compared with the fingerprints. A match turns "allow" into "ask", and the question shows the owner the query and which details were recognised. Anything the owner typed themselves is exempt: if they wrote the booking reference in their message, searching for it is their request. An unattended routine has nobody to ask, so there a matching search is refused.</p>
+<p>Everything the mail, calendar and app tools return is fingerprinted as it is read. So, since Chapter 20, is what an incoming event carries when a watch checks it, and what a browser run signed in as the owner reports. Before a search query or a browser task leaves, it is compared with the fingerprints. A match turns "allow" into "ask", and the question shows the owner the query and which details were recognised. Anything the owner typed themselves is exempt: if they wrote the booking reference in their message, searching for it is their request. An unattended routine has nobody to ask, so there a matching search is refused.</p>
 <div class="box caution"><div class="label">What a text match cannot do</div>
 <p>This check compares characters. It does not understand meaning. A paraphrase passes. So does a detail split across three searches, and so does a short fact such as a name or a date. It makes the crude version of the attack visible to the owner. It does not make leaking impossible, and it should not be described as if it did. The defences that have held against determined attackers in published work keep untrusted text away from the part of the system that can act; that separation is not built here.</p></div>
 <p>There is a cost as well. The owner may now be asked about a search, which never happened before. How often that interrupts ordinary use is <span class="g u">Not tested</span>.</p>
@@ -159,7 +159,7 @@ context, and the source name with its URL. ...
 <li>The gate in front of a real account. No mail or calendar is connected, so nothing irreversible has ever been held or released by it.</li>
 <li>A real model that has actually been misled. In the one live attempt it was not.</li>
 <li>Whether a long question is read. The describing code puts the important line first, and nobody has yet checked that against a real, hurried owner.</li>
-<li>What happens to a pending request if the program restarts. It is lost, which means it is not carried out, and the owner is not told.</li>
+<li>What happens to a pending request if the program restarts. It is lost, which means it is not carried out. When this was written the owner was not told; since Chapter 17 the program says so when it starts again.</li>
 </ul>
 
 <div class="box summary"><div class="label">Summary</div>

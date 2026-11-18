@@ -12,18 +12,16 @@ The catalogue has thousands of actions, so the gate cannot have a hand-written
 rule and question for each, as it has for mail. It sorts an action by the words
 in its name instead:
 
-  reading   (GET, LIST, SEARCH, ...)       allowed
-  adding or editing
-            (CREATE, UPDATE, APPEND, ...)  the owner is asked once per app per task;
-                                           approving covers further additions and edits
-                                           in that app until the task ends
-  reaching other people, destroying, or
-  setting something in motion
-            (SEND, SHARE, DELETE, PAY, CLEAR,
-             REPLACE, RUN, ARCHIVE, ...)   the owner is asked every time
+  reading   (GET, LIST, SEARCH, ...)       allowed, unless its inputs carry details that
+                                           came from the owner's mail or calendar (taint.py)
+  anything else                            the owner is asked, every time, and shown the
+                                           action and its inputs
 
-An action whose name fits none of these is treated as changing. Sorting by name
-is a rule of thumb and can be wrong; it errs towards asking.
+An earlier version asked once per app per task for "adding or editing", and that
+approval then covered every later action in the app that was not on a list of hard
+verbs. A list of hard verbs is never complete: one tap could have covered an action
+named VOID or WIPE. Now only an action positively recognised as reading runs unasked.
+Sorting by name is a rule of thumb and can be wrong; it errs towards asking.
 """
 from __future__ import annotations
 
@@ -32,7 +30,7 @@ import json
 import re
 from typing import Any, Protocol
 
-from .apps import CALENDAR, GMAIL, AppError, hide_secrets
+from .apps import CALENDAR, CALL_TIMEOUT_S, GMAIL, AppError, hide_secrets
 from .gate import ALLOW, ASK, Gate
 from .journal import Journal
 
@@ -92,7 +90,6 @@ class AnyApp:
     def __init__(self, backend: AnyAppBackend, journal: Journal):
         self._b, self._journal = backend, journal
         self._names: dict[str, str] = {}        # toolkit slug -> display name, as learned
-        self._task_ok: set[str] = set()         # apps the owner has approved changes in, for this task only
         self._changes: list[str] = []
         self._links: list[tuple[str, str]] = []
         self.taint = None                       # set by make_gate; remembers what was read from the apps
@@ -111,16 +108,20 @@ class AnyApp:
         return out
 
     def end_task(self) -> None:
-        self._task_ok.clear()
+        pass        # nothing is carried within a task any more: every change is asked about by itself
 
     # --- the gate --------------------------------------------------------------------
 
+    def _leak(self, args: dict[str, Any]) -> list[str]:
+        if self.taint is None:
+            return []
+        return self.taint.leaked(json.dumps(args.get("arguments") or {}, ensure_ascii=False, default=str))
+
     def decide(self, args: dict[str, Any]) -> str:
         slug = str(args.get("tool", "")).strip().upper()
-        kind = classify(slug)
-        if kind == "read" or (kind == "change" and toolkit_of(slug) in self._task_ok):
-            return ALLOW
-        return ASK
+        # Reading runs unasked. But the catalogue includes search engines and scrapers, and "reading" through one of
+        # those sends its inputs to another company, so a read whose inputs carry the owner's private details is asked about.
+        return ALLOW if classify(slug) == "read" and not self._leak(args) else ASK
 
     def describe(self, args: dict[str, Any]) -> str:
         slug = str(args.get("tool", "")).strip().upper()
@@ -132,21 +133,15 @@ class AnyApp:
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
         app = self.name(toolkit_of(slug))
-        if classify(slug) == "reach":
-            return f"Do this in {app}?\n\nAction: {slug}\nWith:\n{_pretty(inputs)}"
-        return (f"Let me add and edit things in {app} for this task?\n\n"
-                f"Approving covers further additions and edits in {app} until this task ends. Anything that sends, shares, deletes, "
-                f"clears, replaces or starts something will still ask each time.\n\nFirst change: {slug}\nWith:\n{_pretty(inputs)}")
-
-    def approved(self, args: dict[str, Any]) -> None:
-        slug = str(args.get("tool", "")).strip().upper()
-        if classify(slug) == "change":
-            self._task_ok.add(toolkit_of(slug))
+        if classify(slug) == "read":
+            return (f"Send these details to {app}? They came from your mail, calendar or apps.\n\nDetails recognised: "
+                    f"{', '.join(self._leak(args))}\n\nAction: {slug}\nWith:\n{_pretty(inputs)}")
+        return f"Do this in {app}?\n\nAction: {slug}\nWith:\n{_pretty(inputs)}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(APP_FIND, ALLOW)
         gate.rule(APP_CONNECT, ALLOW)      # it only makes a link; the owner approves at the provider
-        gate.rule(APP_RUN, self.decide, self.describe, after=self.approved)
+        gate.rule(APP_RUN, self.decide, self.describe)
 
     # --- the tools --------------------------------------------------------------------
 
@@ -161,7 +156,7 @@ class AnyApp:
                 except AppError as e:
                     self._journal.write("tool", name=name, ok=False, error=str(e)[:200])
                     return {"content": [{"type": "text", "text": f"Not done: {e}"}], "is_error": True}
-                except Exception as e:
+                except (Exception, asyncio.TimeoutError) as e:
                     self._journal.write("tool", name=name, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
                     return {"content": [{"type": "text", "text": f"Not done: {type(e).__name__}: {str(e)[:300]}"}], "is_error": True}
             return handler
@@ -170,7 +165,7 @@ class AnyApp:
             task = " ".join(str(a.get("task", "")).split())
             if not task:
                 raise AppError("app_find needs a description of the job.")
-            found = await asyncio.to_thread(self._b.find, task)
+            found = await asyncio.wait_for(asyncio.to_thread(self._b.find, task), CALL_TIMEOUT_S)
             schemas = dict(found.get("tool_schemas") or {})
             wanted: list[str] = []
             for r in found.get("results") or []:
@@ -180,7 +175,7 @@ class AnyApp:
             wanted = wanted[:6] or [s for s in schemas if s.split("_")[0] not in OWN_TOOLS][:6]
             missing = [s for s in wanted if not (schemas.get(s) or {}).get("input_schema")]
             if missing:
-                schemas.update(await asyncio.to_thread(self._b.schemas, missing))
+                schemas.update(await asyncio.wait_for(asyncio.to_thread(self._b.schemas, missing), CALL_TIMEOUT_S))
             if not wanted:
                 self._journal.write("tool", name="app_find", ok=True, tools=0)
                 return "No tool in the catalogue matches that. Try describing the job differently, or name the app."
@@ -201,7 +196,7 @@ class AnyApp:
             wanted = " ".join(str(a.get("app", "")).split())
             if not wanted:
                 raise AppError("app_connect needs the name of an app, like Google Sheets.")
-            matches = await asyncio.to_thread(self._b.lookup, wanted)
+            matches = await asyncio.wait_for(asyncio.to_thread(self._b.lookup, wanted), CALL_TIMEOUT_S)
             if not matches:
                 raise AppError(f"The connector has no app called '{wanted}'.")
             key = re.sub(r"[^a-z0-9]", "", wanted.lower())
@@ -216,7 +211,7 @@ class AnyApp:
             if connected:
                 self._journal.write("tool", name="app_connect", ok=True, app=slug, already=True)
                 return f"{name} is already connected. Use app_find to get its tools."
-            link = await asyncio.to_thread(self._b.connect_link, slug)
+            link = await asyncio.wait_for(asyncio.to_thread(self._b.connect_link, slug), CALL_TIMEOUT_S)
             self._links.append((name, link))
             self._journal.write("tool", name="app_connect", ok=True, app=slug, already=False)
             return (f"{name} is not connected yet. A link to connect it is being sent to the owner with your reply. Tell them to open "
@@ -227,7 +222,7 @@ class AnyApp:
             slug = str(a["tool"]).strip().upper()
             inputs = a.get("arguments") or {}
             kind = classify(slug)
-            data = await asyncio.to_thread(self._b.execute, slug, inputs)
+            data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
             self._journal.write("tool", name="app_run", ok=True, tool=slug, action=kind)
             if kind != "read":
                 self._changes.append(f"ran {slug} in {self.name(toolkit_of(slug))}")
@@ -236,7 +231,7 @@ class AnyApp:
             cut = "" if len(text) <= 8000 else f"\n[Cut: {len(text)} characters in all. Ask for less, or a narrower range.]"
             shown = hide_secrets(text[:8000])
             if self.taint is not None:
-                self.taint.add(shown)
+                self.taint.add(shown, "one of your apps")
             return f"{APP_NOTE}\n\n{shown}{cut}"
 
         return {"app_find": wrap("app_find", app_find), "app_connect": wrap("app_connect", app_connect), "app_run": wrap("app_run", app_run)}
@@ -251,9 +246,8 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
     "app_connect": ("Connect an app that is not connected yet, by name. A link is sent to the owner, who approves access at the "
                     "provider. Use it when app_find says an app is not connected, or when the owner asks to connect something.",
                     {"type": "object", "properties": {"app": {"type": "string", "description": "The app's name, e.g. Google Sheets."}}, "required": ["app"]}),
-    "app_run": ("Run one tool that app_find returned. Reading runs at once. The first change in an app is put to the owner for "
-                "approval and covers later changes in that app for this task; anything that sends, shares or deletes is put to "
-                "the owner every time.",
+    "app_run": ("Run one tool that app_find returned. Reading runs at once. Anything that adds, changes, sends, shares or deletes "
+                "is put to the owner for approval every time, with the action and its inputs shown, so do as much as you can in one call.",
                 {"type": "object",
                  "properties": {"tool": {"type": "string", "description": "A tool name from app_find, e.g. GOOGLESHEETS_VALUES_UPDATE."},
                                 "arguments": {"type": "object", "description": "The tool's inputs, as app_find described them."}},

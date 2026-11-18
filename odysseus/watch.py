@@ -214,6 +214,57 @@ class Watcher:
         self._lock = asyncio.Lock()         # one triage at a time: they share one agent
         self._stop: Callable[[], None] | None = None
         self._tasks: set[asyncio.Task] = set()
+        self._limited_told: datetime | None = None     # when the owner was last told that events are going unchecked
+        self._unsent: list[str] = []        # messages that could not be sent, kept to try again
+        self.retry_wait_s = 2.0
+        self._failures, self._told_down = 0, False     # how many times running the listener has failed, and whether the owner knows
+
+    async def _say(self, text: str) -> bool:
+        """Send the owner a message, trying three times. Returns whether it left."""
+        for attempt in range(3):
+            try:
+                await self._chat.send(text)
+                return True
+            except Exception as e:
+                self._journal.write("error", where="watch.send", error=type(e).__name__, message=str(e)[:200], attempt=attempt + 1)
+                await asyncio.sleep(self.retry_wait_s * (attempt + 1))
+        return False
+
+    @property
+    def listening(self) -> bool:
+        return self._stop is not None
+
+    async def keep_listening(self, loop: asyncio.AbstractEventLoop, every_s: float = 60.0, rounds: int | None = None) -> None:
+        """Make sure events are arriving for as long as anything is being watched, and say so when they are not.
+
+        Before this, a listener that failed when the program started was never tried again: a watch could be set,
+        confirmed to the owner, and dead. Now it is retried every minute; after three failures the owner is told,
+        once, and told again when it works.
+        """
+        while rounds is None or rounds > 0:
+            if self._backend is not None and self._stop is None and self._store.watches():
+                try:
+                    await asyncio.to_thread(self.activate)
+                    await asyncio.to_thread(self.start, loop)
+                    self._failures = 0
+                    if self._told_down:
+                        self._told_down = not await self._say("Watching is working again. Anything that arrived in the meantime was not checked.")
+                except Exception as e:
+                    self._failures += 1
+                    self._journal.write("error", where="watch.listen", error=type(e).__name__, message=str(e)[:200], failures=self._failures)
+                    if self._failures >= 3 and not self._told_down:
+                        self._told_down = await self._say("I can't watch your mail or calendar at the moment: the connection that brings me new events keeps "
+                                               "failing. Your watches are saved and I'll keep trying. Until I say it's working again, nothing "
+                                               "that arrives is being checked.")
+            for message in list(self._unsent):       # something matched a watch and the message did not leave: try again
+                if await self._say(message):
+                    self._unsent.remove(message)
+                    self._on_delivered(message)
+            if rounds is not None:
+                rounds -= 1
+                if rounds <= 0:
+                    break
+            await asyncio.sleep(every_s)
 
     # --- turning the listening on ---------------------------------------------------------
     def activate(self) -> None:
@@ -249,7 +300,7 @@ class Watcher:
 
     # --- one event ---------------------------------------------------------------------------
     async def on_event(self, event: dict[str, Any]) -> str:
-        """Handle one event. Returns what became of it: ignored | duplicate | limited | quiet | told | failed."""
+        """Handle one event. Returns what became of it: ignored | duplicate | limited | quiet | told | unsent | failed."""
         try:
             return await self._on_event(event)
         except Exception as e:
@@ -273,14 +324,20 @@ class Watcher:
         now = self._now()
         while self._runs and now - self._runs[0] > timedelta(hours=1):
             self._runs.popleft()
-        if len(self._runs) >= MAX_PER_HOUR or self._ledger.spent_today() >= self._daily_usd:
-            self._journal.write("event", trigger=slug, outcome="limited")
+        over_budget = self._ledger.spent_today() >= self._daily_usd
+        if len(self._runs) >= MAX_PER_HOUR or over_budget:
+            self._journal.write("event", trigger=slug, outcome="limited", reason="budget" if over_budget else "hourly")
+            # An event that is not checked is a watch that silently did not fire, so the owner is told, at most once an hour.
+            if self._limited_told is None or now - self._limited_told >= timedelta(hours=1):
+                self._limited_told = now
+                await self._say((f"Today's budget of ${self._daily_usd:.2f} is used up" if over_budget else
+                                 f"New {about} is arriving faster than I check it (my limit is {MAX_PER_HOUR} checks an hour)")
+                                + ", so some of what arrives is not being checked against your watches for now.")
             return "limited"
         self._runs.append(now)
         async with self._lock:
             status, reply, cost = await self._triage(TRIAGE.format(about=about, event=text, watches="\n".join(f"[{w.id}] {w.text}" for w in watches)))
-        self._ledger.add(cost)
-        told = []
+        told, unsent = [], 0
         if status == "done" and reply.strip(" .\"'`").upper() != NO_REPLY:
             by_id = {w.id: w for w in watches}
             for line in reply.splitlines():
@@ -290,13 +347,16 @@ class Watcher:
                     # A link is never passed on: the words came from a model that had just read a stranger's message.
                     said = re.sub(r"(?i)\b(?:https?://|www\.)\S+", "[link removed]", m.group(2).strip())[:900]
                     message = f"{said}\n\n(Watch [{watch.id}]: {watch.text[:120]})"
-                    await self._chat.send(message)
-                    self._on_delivered(message)
                     told.append(watch.id)
                     if watch.repeat == "once":
                         self._store.cancel(watch.id, by="fired")
-        outcome = "told" if told else ("quiet" if status == "done" else "failed")
-        self._journal.write("event", trigger=slug, outcome=outcome, watches=len(watches), told=told, cost_usd=cost)
+                    if await self._say(message):
+                        self._on_delivered(message)
+                    else:
+                        self._unsent.append(message)      # kept, and tried again every minute (keep_listening)
+                        unsent += 1
+        outcome = ("unsent" if unsent == len(told) else "told") if told else ("quiet" if status == "done" else "failed")
+        self._journal.write("event", trigger=slug, outcome=outcome, watches=len(watches), told=told, cost_usd=cost)      # the ledger counts this line
         return outcome
 
 

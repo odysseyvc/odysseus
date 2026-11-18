@@ -255,7 +255,8 @@ async def test_typing_yes_is_not_an_approval(tmp_path):
     await x.conv.handle(OWNER, "invite Priya to lunch", x.chat)
     await until(lambda: x.chat.asks)
     await x.conv.handle(OWNER, "yes", x.chat)            # a message, not a tap
-    assert "Noted" in x.chat.sent[-1], "the word is kept as an ordinary message for later; it approves nothing"
+    assert "Typing does not answer it" in x.chat.sent[-1], "it approves nothing, and it is not kept to run later as a task called 'yes'"
+    assert not x.conv._waiting
     assert x.outbox == [] and x.gate.pending(), "the question is still waiting for a tap"
     await x.conv.handle(OWNER, "stop", x.chat)
     await x.conv.wait()

@@ -167,6 +167,7 @@ class Browser:
         self._b, self._journal, self._task_usd = backend, journal, task_usd
         self._pending: list[str] = []
         self._cost = 0.0
+        self.taint = None      # set by add_rules; what a run reports is remembered there
 
     def pop_changes(self) -> list[str]:
         out, self._pending = self._pending, []
@@ -209,6 +210,12 @@ class Browser:
             note += f' as you: "{task[:300]}{"…" if len(task) > 300 else ""}"'
         self._pending.append(note)
         report = hide_secrets(result.text.strip())[:8000]
+        if self.taint is not None:
+            # A web page is something other people wrote. And what a signed-in run reports came from the owner's own
+            # accounts on those sites, so it is fingerprinted like mail: it should not leave through a later search.
+            self.taint.saw("a web page, through the browser")
+            if signed_in and report:
+                self.taint.add(report, "your accounts on websites, through the browser")
         if result.status != "done":
             text = f"The browser run {result.status}" + (f": {result.error}" if result.error else ".") + (f"\n\n{BROWSER_NOTE}\n\n{report}" if report else "")
             return {"content": [{"type": "text", "text": text}], "is_error": True}

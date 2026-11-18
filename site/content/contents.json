@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 235
+    "tests": 275
   },
   "parts": [
     {
@@ -147,8 +147,15 @@
           "n": 19,
           "slug": "being-told",
           "title": "Being told: watches",
-          "revised": "20 November 2026",
+          "revised": "19 November 2026",
           "summary": "\"Tell me when Priya replies.\" The connector reports each new email or calendar change, a read-only small model judges it against what the owner asked for, and code does the telling. Run in the simulated world; not yet fired by a real email."
+        },
+        {
+          "n": 20,
+          "slug": "a-second-reading",
+          "title": "A second reading: what the tests did not find",
+          "revised": "19 November 2026",
+          "summary": "Every test passed and an independent reading still found sixteen things wrong: holes in the gate, failures nobody was told about, and numbers that left something out. What each was, what closed it, and what is still open."
         }
       ]
     }

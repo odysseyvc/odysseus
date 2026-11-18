@@ -2,7 +2,7 @@
 <div>
 <p class="eyebrow">A personal AI agent you run yourself</p>
 <h1>An assistant you message, that <em>asks</em> before it acts.</h1>
-<p class="sub">Odysseus lives in a private Telegram chat. It searches, remembers, reminds, reads your mail and calendar, works in your other apps and browses the web. It runs on your own server, with your own keys.</p>
+<p class="sub">Odysseus lives in a private chat on Telegram, and optionally WhatsApp. It searches, remembers, reminds, watches for what you are waiting for, reads your mail and calendar, works in your other apps and browses the web. You run it yourself, on a laptop or a small server, with your own keys.</p>
 <div class="actions">
 <a class="btn primary" href="deploy.html">Deploy your own</a>
 <a class="btn ghost" href="book.html">Read how it is built</a>
@@ -23,11 +23,11 @@
 </div></div>
 </div></section>
 
-<div class="strip"><div><b>Where it honestly stands.</b><span>Built in a day. {{tests}} automated tests. The parts that read (search, mail, calendar, public pages, files) have each run once against the real services. The parts that act have not: no email has been sent, no event created, no work done in a connected app, and no reminder has fired at its real time. Nothing has been proven over weeks. Nothing on this site claims it is better than anything else.</span><a href="evidence.html">How claims are graded</a></div></div>
+<div class="strip"><div><b>Where it honestly stands.</b><span>Built in three days. {{tests}} automated tests. The parts that read (search, mail, calendar, public pages, files) have each run once against the real services. The parts that act have not: no email has been sent, no event created, no work done in a connected app, and no reminder has fired at its real time. Nothing has been proven over weeks. Nothing on this site claims it is better than anything else.</span><a href="evidence.html">How claims are graded</a></div></div>
 
 <section class="band"><div class="in">
 <p class="eyebrow">What it does</p>
-<h2>Eight things, each built to be switched off, stopped and inspected.</h2>
+<h2>What it does, each part built to be switched off, stopped and inspected.</h2>
 <p class="lead">Only the first row needs anything beyond a Telegram bot, a model key and a search key. The rest switch on when you add a key for them.</p>
 <div class="cards">
 
@@ -47,13 +47,13 @@
 <h3>Mail and calendar</h3><p>Reads both. Sending, replying and inviting guests are shown to you first, word for word. Sign-in codes are removed from mail before the model sees it.</p><span class="chip part">Read live; nothing sent yet</span></div>
 
 <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.500" y="3.500" width="7" height="7" rx="1.500"/><rect x="13.500" y="3.500" width="7" height="7" rx="1.500"/><rect x="3.500" y="13.500" width="7" height="7" rx="1.500"/><path d="M17 14v6M14 17h6"/></svg></div>
-<h3>Your other apps</h3><p>Ask for work in Sheets, Notion, Slack and many more. If the app is not connected, the reply carries a link to connect it. Changes ask once per app per task.</p><span class="chip part">Link sent live; no work done yet</span></div>
+<h3>Your other apps</h3><p>Ask for work in Sheets, Notion, Slack and many more. If the app is not connected, the reply carries a link to connect it. Every change asks first, and shows you exactly what will be done.</p><span class="chip part">Link sent live; no work done yet</span></div>
 
 <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.500" width="18" height="15" rx="2"/><path d="M3 9h18M6.500 6.800h.01M9.500 6.800h.01"/></svg></div>
 <h3>A browser</h3><p>Hands a task to a browsing agent for sites with no connector. You sign in to sites yourself; no password is stored. See the caveat below.</p><span class="chip open">Two public pages live; one doubtful</span></div>
 
 <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.500 12s3.500-6.500 9.500-6.500S21.500 12 21.500 12s-3.500 6.500-9.500 6.500S2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/></svg></div>
-<h3>Reads what you send</h3><p>Photograph a bill or forward a PDF. A text-recognition service reads it and the model answers from the text, kept apart from your own words.</p><span class="chip part">One test page live</span></div>
+<h3>Reads what you send</h3><p>Send a photo and the model looks at it directly. Forward a PDF or a scan and a text-recognition service reads it, and the model answers from the text, kept apart from your own words.</p><span class="chip part">One test page live</span></div>
 
 </div></div></section>
 

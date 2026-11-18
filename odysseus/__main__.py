@@ -26,27 +26,56 @@ from .watch import ComposioTriggers, Watcher, WatchStore
 from .whatsapp import WhatsApp, make_http, serve
 
 
+SYNCED = ("onedrive", "dropbox", "google drive", "googledrive", "icloud", "mobile documents")
+
+
+def synced_folder(path) -> str | None:
+    """The name of the file-syncing service this path is inside, if any. The data folder holds mail text and the
+    conversation in the clear; inside a synced folder it is also copied to that service."""
+    full = str(path.resolve()).lower()
+    return next((name for name in SYNCED if name in full), None)
+
+
 def unfinished(journal: Journal) -> dict | None:
-    """The task that was running when the program last stopped, if there was one: a start with no end after it."""
-    open_task = None
+    """What was lost when the program last stopped, if anything: a task that had started and not ended, and any
+    messages that were waiting behind it."""
+    open_task, waiting = None, {}
     for r in journal.read():
-        if r["kind"] == "task_start":
+        if r["kind"] == "start":
+            open_task, waiting = None, {}       # an earlier restart: whatever was lost then has been reported already
+        elif r["kind"] == "task_start":
             open_task = {"preview": r.get("preview", ""), "asked": False}
         elif r["kind"] == "task_end" and "routine" not in r:
             open_task = None
+        elif r["kind"] == "queued" and "q" in r:
+            waiting[r["q"]] = r.get("preview", "")
+        elif r["kind"] == "dequeued":
+            waiting.pop(r.get("q"), None)
+        elif r["kind"] == "queue_cleared":
+            waiting = {}
         elif r["kind"] == "gate" and r.get("verdict") == "asked" and open_task is not None:
             open_task["asked"] = True
         elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
             open_task["asked"] = False
-    return open_task
+    if open_task is None and not waiting:
+        return None
+    return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values())}
 
 
 def restart_notice(task: dict, resumed: bool) -> str:
-    what = f': "{task["preview"]}"' if task.get("preview") else ""
-    text = f"I was restarted while I was working on something{what}. It was not finished, and I have not carried on with it by myself."
-    if task.get("asked"):
-        text += " I had asked for your approval; that question no longer counts, so tapping it will do nothing."
-    text += " Ask me again if you still want it done."
+    waiting = task.get("waiting") or []
+    if task.get("preview") is None:
+        text = "I was restarted."
+    else:
+        what = f': "{task["preview"]}"' if task.get("preview") else ""
+        text = f"I was restarted while I was working on something{what}. It was not finished, and I have not carried on with it by myself."
+        if task.get("asked"):
+            text += " I had asked for your approval; that question no longer counts, so tapping it will do nothing."
+    if waiting:
+        n = len(waiting)
+        text += (f" {n} message{'s' if n != 1 else ''} you sent {'were' if n != 1 else 'was'} waiting behind it and {'were' if n != 1 else 'was'} lost: "
+                 + "; ".join(f'"{w}"' for w in waiting) + ".")
+    text += " Ask me again if you still want " + ("these" if waiting else "it") + " done."
     return text + ("" if resumed else " I also no longer have our earlier conversation, only what I remember about you.")
 
 
@@ -58,7 +87,12 @@ async def main() -> int:
         return 2
     now = make_clock(settings.tz)     # one clock for message stamps, memory dates and the schedule
     journal = Journal(settings.data_dir / "journal.jsonl", echo=True)   # a summary line per step also goes to the machine's log
-    ledger = Ledger(journal)
+    ledger = Ledger(journal, tz=settings.tz)      # "today" ends at the owner's midnight
+    service = synced_folder(settings.data_dir)
+    if service:
+        journal.write("warning", where="data_dir", note=f"inside a {service} folder")
+        print(f"Warning: the data folder {settings.data_dir.resolve()} is inside a {service} folder, so your mail text and "
+              "conversation are being copied to that service. Set ODYSSEUS_DATA_DIR to a folder that is not synced.", file=sys.stderr)
     memory = MemoryStore(settings.data_dir / "memory", now=now)
     schedule = ScheduleStore(settings.data_dir / "schedule.db", now=now)
     search = Exa(api_key=settings.exa_api_key).tools.web_search()
@@ -77,8 +111,10 @@ async def main() -> int:
 
     async def on_watch():
         await asyncio.to_thread(box["watcher"].activate)
-    gate = make_gate(journal, now, with_apps=apps is not None, with_browser=browser is not None,
-                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None)
+        await asyncio.to_thread(box["watcher"].start, asyncio.get_running_loop())
+    gate = make_gate(journal, now, with_apps=apps is not None, browser=browser,
+                     browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
+                     taint_file=settings.data_dir / "taint.bin")
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp, watches=watches, on_watch=on_watch),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
@@ -101,30 +137,27 @@ async def main() -> int:
         whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
                             app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id)
     # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
-    notify = whatsapp.chat() if whatsapp is not None and settings.notify_on == "whatsapp" else TelegramChat(bot, settings.owner_id)
+    telegram = TelegramChat(bot, settings.owner_id)
+    on_whatsapp = whatsapp is not None and settings.notify_on == "whatsapp"
+    notify = whatsapp.chat() if on_whatsapp else telegram
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
     run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps),
                                       memory, now, with_apps=apps is not None)
     scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
-                          run_routine, now=now, on_delivered=conversation.record_delivery)
+                          run_routine, now=now, on_delivered=conversation.record_delivery,
+                          fallback=telegram if on_whatsapp else None)     # WhatsApp refuses messages outside its 24-hour window
 
-    watcher = triage = None
+    watcher = triage = watching = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
         triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), now)
         watcher = box["watcher"] = Watcher(watches, ComposioTriggers(settings.composio_api_key, f"odysseus-{settings.owner_id}"), triage, notify,
                                            journal, ledger, settings.daily_usd, now=now, on_delivered=conversation.record_delivery,
                                            on_read=lambda text: (gate.taint.add(text), tracing.hide(text)))
-        if watches.watches():           # something is being watched for: make sure events are coming, and listen
-            try:
-                await asyncio.to_thread(watcher.activate)
-            except Exception as e:
-                journal.write("error", where="watch.activate", error=type(e).__name__, message=str(e)[:200])
-        try:
-            await asyncio.to_thread(watcher.start, asyncio.get_running_loop())
-        except Exception as e:
-            journal.write("error", where="watch.listen", error=type(e).__name__, message=str(e)[:200])
+        # While anything is being watched, keep the stream of events open: try again every minute if it cannot be
+        # opened, and tell the owner if it stays closed.
+        watching = asyncio.create_task(watcher.keep_listening(asyncio.get_running_loop()))
 
     interrupted = unfinished(journal)      # read before this run of the program writes anything
     await runner.start()   # connect the agent loop now, so the first message is not slow
@@ -144,6 +177,8 @@ async def main() -> int:
         await build_dispatcher(bot, conversation).start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         ticking.cancel()
+        if watching is not None:
+            watching.cancel()
         await conversation.wait()
         await runner.close()
         await run_routine.runner.close()

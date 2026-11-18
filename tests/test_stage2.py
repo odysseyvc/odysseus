@@ -176,12 +176,11 @@ def test_app_inputs_are_shown_whole():
 
 # --- hole 3: one approval covering destructive actions -------------------------------------
 
-def test_an_approval_to_edit_an_app_does_not_cover_clearing_replacing_or_running():
+def test_only_an_action_recognised_as_reading_runs_in_an_app_without_asking():
     app = AnyApp(SimpleNamespace(), Journal.__new__(Journal))
-    app.approved({"tool": "GOOGLESHEETS_VALUES_UPDATE"})
-    assert app.decide({"tool": "GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND"}) == "allow"
-    for slug in ("GOOGLESHEETS_CLEAR_VALUES", "GOOGLESHEETS_SEARCH_AND_REPLACE", "GOOGLESHEETS_DELETE_SHEET", "GOOGLESHEETS_EXECUTE_SQL",
-                 "GOOGLESHEETS_MOVE_SHEET"):
+    assert app.decide({"tool": "GOOGLESHEETS_BATCH_GET"}) == "allow"
+    for slug in ("GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND", "GOOGLESHEETS_CLEAR_VALUES", "GOOGLESHEETS_SEARCH_AND_REPLACE",
+                 "GOOGLESHEETS_DELETE_SHEET", "GOOGLESHEETS_EXECUTE_SQL", "GOOGLESHEETS_MOVE_SHEET", "GOOGLESHEETS_VOID_SHEET", "STRIPE_WIPE"):
         assert app.decide({"tool": slug}) == "ask", slug
 
 

@@ -7,6 +7,7 @@ down, so nothing is carried from one run to the next.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any, Callable
 
@@ -17,6 +18,24 @@ from .config import Settings
 from .journal import Journal
 from .memory import MEMORY_NOTE, MemoryStore
 from .tools import routine_tools
+
+
+ROUTINE_TIMEOUT_S = 300     # an unattended run that has not finished by then is ended and recorded as failed
+TRIAGE_TIMEOUT_S = 120
+
+
+async def _bounded(runner: AgentRunner, journal: Journal, prompt: str, seconds: float, where: str):
+    """Run one unattended task with a time limit. Nobody is there to send "stop" if a service hangs."""
+    async def noop(text: str) -> None:
+        pass
+    try:
+        return await asyncio.wait_for(runner.run(prompt, noop), seconds)
+    except asyncio.TimeoutError:
+        spent = runner.estimate
+        journal.write("error", where=where, error="TimeoutError", message=f"no result after {seconds:.0f} s")
+        await runner.reset()
+        from .agent import Outcome
+        return Outcome("error", cost_usd=spent, detail="timeout")
 
 
 def make_routine_runner(settings: Settings, journal: Journal, read_only_server: Any, memory: MemoryStore,
@@ -35,7 +54,7 @@ def make_routine_runner(settings: Settings, journal: Journal, read_only_server: 
                   f"ROUTINE INSTRUCTIONS (written earlier, at the owner's request)\n{instructions}\n\n"
                   f"[{now().strftime('%A %d %B %Y, %H:%M')}]")
         try:
-            outcome = await runner.run(prompt, noop)
+            outcome = await _bounded(runner, journal, prompt, ROUTINE_TIMEOUT_S, "routine")
         finally:
             await runner.forget_session()
         return outcome.status, outcome.text, outcome.cost_usd
@@ -69,7 +88,7 @@ def make_triage_runner(settings: Settings, journal: Journal, read_only_server: A
     async def triage(question: str) -> tuple[str, str, float]:
         await runner.forget_session()
         try:
-            outcome = await runner.run(f"{question}\n\n[{now().strftime('%A %d %B %Y, %H:%M')}]", noop)
+            outcome = await _bounded(runner, journal, f"{question}\n\n[{now().strftime('%A %d %B %Y, %H:%M')}]", TRIAGE_TIMEOUT_S, "triage")
         finally:
             await runner.forget_session()
         return outcome.status, outcome.text, outcome.cost_usd

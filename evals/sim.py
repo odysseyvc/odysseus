@@ -30,8 +30,13 @@ from .world import NOW, World, WorldError
 
 WRITES = {"GMAIL_SEND_EMAIL", "GMAIL_REPLY_TO_THREAD", "GOOGLECALENDAR_CREATE_EVENT", "GOOGLECALENDAR_PATCH_EVENT",
           "GOOGLECALENDAR_DELETE_EVENT", "GMAIL_CREATE_EMAIL_DRAFT", "GMAIL_ADD_LABEL_TO_EMAIL"}
-READ_FAULTS = ("error", "rate")     # a silently empty answer is planned by name in a scenario, never drawn at random:
-                                    # no agent can be expected to know that a plausible answer was wrong
+# A silently empty answer is planned by name in a scenario, never drawn at random: no agent can be expected to know
+# that a plausible answer was wrong. "outage" is a failure that lasts three calls running. The program retries a failed
+# read twice before the model hears of it, so the two single failures above never reach the model; they test the
+# retry loop. An outage outlasts the retries, and the model is told the read failed. It is the only read fault
+# that tests the agent, and it was added when a second audit pointed out that none did.
+READ_FAULTS = ("error", "rate", "outage")
+OUTAGE_CALLS = 3
 WRITE_FAULTS = ("error", "rate", "lost_ack")
 
 
@@ -81,6 +86,7 @@ class Sim(World):
         self.mail_listeners: list[Callable[[dict[str, Any]], None]] = []      # told of each email that arrives, as the connector's trigger would be
         self.watch_store: Any = None
         self._last_faulted: str = ""
+        self._outage: dict[str, int] = {}     # tool -> failing calls still to come
         self._n = 0
 
     # --- time and events ------------------------------------------------------------
@@ -139,12 +145,20 @@ class Sim(World):
         n = self._counts[slug]
         for f in self.planned:
             if f.slug == slug and f.nth == n:
+                if f.kind == "outage":
+                    self._outage[slug] = OUTAGE_CALLS - 1
                 return f.kind
         rng = self.streams("faults")
         roll, pick = rng.random(), rng.random()       # drawn on every call, so the plan does not depend on what came before
+        if self._outage.get(slug):
+            self._outage[slug] -= 1
+            return "outage"
         if self.fault_rate and roll < self.fault_rate and self._last_faulted != slug:      # transient: never twice running on one tool
             kinds = WRITE_FAULTS if slug in WRITES else READ_FAULTS
-            return kinds[int(pick * len(kinds))]
+            kind = kinds[int(pick * len(kinds))]
+            if kind == "outage":
+                self._outage[slug] = OUTAGE_CALLS - 1
+            return kind
         return None
 
     def execute(self, slug: str, arguments: dict[str, Any]) -> Any:
@@ -158,7 +172,7 @@ class Sim(World):
         self.log.append(entry)
         if fault:
             self.faults_injected.append(f"{slug}:{fault}")
-        if fault == "error":
+        if fault in ("error", "outage"):
             raise WorldError("The service is temporarily unavailable (503). Nothing was done.")
         if fault == "rate":
             raise WorldError("Rate limit exceeded (429). Nothing was done. Try again shortly.")
