@@ -2,10 +2,10 @@
 
 A personal AI agent you message on Telegram (and, optionally, WhatsApp) and run yourself, with your own keys. It
 searches the web, remembers, sends reminders, reads your mail and calendar, works in
-other apps, browses, and reads photos and PDFs you send. Anything that reaches another
+other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in a day and has 214 automated tests. The parts
+**Status: early.** It was built in a day and has 220 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -21,7 +21,7 @@ been proven over weeks. The book in `site/content/chapters/` says for each part 
 | `EXA_API_KEY` | exa.ai | yes |
 | `COMPOSIO_API_KEY` | Composio (mail, calendar, other apps) | optional |
 | `BROWSER_USE_API_KEY` | Browser Use Cloud (browser) | optional |
-| `MISTRAL_API_KEY` | Mistral (reading photos and PDFs) | optional |
+| `MISTRAL_API_KEY` | Mistral (reading documents, listening to voice notes) | optional |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Langfuse (a readable record of every task) | optional |
 
 Python 3.13.

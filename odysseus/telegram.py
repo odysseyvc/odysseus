@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from .conversation import Conversation, split_message
 from .ocr import MAX_BYTES
+from .voice import MAX_BYTES as VOICE_MAX_BYTES, MAX_SECONDS as VOICE_MAX_SECONDS
 
 
 class TelegramChat:
@@ -61,6 +62,29 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
             except Exception:
                 data = None
         await conversation.handle_file(user_id, data, name, mime, size, message.caption or "", chat)
+
+    # Voice notes and audio files. Fetched only for the owner, and never kept.
+    @dp.message(F.chat.type == "private", F.voice | F.audio)
+    async def on_voice(message: Message) -> None:
+        user_id = message.from_user.id if message.from_user else 0
+        item = message.voice or message.audio
+        size, seconds = item.file_size or 0, int(item.duration or 0)
+        name = getattr(item, "file_name", None) or "voice.ogg"
+        data = None
+        if conversation.is_owner(user_id) and size <= VOICE_MAX_BYTES and seconds <= VOICE_MAX_SECONDS:
+            try:
+                buffer = await bot.download(item.file_id)
+                data = buffer.read() if buffer else None
+            except Exception:
+                data = None
+        await conversation.handle_voice(user_id, data, name, size, seconds, TelegramChat(bot, message.chat.id))
+
+    # Anything else the owner sends (a sticker, a video, a location) is answered, so that silence never has to be interpreted.
+    @dp.message(F.chat.type == "private")
+    async def on_other(message: Message) -> None:
+        user_id = message.from_user.id if message.from_user else 0
+        if conversation.is_owner(user_id):
+            await TelegramChat(bot, message.chat.id).send("I can read text, photos, documents and voice notes. I can't use that kind of message yet.")
 
     @dp.callback_query(F.data.startswith("ap:"))
     async def on_tap(callback: CallbackQuery) -> None:

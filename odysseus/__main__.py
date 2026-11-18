@@ -21,6 +21,7 @@ from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
 from .tools import make_gate, make_tool_server
 from .tracing import Tracing
+from .voice import MistralVoice
 from .whatsapp import WhatsApp, make_http, serve
 
 
@@ -68,6 +69,7 @@ async def main() -> int:
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
+    voice = MistralVoice(settings.mistral_api_key, settings.voice_model) if settings.mistral_api_key else None     # same key: it also listens
     gate = make_gate(journal, now, with_apps=apps is not None, with_browser=browser is not None,
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
@@ -81,7 +83,7 @@ async def main() -> int:
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
-                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing)
+                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice)
     bot = Bot(settings.telegram_token)
 
     # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.
@@ -108,7 +110,7 @@ async def main() -> int:
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
+                  files=ocr is not None, voice=voice is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
     if whatsapp is not None:
         door = await serve(whatsapp, settings.whatsapp_port)
     ticking = asyncio.create_task(scheduler.run_forever())

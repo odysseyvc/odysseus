@@ -152,7 +152,20 @@
 <p>Three things in that table need saying plainly.</p>
 <p>The last row got worse, and by design. When a send fails, the program does not retry it, and the approval that covered it has been used up. If the model tries again, the owner is asked again. That is the safe behaviour when a failure might be a lost acknowledgement, and it is also a real cost: on a bad day the owner is asked twice for one email.</p>
 <p>One errand that had passed seven times out of seven now passed twice. It asked for "anything I've promised people by the end of the week". After the changes the agent looked in the sent mail for promises, found none, and said so. The check wanted Sam's request for comments, which is something Sam asked for and not something the owner promised. The errand was ambiguous and the earlier passes were luck. This is a ninth defect in the evaluation, found only because the two runs could be compared errand by errand. Its wording has been corrected.</p>
-<p>And the improvement is measured on the same errands that prompted the changes. That is the weakest kind of evidence there is: the program was changed until these cases passed. The sealed rewordings and seeds exist to answer whether the changes help on cases nobody looked at, and that run has not yet been made.</p>
+<p>And the improvement is measured on the same errands that prompted the changes. That is the weakest kind of evidence there is: the program was changed until these cases passed. The sealed rewordings and seeds exist to answer whether the changes help on cases nobody looked at.</p>
+<p>That run was then made: the same 81 errands and scenarios with different seeds and the second set of rewordings, none of which had been looked at. <span class="g v">Verified</span></p>
+<div class="tablewrap"><table>
+<caption>The sealed run, beside the development run after the changes.</caption>
+<thead><tr><th></th><th>Development set</th><th>Sealed set</th></tr></thead>
+<tbody>
+<tr><th>Runs that failed</th><td>11 of 567</td><td>6 of 567</td></tr>
+<tr><th>Still world, with faults</th><td>65 of 67</td><td>67 of 67</td></tr>
+<tr><th>Moving world, with faults</th><td>14 of 14</td><td>14 of 14</td></tr>
+<tr><th>Still world, reworded with faults</th><td>65 of 67</td><td>65 of 67</td></tr>
+<tr><th>Something done twice, or said done when it was not</th><td>none</td><td>none</td></tr>
+</tbody></table></div>
+<p>The changes held. Tool failures, which caused most of the first run's failures, caused none on the sealed set. All six sealed failures happened under rewording, in three errands: missing one of three upcoming payments, giving up on finding the dentist's address after one search, and using a stale meeting time. Those three are what the evaluation currently says is wrong with the agent.</p>
+<p>Two cautions about this result. A sealed set that scores a little better than the development set is not suspicious, but it is a reminder of how small the differences are: five runs in 567. And this sealed set is a weak one. It varies the wording and the seed, and the 81 situations underneath are the same ones the program was developed against. A strong hold-out would be situations of kinds never seen during development, and none exists yet.</p>
 
 <h2 id="traces">The first piece of the other half: reading real use</h2>
 <p>Everything above widens what the builders thought of. None of it comes from use. The research was plain that real use is the only source of situations nobody imagined, and that the working method is unglamorous: keep a readable record of every real task, read a batch of them regularly, name each kind of failure, and turn each one into a test.</p>
@@ -190,7 +203,7 @@
 <li><strong>No attacker adapts.</strong> Every planted instruction is fixed text. The evidence above says fixed attacks overstate safety by a very wide margin.</li>
 <li><strong>The world is still a stand-in.</strong> It cannot show how the real mail service behaves, and nothing here touches the browser or files.</li>
 <li><strong>It finds failures; it cannot say how often they happen in life.</strong> A fault rate of one in seven is a choice, not a measurement.</li>
-<li><strong>The sealed set has not been run.</strong></li>
+<li><strong>The sealed set varies only wording and seed.</strong> The situations themselves are the ones the program was developed against.</li>
 </ul>
 
 <h2 id="tested">What is tested, and what is not</h2>

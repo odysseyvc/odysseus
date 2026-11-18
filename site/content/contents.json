@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 214
+    "tests": 220
   },
   "parts": [
     {
@@ -98,8 +98,8 @@
           "n": 12,
           "slug": "eyes-reading-files",
           "title": "Eyes: reading files",
-          "revised": "17 November 2026",
-          "summary": "Photos and PDFs the owner sends are turned into text by a recognition service and placed in the message, fenced off from the owner's own words. Read one invented test bill correctly; no real photograph yet."
+          "revised": "18 November 2026",
+          "summary": "Documents the owner sends are turned into text by a recognition service and fenced off from the owner's own words. Pictures are shown to the model itself, which sees as well as reads. One test bill read; one generated picture seen."
         },
         {
           "n": 13,
@@ -135,6 +135,13 @@
           "title": "Not losing its place",
           "revised": "18 November 2026",
           "summary": "Three ways the first design lost the owner's work, and what replaced them: messages that wait their turn, a conversation that survives a restart, and a plain notice when a restart interrupts a task."
+        },
+        {
+          "n": 18,
+          "slug": "ears-voice-notes",
+          "title": "Ears: voice notes",
+          "revised": "18 November 2026",
+          "summary": "A voice note is turned into text, shown back to the owner, and then handled like any typed message. Checked end to end with a synthesized recording; no real voice yet."
         }
       ]
     }

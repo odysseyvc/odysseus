@@ -11,14 +11,14 @@ import json
 from types import SimpleNamespace
 
 from odysseus.journal import Journal
-from odysseus.whatsapp import OTHER_NOTE, VOICE_NOTE, WhatsApp, signature_ok
+from odysseus.whatsapp import OTHER_NOTE, WhatsApp, signature_ok
 
 SECRET, OWNER, STRANGER = "app-secret-for-tests", "919820012345", "447700900123"
 
 
 class FakeConversation:
     def __init__(self):
-        self.texts, self.decisions, self.files = [], [], []
+        self.texts, self.decisions, self.files, self.voices = [], [], [], []
         self.decision_line = "Approved."
 
     async def handle(self, user_id, text, chat):
@@ -32,6 +32,9 @@ class FakeConversation:
     async def handle_file(self, user_id, data, name, mime, size, caption, chat):
         self.files.append((name, mime, size, caption, data))
 
+    async def handle_voice(self, user_id, data, name, size, seconds, chat):
+        self.voices.append((name, size, data))
+
 
 def rig(tmp_path, media: bytes = b"%PDF-1.4 test"):
     sent, conv, journal = [], FakeConversation(), Journal(tmp_path / "journal.jsonl")
@@ -40,7 +43,7 @@ def rig(tmp_path, media: bytes = b"%PDF-1.4 test"):
         if method == "POST":
             sent.append(body)
             return 200, {"messages": [{"id": "wamid.out"}]}
-        if url.endswith("/media-1"):
+        if url.endswith(("/media-1", "/media-2")):
             return 200, {"url": "https://lookaside.example/file", "file_size": len(media), "mime_type": "application/pdf"}
         return 200, media
     wa = WhatsApp(conv, journal, http, phone_id="1065", owner_number="+91 98200 12345", app_secret=SECRET, verify_token="my-phrase", owner_id=7)
@@ -130,7 +133,7 @@ async def test_a_tap_from_someone_else_is_ignored(tmp_path):
     assert x.conv.decisions == []
 
 
-async def test_a_document_is_fetched_and_handed_over_and_a_voice_note_is_answered_plainly(tmp_path):
+async def test_documents_and_voice_notes_are_fetched_and_handed_over_and_anything_else_is_answered_plainly(tmp_path):
     x = rig(tmp_path)
     doc = {"from": OWNER, "id": "wamid.d", "type": "document", "document": {"id": "media-1", "filename": "bill.pdf", "mime_type": "application/pdf", "caption": "how much?"}}
     voice = {"from": OWNER, "id": "wamid.v", "type": "audio", "audio": {"id": "media-2"}}
@@ -138,7 +141,8 @@ async def test_a_document_is_fetched_and_handed_over_and_a_voice_note_is_answere
     x.wa.receive(*delivery(doc, voice, sticker))
     await x.wa.wait()
     assert x.conv.files == [("bill.pdf", "application/pdf", 13, "how much?", b"%PDF-1.4 test")]
-    assert sorted(m["text"]["body"] for m in x.sent) == sorted([VOICE_NOTE, OTHER_NOTE]), "never silence"
+    assert x.conv.voices == [("voice.ogg", 13, b"%PDF-1.4 test")], "the recording is fetched and handed to the same code Telegram uses"
+    assert [m["text"]["body"] for m in x.sent] == [OTHER_NOTE], "never silence"
 
 
 async def test_a_refused_send_is_recorded_and_raised_so_the_reply_is_not_counted_as_delivered(tmp_path):

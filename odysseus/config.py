@@ -40,6 +40,7 @@ class Settings:
     langfuse_full_content: bool = False   # also record what mail, calendar and app tools returned (off: only its length)
     model: str = "claude-sonnet-5-5"
     background_model: str = "claude-haiku-5-5"   # runs scheduled routines
+    voice_model: str = "voxtral-small-transcribe-3"   # turns voice notes into text; uses the Mistral key
     tz: str = ""                 # IANA zone such as Asia/Kolkata; empty means the machine's own clock
     max_turns: int = 25          # model round-trips allowed in one task
     task_usd: float = 0.50       # spending limit for one task
@@ -103,6 +104,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() in ("1", "true", "yes", "on"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
         background_model=merged.get("ODYSSEUS_BACKGROUND_MODEL", "claude-haiku-5-5"),
+        voice_model=merged.get("ODYSSEUS_VOICE_MODEL", "voxtral-small-transcribe-3"),
         tz=merged.get("ODYSSEUS_TZ", ""),
         max_turns=int(merged.get("ODYSSEUS_MAX_TURNS", 25)),
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),

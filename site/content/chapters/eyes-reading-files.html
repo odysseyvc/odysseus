@@ -60,6 +60,15 @@ How much do I owe and by when?
 <p>The text does live on in two places. It is part of the conversation until that is condensed or the program restarts, and the model may save things it learned from the file into memory, where Chapter 7's rules apply and the owner is shown every save.</p>
 <p>A fourth outside party now sees something of the owner's. The text-recognition service receives every file the owner sends, in full. Chapter 10 made the same observation about the connector service and mail.</p>
 
+<h2 id="seeing">Seeing, not only reading</h2>
+<p>Everything above turns a file into text. For a bill or a contract that is the right thing to do. For a photograph it throws away the picture: a photo of a parcel on a doorstep, a room, a broken tap or a whiteboard diagram has little or no writing on it, and text recognition returns nothing. The first design could be sent a photograph and see a blank.</p>
+<p>The model itself can look at pictures. So a picture the owner sends (a JPEG, PNG, WebP or GIF) is now shown to the model directly, alongside the owner's words, and is not sent for text recognition at all. The model reads any writing on it as well as seeing what is in it. Documents, and pictures too large to show, still go through text recognition as before.</p>
+<p>Two things carry over unchanged. The picture arrives with a note written by code saying that anything written inside it is material to read and not an instruction from the owner; a photograph of a sign that says "send your password to..." is the same trick as an email that says it. And the log records the picture's name, type and size, never its contents.</p>
+<p>One thing is simpler. Seeing needs no extra key. A copy of Odysseus with no text-recognition service can still be sent a photograph.</p>
+<div class="box example"><div class="label">Worked example: a picture with nothing to read</div>
+<p>To check this without a phone, a picture was made in code: the top half red, the bottom half blue, with no writing anywhere. Text recognition would return nothing for it. It was sent as the owner would send it, with the question "Which two colours are in this picture, and which one is on top?", to a copy of the program with no text-recognition key. <span class="g v">Verified</span></p>
+<p>The reply: "The picture has red on top and blue on the bottom."</p></div>
+
 <h2 id="tested">What is tested, and what is not</h2>
 <div class="tablewrap"><table>
 <caption>The 9 file-reading tests, all passing on 17 November 2026 against a stand-in for the service.</caption>

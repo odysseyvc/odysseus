@@ -20,6 +20,7 @@ Two rules of WhatsApp's shape what is possible:
                        wrote. A reminder that falls outside the window is refused by WhatsApp.
                        Sending outside it needs message templates approved by Meta, which are
                        not built here. The failure is logged, never silent.
+  voice notes          are fetched and handed to the same code that handles Telegram's (voice.py).
   buttons              an approval question carries Approve and Decline as reply buttons. A
                        button message holds 1,024 characters, so a longer question is sent as
                        ordinary messages first, with the buttons on the last part.
@@ -155,7 +156,9 @@ class WhatsApp:
                 data, size = await self._download(item.get("id", ""))
                 await self._conv.handle_file(self._owner_id, data, name, item.get("mime_type"), size, item.get("caption") or "", chat)
             elif kind == "audio":
-                await chat.send(VOICE_NOTE)        # said plainly: silence would read as a broken bot
+                data, size = await self._download((m.get("audio") or {}).get("id", ""))
+                # WhatsApp does not say how long a recording is, so only its size is checked here.
+                await self._conv.handle_voice(self._owner_id, data, "voice.ogg", size, 0, chat)
             else:
                 await chat.send(OTHER_NOTE)
         except Exception as e:

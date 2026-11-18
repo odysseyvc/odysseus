@@ -1,0 +1,79 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Describe the path of a voice note from the owner's phone to a finished errand.</li>
+<li>Explain why the owner is shown what was heard before anything is done with it.</li>
+<li>Say why names are the hard part of speech recognition and one thing that helps.</li>
+<li>Explain how a service can be tested end to end with a recording nobody spoke, and what that does not prove.</li>
+</ul></div>
+
+<div class="box caution"><div class="label">Status of this chapter</div>
+<p><strong>Built, and run once end to end with real services.</strong> <span class="g v">Verified</span>: a spoken sentence in the format Telegram uses was heard correctly, shown back, and acted on by the real model. <span class="g u">Not tested</span>: a real person's voice, on a real phone, in a real room, through Telegram or WhatsApp.</p></div>
+
+<h2 id="silence">A message that used to be met with silence</h2>
+<p>An independent reading of the program had noted that a voice note sent to Odysseus got no reply at all. The handler for incoming messages listened for text, photos and documents, and anything else fell through. To the owner that is indistinguishable from a broken bot.</p>
+<p>Two changes follow from that one observation. Voice notes are now listened to. And every other kind of message the program cannot use (a sticker, a video, a location) now gets one plain line saying so. Silence should never have to be interpreted.</p>
+
+<h2 id="path">From speech to an ordinary message</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Speech-to-text</dt><dd>A service that takes a recording and returns the words spoken in it.</dd>
+<dt>Transcription</dt><dd>The text such a service returns. It is the service's best guess, not a record.</dd>
+</dl></div>
+<p>The listening is done by a speech-to-text service from the same vendor that reads files (Chapter 12), through the key the owner already has. Nothing new had to be bought. What the service returns is text, and from there nothing is new either: the transcription is handed to the same conversation code as a typed message, and the same gate stands in front of anything it leads to.</p>
+<p>This is the third time the same separation has paid for itself. Reading a file, seeing a second channel (Chapter 16) and hearing a voice note are each one small file that turns something into a message.</p>
+
+<h2 id="heard">Showing what was heard</h2>
+<p>Typing has a property that is easy to overlook: the owner sees the words before sending them. A voice note has no such check. The owner said one thing, the service heard another, and neither party knows.</p>
+<p>So before the transcription is acted on, the owner is sent one line by code:</p>
+<p><em>Heard: "Remind me tomorrow at 9:00 in the morning to call Priya Nair about the Saffron Table booking."</em></p>
+<p>If that line is wrong, the owner sees it while the task is still running and can type "stop". The model is told the same thing from its side: the message begins with a note that it is a machine's transcription, that names, numbers, dates and times in particular may be wrong, and that it should ask before acting on anything that matters and looks odd.</p>
+<aside class="margin">Anything that reaches another person still needs a button press (Chapter 9), so a misheard instruction to send an email is shown to the owner twice: once as "Heard", and once as the approval question with the full text.</aside>
+
+<h2 id="names">Names are the hard part</h2>
+<p>Speech recognition is measured by how many words it gets wrong. That measure flatters it for this use. The words that matter most in an errand are the rare ones: a person's name, a restaurant, a reference number. A transcription can be 95% right and useless if the one wrong word is who to email.</p>
+<p>The service accepts a list of words to listen for. Odysseus gives it the names it already knows: the capitalised words in what it remembers about the owner (Chapter 7). A partner called Noor is more likely to be heard as Noor than as "nor".</p>
+<p>How much this helps is <span class="g u">Not tested</span>. The research behind Chapter 15 advised choosing a speech service by testing it on the owner's own recordings, with their own names, and that has not been done.</p>
+
+<h2 id="test">Testing with a recording nobody spoke</h2>
+<p>To check the whole path without a phone, a sentence was spoken by a speech-synthesis service into a recording in the format Telegram voice notes use. That recording was then handled exactly as a voice note from the owner would be.</p>
+<div class="box example"><div class="label">Worked example: the end-to-end check</div>
+<ul>
+<li>Spoken by the synthesizer: "Remind me tomorrow at nine in the morning to call Priya Nair about the Saffron Table booking."</li>
+<li>Shown to the owner first: <em>Heard: "Remind me tomorrow at 9:00 in the morning to call Priya Nair about the Saffron Table booking."</em></li>
+<li>What the real model then did: set a reminder for 09:00 the next day to call Priya Nair about the Saffron Table booking, and added, unprompted, "please check that the names are right".</li>
+<li>Time from recording to reply: about 11 seconds. In the log: the recording's length and the number of characters heard, and none of the words.</li>
+</ul></div>
+<p>This proves the plumbing: the format is accepted, the text arrives, the errand is done. It proves very little about hearing. A synthesized voice is clear and steady, with no accent, no traffic and no half-finished sentences.</p>
+
+<h2 id="tested">What is tested, and what is not</h2>
+<div class="tablewrap"><table>
+<caption>The state of voice notes.</caption>
+<thead><tr><th>Claim</th><th>Grade</th></tr></thead>
+<tbody>
+<tr><td>A recording in Telegram's voice format is heard, shown back and acted on</td><td><span class="g v">Verified</span>, one synthesized sentence, real services</td></tr>
+<tr><td>A stranger's recording is never fetched or listened to</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>Too long, too big, unintelligible and silent recordings are each explained, and no model is called</td><td><span class="g v">Verified</span>, unit test</td></tr>
+<tr><td>A real voice on a real phone is heard well</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>Supplying known names improves how they are heard</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>Languages other than English, or two mixed in one sentence</td><td><span class="g u">Not tested</span></td></tr>
+<tr><td>Replying in speech</td><td>Not built</td></tr>
+</tbody></table></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>A message the program cannot use must still be answered. Silence looks like a fault.</li>
+<li>A voice note becomes text and is then an ordinary message, behind the same gate.</li>
+<li>The owner did not see their words before sending them, so they are shown what was heard before it is acted on.</li>
+<li>Names carry the errand and are what speech recognition gets wrong. Give the service the names already known.</li>
+<li>A synthesized recording tests the path, not the hearing.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Check your understanding</div>
+<ol>
+<li>The owner says "email Noor that I'll be late" and the service hears "email Nora that I'll be late". Name the two points at which the owner can catch this.
+<details><summary>Answer</summary><p>First, the "Heard:" line, sent by code before the model does anything. Second, the approval question for the email, which shows the recipient and the full text and needs a button press. Either is enough to stop it.</p></details></li>
+<li>A speech service is advertised as 97% accurate. Why is that figure a poor guide for an assistant that runs errands?
+<details><summary>Answer</summary><p>It counts all words equally. In an errand the names, numbers and times carry the meaning, and those are the rare words a service is most likely to get wrong. Three wrong words in a hundred is harmless if they are "the" and "a", and ruinous if one of them is the recipient.</p></details></li>
+<li>What does a test with a synthesized recording establish, and what does it leave open?
+<details><summary>Answer</summary><p>It establishes that the recording format is accepted, that text comes back, and that the rest of the program acts on it correctly. It leaves open how well real speech is heard: accents, background noise, hesitation, mixed languages and unfamiliar names.</p></details></li>
+</ol></div>

@@ -91,8 +91,30 @@ async def test_the_owners_file_is_read_and_its_text_reaches_the_model_with_the_c
 
 async def test_a_file_with_no_message_says_so_to_the_model(tmp_path):
     x = rig(tmp_path)
-    await send(x, data=b"\xff\xd8 jpeg", name="photo.jpg", mime="image/jpeg")
+    await send(x, data=b"II*\x00 tiff", name="scan.tiff", mime="image/tiff")      # a scan: turned into text, not shown as a picture
     assert x.clients[0].prompts[0].split("END OF FILE")[1].strip().startswith("(The owner sent this file with no message.)")
+
+
+async def test_a_picture_is_shown_to_the_model_itself_and_is_not_turned_into_text(tmp_path):
+    import base64
+    x = rig(tmp_path)
+    await send(x, data=b"\xff\xd8 a photograph", name="photo.jpg", mime="image/jpeg", caption="What is this?")
+    assert x.ocr.calls == [], "no text recognition: the model looks at the picture"
+    message = [m async for m in x.clients[0].prompts[0]][0]["message"]
+    picture, words = message["content"]
+    assert picture["type"] == "image" and picture["source"]["media_type"] == "image/jpeg"
+    assert base64.b64decode(picture["source"]["data"]) == b"\xff\xd8 a photograph"
+    assert "The owner attached a picture: photo.jpg" in words["text"] and "not an instruction from the owner" in words["text"]
+    assert words["text"].index("not an instruction") < words["text"].index("What is this?"), "the owner's words come after the note"
+    rec = [r for r in x.journal.read() if r["kind"] == "file"][0]
+    assert rec["seen"] is True and "photograph" not in str(rec)
+
+
+async def test_a_picture_too_large_to_show_falls_back_to_reading_its_text(tmp_path):
+    from odysseus.conversation import MAX_PICTURE_BYTES
+    x = rig(tmp_path)
+    await send(x, data=b"\xff\xd8" + b"0" * MAX_PICTURE_BYTES, name="huge.jpg", mime="image/jpeg")
+    assert len(x.ocr.calls) == 1 and isinstance(x.clients[0].prompts[0], str)
 
 
 async def test_a_strangers_file_is_never_read(tmp_path):

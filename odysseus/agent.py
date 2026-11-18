@@ -303,7 +303,17 @@ class AgentRunner:
         await self._client.interrupt()
         return True
 
-    async def run(self, prompt: str, on_text: OnText, preamble: Preamble | None = None) -> Outcome:
+    @staticmethod
+    async def _with_pictures(prompt: str, images: list[tuple[str, bytes]]):
+        """One message from the owner made of pictures followed by their words, in the form the agent library takes."""
+        import base64
+        content: list[dict[str, Any]] = [{"type": "image", "source": {"type": "base64", "media_type": mime, "data": base64.b64encode(data).decode()}}
+                                         for mime, data in images]
+        content.append({"type": "text", "text": prompt})
+        yield {"type": "user", "message": {"role": "user", "content": content}, "parent_tool_use_id": None, "session_id": "default"}
+
+    async def run(self, prompt: str, on_text: OnText, preamble: Preamble | None = None,
+                  images: list[tuple[str, bytes]] | None = None) -> Outcome:
         self._stopped = False
         self._limit = None
         current = ""      # text of the assistant message being written now
@@ -316,7 +326,7 @@ class AgentRunner:
             if preamble is not None:
                 prompt = preamble(self._blank) + prompt
                 self._blank = False
-            await client.query(prompt)
+            await client.query(self._with_pictures(prompt, images) if images else prompt)
             async for msg in client.receive_response():
                 if isinstance(msg, StreamEvent):
                     ev = msg.event
