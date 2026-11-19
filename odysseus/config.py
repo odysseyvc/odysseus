@@ -49,6 +49,8 @@ class Settings:
     max_turns: int = 25          # model round-trips allowed in one task
     task_usd: float = 0.50       # spending limit for one task
     daily_usd: float = 3.00      # spending limit for one calendar day
+    fresh_after_min: int = 120   # after this long without a message, the next one starts a new conversation. 0: never
+    fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
 
@@ -115,6 +117,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         voice_model=merged.get("ODYSSEUS_VOICE_MODEL", "voxtral-small-transcribe-3"),
         tz=merged.get("ODYSSEUS_TZ", ""),
         max_turns=int(merged.get("ODYSSEUS_MAX_TURNS", 25)),
+        fresh_after_min=int(merged.get("ODYSSEUS_FRESH_AFTER_MIN", 120)),
+        fresh_above_tokens=int(merged.get("ODYSSEUS_FRESH_ABOVE_TOKENS", 40000)),
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),

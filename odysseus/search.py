@@ -20,6 +20,7 @@ from .journal import Journal
 SERVER = "odysseus"
 SEARCH_TOOL = f"mcp__{SERVER}__web_search"
 
+MAX_RESULT_CHARS = 12_000  # what one search may add to the conversation, which is then paid for with every later message
 SEARCH_TIMEOUT_S = 40     # a search that has not answered by then is reported to the model as failed
 
 UNTRUSTED_NOTE = (
@@ -52,6 +53,8 @@ def make_search_handler(spec: SearchSpec, journal: Journal):
         price = getattr(getattr(response, "cost_dollars", None), "total", None)
         journal.write("tool", name="web_search", query=query, objective=str(args.get("objective", ""))[:300],
                       ok=True, results=count, cost_usd=float(price) if isinstance(price, (int, float)) else 0.0)
+        if len(text) > MAX_RESULT_CHARS:
+            text = text[:MAX_RESULT_CHARS] + f"\n[Cut: {len(text)} characters came back. Search again, more narrowly, for the rest.]"
         return {"content": [{"type": "text", "text": f"{UNTRUSTED_NOTE}\n\n{text}"}]}
 
     return web_search

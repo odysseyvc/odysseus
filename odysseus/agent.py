@@ -232,6 +232,7 @@ class AgentRunner:
         self._blank = True   # True while the model has not yet been shown the memory in this context
         self._resumed = self.session_id is not None
         self.lost_session = False    # a saved conversation existed and could not be picked up
+        self.context_tokens = 0      # how much the model was sent on its last call: the size of the conversation
         self._calls: dict[str, float] = {}     # estimated cost of each model call in the task now running
 
     @property
@@ -329,6 +330,7 @@ class AgentRunner:
         """End this conversation for good. The next task begins a new one with nothing carried over."""
         await self.reset()
         self.session_id = None
+        self.context_tokens = 0
         self._session_cost = 0.0
         self._blank = True
         self._resumed = False
@@ -388,6 +390,9 @@ class AgentRunner:
                     # One model call can arrive as several messages sharing an id; count it once.
                     key = msg.message_id or f"n{len(calls)}"
                     calls[key] = estimate_usd(self._model, msg.usage or {})
+                    used = msg.usage or {}
+                    # Everything the model was sent for this call: what a later message would have to pay for again.
+                    self.context_tokens = sum(int(used.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
                     if self._limit is None and not self._stopped:
                         if len(calls) > self._s.max_turns:
                             self._limit = "turn_limit"
