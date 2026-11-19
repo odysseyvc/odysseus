@@ -67,6 +67,7 @@
 <li>Unattended routines and watches cannot read Attio.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
 <li>No errand in the evaluation is a partner's.</li>
+<li>The server can add to a workspace's layout but not take away. <span class="g v">Verified</span> by reading the tool's inputs: it can create an object, a field, a link between objects and a list. It cannot rename or remove a field, or change the stages of the pipeline a workspace starts with ("Lead", "In Progress", "Won", "Lost", which are a sales team's and not a fund's). So a layout made through it cannot be undone through it. The first layout is therefore being drafted for the owner to read before anything is created, and the stage names are the owner's to change by hand.</li>
 </ul>
 
 <div class="box summary"><div class="label">Summary</div>
