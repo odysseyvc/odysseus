@@ -122,7 +122,7 @@
 <p>The parts that make one approval safe are all in code, not in the model:</p>
 <ul>
 <li><strong>The plan is checked against the layout.</strong> A field that does not exist, a choice that is not one of the choices, a link to a record the plan does not contain: each is refused with the reason before the owner sees anything.</li>
-<li><strong>Every record is looked up, by the program.</strong> By website for a company, by email address or profile link for a person, then by name. One that exists is linked to and left exactly as it is. (As first built, a plan could never change an existing record at all; Section 21.13 adds changes, each shown to the owner.)</li>
+<li><strong>Every record is looked up, by the program.</strong> By website for a company, by email address or profile link for a person, then by name. One that exists is linked to and left exactly as it is. (As first built, a plan could never change an existing record at all; Section 21.12 adds changes, each shown to the owner.)</li>
 <li><strong>The owner approves the page the program wrote.</strong> The plan is kept by the program between the two steps and cannot be altered. The approval is for an identifier that stands for that plan, used once, and good for twenty minutes.</li>
 <li><strong>It looks again at the moment of acting.</strong> Just before creating each record the program searches once more, in case a colleague added it in the minutes between plan and approval (Chapter 20's rule).</li>
 <li><strong>A failure stops it and is reported exactly.</strong> Nothing can be undone through this server, so the program says what was done before the failed step and what was not, and tells the model not to run the same plan again.</li>
