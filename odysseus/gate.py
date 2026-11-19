@@ -71,6 +71,10 @@ class Gate:
         self._asker: Asker | None = None
         self._pending: dict[str, Approval] = {}
         self._grants: list[str] = []       # approvals given and not yet used, one use each
+        # A second reading of what is about to leave (review.py). It can add lines under a question. It cannot answer one.
+        self._second: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None = None
+        self._second_tools: frozenset[str] = frozenset()
+        self.request = ""                  # what the owner asked in this task, with the exchanges before it; set by the conversation
 
     # --- set-up ----------------------------------------------------------------
 
@@ -85,6 +89,20 @@ class Gate:
     def set_asker(self, asker: Asker | None) -> None:
         """Who to ask. None means nobody is here, and anything that needs asking is refused."""
         self._asker = asker
+
+    def set_second_reader(self, reader: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None, tools: Any = ()) -> None:
+        """Have `reader` look at the question for each of `tools` before it is shown. What it returns is put under the question."""
+        self._second, self._second_tools = reader, frozenset(tools)
+
+    async def _second_reading(self, tool: str, args: dict[str, Any], text: str) -> str:
+        if self._second is None or tool not in self._second_tools:
+            return ""
+        try:
+            note = str(await self._second(tool, copy.deepcopy(args), text, self.request) or "").strip()
+        except Exception as e:      # a reader that fails must never stop the owner being asked
+            self._journal.write("error", where="gate.second_reading", error=type(e).__name__)
+            return ""
+        return note if note and len(text) + len(note) + 2 <= MAX_QUESTION else ""
 
     def decide(self, tool: str, args: dict[str, Any]) -> str:
         rule = self._rules.get(tool)
@@ -131,9 +149,12 @@ class Gate:
             self._journal.write("gate", tool=tool, verdict="refused", reason="too long to show", chars=len(text))
             return False, (f"This is too long to show the owner in full ({len(text)} characters; the limit is {MAX_QUESTION}), so it was "
                            "not shown and was not done. Do it in smaller pieces."), None
+        note = await self._second_reading(tool, frozen, text)
+        if note:
+            text = f"{text}\n\n{note}"
         approval = Approval(secrets.token_hex(4), tool, frozen, text, asyncio.get_running_loop().create_future())
         self._pending[approval.id] = approval
-        self._journal.write("gate", tool=tool, verdict="asked", approval=approval.id, args=frozen)
+        self._journal.write("gate", tool=tool, verdict="asked", approval=approval.id, args=frozen, **({"second_reading": True} if note else {}))
         try:
             await self._asker(approval)
             answer = await asyncio.wait_for(asyncio.shield(approval.answer), self._timeout_s)

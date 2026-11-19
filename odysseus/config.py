@@ -28,6 +28,7 @@ class Settings:
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
     viewer_email: str = ""                # the address given to a document site that asks who is viewing. Empty: the connected mailbox's
     pages_model: str = ""                 # the model that looks at a PDF's pages (pages.py). Empty: the main model
+    review_model: str = ""                # the model that reads an email or invitation again before you are asked (review.py). Empty: the background model. "off": no second reading
     ask_every_change: bool = False        # 1: ask before every change, as before 19 Nov 2026. Default: small changes run and are reported
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
     # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
@@ -111,6 +112,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),
         viewer_email=merged.get("ODYSSEUS_VIEWER_EMAIL", "").strip(),
         pages_model=merged.get("ODYSSEUS_PAGES_MODEL", "").strip(),
+        review_model=merged.get("ODYSSEUS_REVIEW_MODEL", "").strip(),
         ask_every_change=merged.get("ODYSSEUS_ASK_EVERY_CHANGE", "").strip().lower() in ("1", "true", "yes", "on"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
         background_model=merged.get("ODYSSEUS_BACKGROUND_MODEL", "claude-haiku-5-5"),

@@ -132,6 +132,11 @@ class Taint:
         """Remember the owner's own words, which are theirs to send anywhere."""
         self._owner |= {_h("t", t) for t in _tokens(text)} | {_h("s", s) for s in _shingles(text)}
 
+    def known(self, token: str) -> bool:
+        """Whether an address or a code is in the owner's own words or in anything read from their accounts."""
+        h = _h("t", token.strip().lower())
+        return h in self._known or h in self._owner
+
     def leaked(self, text: str) -> list[str]:
         """Private details found in `text`, most specific first. Empty means nothing was recognised."""
         def hit(kind: str, value: str) -> bool:

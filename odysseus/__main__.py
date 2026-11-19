@@ -23,6 +23,7 @@ from .deckview import DeckViewer
 from .links import Fetcher
 from .ocr import MistralOcr
 from .pages import make_page_reader
+from .review import OUTGOING, anthropic_call, make_second_reader
 from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
@@ -132,6 +133,10 @@ async def main() -> int:
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
                      taint_file=settings.data_dir / "taint.bin", attio=attio, services=services,
                      auto_small=not settings.ask_every_change)
+    if apps is not None and settings.review_model.lower() != "off":
+        # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
+        gate.set_second_reader(make_second_reader(journal, anthropic_call(settings.anthropic_api_key),
+                                                  settings.review_model or settings.background_model, gate.taint), OUTGOING)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,

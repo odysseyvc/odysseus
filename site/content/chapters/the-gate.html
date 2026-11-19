@@ -224,6 +224,27 @@ def guard(self, tool: str, args: dict[str, Any]) -> bool:
 <h3>What the trade costs</h3>
 <p>Stated plainly: before this change, a planted instruction that the model obeyed could do nothing without the owner's tap. Now it could add a record, a note or a spreadsheet line that the owner learns about only from the reply. It still could not overwrite a database value, send mail, share a file or delete anything in the owner's accounts. Two things it could do before and still can, whatever the setting: start a browser run signed in to nothing, inside which another company's agent may fill in and submit a form on a public site (a message to a stranger, by another route); and forget, replace or cancel entries in the assistant's own memory and schedule, which are reported. For an addition the report line is the whole of the protection, and it can be missed. Whether that is a good trade rests on a claim from research about unread approvals, not on a measurement made here.</p>
 
+<h3 id="second-reading">A second reading that can warn and cannot approve</h3>
+<p>Asking less is one answer to approval fatigue. The other is to make each question easier to read well. Before the question for an email, a reply or an invitation is shown, the action is read once more, and if something looks wrong a line is added under it.</p>
+<p>Some commercial assistants use a second model for a different purpose: to decide whether a message may go without asking. That was not built. It would make a model the grantor, and the rule of this chapter is that the model proposes and code grants. The second reader here has less power than that on purpose, and the limits are in the code:</p>
+<ul>
+<li><strong>It cannot answer the question.</strong> The gate asks the owner exactly as before, whatever the reader says. If the reader says nothing is wrong, the question is still asked.</li>
+<li><strong>It cannot write on the question.</strong> It replies with code words from a fixed list. The sentences the owner sees are written in code. A reply whose first line is anything but code words is thrown away, and anything after the first line is never read.</li>
+<li><strong>It cannot hold the question up.</strong> After eight seconds, or on any failure, the question is shown without it.</li>
+</ul>
+<pre><code>CODES = {
+    "NOT_ASKED": "It does or says something your message did not ask for.",
+    "FROM_MATERIAL": "Part of it may come from an instruction in something that was read, not from you.",
+    "PRIVATE": "It shares private details that the request does not seem to need.",
+    "MISMATCH": "A name, address, date or amount in it does not match what you asked.",
+}</code></pre>
+<p class="src"><code>odysseus/review.py</code></p>
+<p>The reason for code words is {{ch:untrusted-content}}. The reader is a model reading text that other people may have written, so it can be misled like any other. If it could write freely under the question, text planted in a draft could make it print "checked, safe to approve" there. With code words, the worst a planted text can do is make the reader say nothing, which is where the owner stood before it existed.</p>
+<p>There are two readers, the free one first. Code points out any address the action goes to that is neither in the owner's own words nor in anything read from their accounts: the mark of an address that was invented, or that came from a web page. That costs nothing and calls nothing. Then one call goes to a small model with no tools, given what the owner asked, the last few exchanges, and the question as the owner will see it.</p>
+<p>Which model was a measurement, not a preference. Twenty-four invented cases, half with nothing wrong and half with one fault each (a copy nobody asked for, a wrong amount, a promise, a sign-in code, a note addressed to "any reviewer"), were each read three times by the small model and by the main one. Both caught 36 of 36 faults with no false alarm in 36 clean readings. The small model cost about a hundredth of a cent a reading and the main model about twenty times that, each in about a second. With equal results, the cheaper one was chosen. <span class="g v">Verified</span>, one run of 72 readings per model. Notice what that does not show: when every case is passed by both models, the set is too easy to tell them apart, and it says little about faults nobody thought to write down.</p>
+<p>The first run of that measurement found a fault in the caller, not in either model. Two thirds of the replies came back empty. These models think before answering, the thinking is counted against the limit on the reply's length, and the limit had been set for the dozen tokens of the answer. In the program that would have looked like a reader with nothing to say.</p>
+<p>What the reader does not see limits it. It is not shown what the assistant read, so it cannot tell that a figure in a reply disagrees with the thread; it compares the action with the owner's request and nothing else. It reads only mail and calendar actions, not a message sent through another connected app. It has run once through the real gate on two invented emails (the clean one got no line; the faulty one got four) and has not yet been seen on a real question in the chat. <span class="g u">Not tested</span> in real use.</p>
+
 <h2 id="families">How each family of tool is sorted</h2>
 <p>Three questions sort any action: does it only read; if it changes something, does it reach anyone else; and can it be put back. Each family of tools answers them from different evidence.</p>
 
