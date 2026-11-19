@@ -435,6 +435,20 @@ class Apps:
         import tzlocal
         return tzlocal.get_localzone_name()
 
+    async def my_address(self) -> str:
+        """The address of the mailbox the owner connected. For code, not for the model."""
+        if not getattr(self, "_address", ""):
+            data = _unwrap(await self._call("mail_profile", "GMAIL_GET_PROFILE", {}))
+            self._address = str((data or {}).get("emailAddress") or "").strip().lower() if isinstance(data, dict) else ""
+        return self._address
+
+    async def messages_for_code(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Messages as the service gives them, with nothing removed. For code only (deckview.py reads one kind of link
+        from one sender); what the model is shown of mail goes through mail_search and mail_read, which remove such links."""
+        data = _unwrap(await self._call("mail_for_code", "GMAIL_FETCH_EMAILS", {"query": query, "max_results": limit, "verbose": True}))
+        items = data if isinstance(data, list) else _first(data, "messages", default=[]) if isinstance(data, dict) else []
+        return [m for m in items if isinstance(m, dict)]
+
     async def events_between(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
         """The calendar's events in a stretch of time, as the service gives them. For code (brief.py), not for the model."""
         data = await self._call("calendar_list", "GOOGLECALENDAR_EVENTS_LIST", {

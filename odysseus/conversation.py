@@ -15,6 +15,7 @@ from .agent import AgentRunner, Outcome
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
+from . import deckview as deckview_mod
 from . import links as links_mod
 from .ocr import MAX_BYTES, MAX_CHARS, NO_MESSAGE, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
@@ -61,8 +62,10 @@ class Conversation:
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
-                 services: Any = (), pages: Any = None, links: Any = None):
+                 services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None):
         self._s = settings
+        self._viewing = False
+        self._deckview = deckview    # reads a DocSend document in a browser, giving the owner's address: deckview.py
         self._links = links          # fetches a PDF from a link in the owner's own message: links.py
         self._pages = pages          # looks at a short PDF's pages in a run of its own: pages.py
         self._journal = journal
@@ -128,6 +131,26 @@ class Conversation:
                     rest = " ".join(text.replace(written, " ").split()).strip(" .,:;-")
                     await self.handle_file(user_id, data, name, "application/pdf", len(data), text if rest else "", chat)
                     return
+        # A DocSend link has no file to fetch. It is read in a browser by fixed steps, giving the owner's address if asked.
+        if self._deckview is not None and material is None and not images and not command.startswith("/") and not self.busy \
+                and not self._viewing and not (self._gate is not None and self._gate.pending()) and self._ledger.spent_today() < self._s.daily_usd:
+            where = deckview_mod.docsend_link(text)
+            if where:
+                self._viewing = True
+                try:
+                    await chat.send("Opening that in a browser and reading it page by page. This takes a few minutes.")
+                    view = await self._deckview.view(where)
+                finally:
+                    self._viewing = False
+                if view.ok:
+                    rest = " ".join(text.replace(where, " ").split()).strip(" .,:;-")
+                    how = (" The site asked for an email address and yours was given" + (", and verified from your mailbox" if view.verified else "")
+                           + "; the sender is told who looked." )
+                    said = (text if rest else NO_MESSAGE) + f"\n\n[The program read this document in a browser.{how} Tell the owner that in one line.]"
+                    await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser")
+                    return
+                text += (f"\n\n[The program tried to read the document at that link in a browser and could not: {view.text}. Nothing of it "
+                         "has been read. Tell the owner exactly that, and ask for the file itself or what the site needs.]")
 
         # Signing in to sites is done by the owner, by hand, in a live view of the browser. No model is involved,
         # and no password passes through Odysseus.

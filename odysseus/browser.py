@@ -88,7 +88,23 @@ class BrowserUseBackend:
         kwargs: dict[str, Any] = {"max_cost_usd": max_cost_usd}
         if signed_in:
             kwargs["browser_settings"] = {"profileId": self._profile()}
+        return self._wait(self._c().runs.create(task, **kwargs))
+
+    def run_in(self, task: str, max_cost_usd: float, session: str | None = None, keep_alive: int | None = None) -> tuple[RunResult, str]:
+        """One run in a browser that is kept open afterwards, or a further run in that same browser (deckview.py).
+        Signed in to nothing. Returns the result and the session to pass back for the next run."""
+        kwargs: dict[str, Any] = {"max_cost_usd": max_cost_usd}
+        if session:
+            kwargs["session_id"] = session
+        if keep_alive:
+            kwargs["keep_alive"] = keep_alive
         created = self._c().runs.create(task, **kwargs)
+        return self._wait(created), str(created.session_id)
+
+    def end(self, session: str) -> None:
+        self._c().sessions.delete(session)
+
+    def _wait(self, created: Any) -> RunResult:
         self._run_id = str(created.id)
         try:
             summary = self._c().runs.wait_for_completion(created.id, timeout=900)

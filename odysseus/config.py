@@ -26,6 +26,7 @@ class Settings:
     browser_use_api_key: str = ""  # optional: without it, there is no browser
     browser_ask_signed_in: bool = True    # ask the owner before a browser run that is signed in as them; 0 turns it off
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
+    viewer_email: str = ""                # the address given to a document site that asks who is viewing. Empty: the connected mailbox's
     pages_model: str = ""                 # the model that looks at a PDF's pages (pages.py). Empty: the main model
     ask_every_change: bool = False        # 1: ask before every change, as before 19 Nov 2026. Default: small changes run and are reported
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
@@ -106,6 +107,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         langfuse_full_content=merged.get("LANGFUSE_FULL_CONTENT", "").strip().lower() in ("1", "true", "yes", "on"),
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() not in ("0", "false", "no", "off"),
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),
+        viewer_email=merged.get("ODYSSEUS_VIEWER_EMAIL", "").strip(),
         pages_model=merged.get("ODYSSEUS_PAGES_MODEL", "").strip(),
         ask_every_change=merged.get("ODYSSEUS_ASK_EVERY_CHANGE", "").strip().lower() in ("1", "true", "yes", "on"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
