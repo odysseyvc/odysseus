@@ -1,6 +1,6 @@
 """Live check of stage 2 (memory), without Telegram. Uses its own empty memory folder.
 
-The stage's test, from Chapter 5: a preference stated in one conversation is used
+The stage's test, from the build plan: a preference stated in one conversation is used
 unprompted in a later one, and a changed fact replaces the old one.
 
     .venv/Scripts/python scripts/live_memory.py

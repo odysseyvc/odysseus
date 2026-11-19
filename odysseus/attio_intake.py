@@ -1,7 +1,7 @@
 """Filing what a document names into Attio: one plan, one approval.
 
 A forwarded email or a note of a meeting usually names several things at once: a company, its founder, a deal,
-something worth writing down. Entered one at a time, that is four or five approval questions in a row, and Chapter 3
+something worth writing down. Entered one at a time, that is four or five approval questions in a row, and the book's chapter on the gate
 warned what a run of questions does: the owner stops reading them.
 
 So filing is done in two steps.

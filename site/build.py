@@ -16,7 +16,9 @@ Content lives in site/content:
                        "key: value" pairs (n, date, title, summary)
 
 The build numbers sections, figures and tables, so chapter files never carry
-numbers by hand.
+numbers by hand. A chapter refers to another by its name, written {{ch:the-gate}},
+and the build turns that into a link reading "Chapter 8". The book can then be
+reordered without a single chapter being edited.
 """
 import html
 import json
@@ -34,8 +36,8 @@ FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
-    "family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&"
-    'family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">'
+    "family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&"
+    'family=Instrument+Serif:ital@0;1&display=swap">'
 )
 
 # The mark: a sail on a hull.
@@ -67,12 +69,12 @@ def page(title, description, body, current=""):
 <body>
 <header class="masthead"><div class="masthead-inner">
 <a class="brand" href="index.html">{MARK}Odysseus</a>
-<nav aria-label="Site">{nav("index.html", "Product", "hide-sm")}{nav("book.html", "The book")}{nav("deploy.html", "Deploy", "go")}</nav>
+<nav aria-label="Site">{nav("index.html", "Product", "hide-sm")}{nav("book.html", "The book")}{nav("deploy.html", "Run your own", "go")}</nav>
 </div></header>
 {body}
 <footer><div>
 <p>Odysseus is built in the open. Every factual claim on this site carries an evidence grade, and anything not yet run is marked as such.</p>
-<nav aria-label="Footer"><a href="deploy.html">Deploy guide</a><a href="book.html">The book</a><a href="evidence.html">How to read the evidence</a></nav>
+<nav aria-label="Footer"><a href="book.html">The book</a><a href="what-is-built.html">What is built</a><a href="deploy.html">Run your own</a><a href="evidence.html">How to read the evidence</a></nav>
 </div></footer>
 </body>
 </html>
@@ -125,6 +127,16 @@ def rail(contents, here=None, sections=()):
     return "".join(out)
 
 
+def cross_refs(text, numbers, where):
+    """Turn {{ch:slug}} into a link to that chapter, by its number. An unknown name stops the build."""
+    def one(m):
+        slug = m.group(1)
+        if slug not in numbers:
+            raise SystemExit(f"{where}: refers to a chapter that does not exist: {slug}")
+        return f'<a href="{slug}.html">Chapter {numbers[slug]}</a>'
+    return re.sub(r"\{\{ch:([a-z0-9-]+)\}\}", one, text)
+
+
 def read_entry(path):
     text = path.read_text(encoding="utf-8")
     m = re.match(r"\s*<!--(.*?)-->", text, re.S)
@@ -157,12 +169,13 @@ def build():
     site = contents.get("site", {})
     repo = site.get("repo", "").strip()
     written = [(p, c) for p in contents["parts"] for c in p["chapters"] if c.get("slug")]
+    numbers = {c["slug"]: c["n"] for _, c in written}
     entries = sorted((read_entry(p) for p in PRIVATE_LOG.glob("*.html")), key=lambda e: int(e[0]["n"])) if "--log" in sys.argv else []
 
     # Chapters
     for i, (part, ch) in enumerate(written):
         raw = (CONTENT / "chapters" / f'{ch["slug"]}.html').read_text(encoding="utf-8")
-        body, sections = number_chapter(ch["n"], raw)
+        body, sections = number_chapter(ch["n"], cross_refs(raw, numbers, ch["slug"]))
         prev_ = written[i - 1][1] if i else None
         next_ = written[i + 1][1] if i + 1 < len(written) else None
         pager = ['<nav class="pager" aria-label="Chapters">']
@@ -212,7 +225,7 @@ def build():
         (PRIVATE_LOG.parent / "log.html").write_text(private_page, encoding="utf-8")
 
     # Evidence page (plain single page)
-    ev = (CONTENT / "evidence.html").read_text(encoding="utf-8")
+    ev = cross_refs((CONTENT / "evidence.html").read_text(encoding="utf-8"), numbers, "evidence")
     (DIST / "evidence.html").write_text(
         page("How to read the evidence | Odysseus", "The evidence grades used across the Odysseus site.",
              f'<div class="frame plain"><main><article class="text">{ev}</article></main></div>', "book.html"),
@@ -220,10 +233,11 @@ def build():
     )
 
     # The book's contents page
-    cover = (CONTENT / "cover.html").read_text(encoding="utf-8")
+    cover = cross_refs((CONTENT / "cover.html").read_text(encoding="utf-8"), numbers, "cover")
     toc = ['<section class="toc"><h2>Contents</h2>']
     for part in contents["parts"]:
-        toc.append(f'<div class="parttitle">{html.escape(part["title"])}</div><ol>')
+        toc.append(f'<div class="parttitle">{html.escape(part["title"])}</div>'
+                   + (f'<p class="partnote">{part["note"]}</p>' if part.get("note") else "") + "<ol>")
         for ch in part["chapters"]:
             if ch.get("slug"):
                 toc.append(f'<li><span class="n">{ch["n"]}</span><a href="{ch["slug"]}.html">{html.escape(ch["title"])}</a><p>{ch["summary"]}</p></li>')
@@ -232,17 +246,18 @@ def build():
         toc.append("</ol>")
     toc.append("</section>")
     (DIST / "book.html").write_text(
-        page("The book | Odysseus", "A textbook on building a personal AI agent, written alongside the build.",
+        page("The book | Odysseus", "A textbook on building a personal AI agent, from first principles to the code that runs.",
              f'<div class="frame plain"><main>{cover}{"".join(toc)}</main></div>', "book.html"),
         encoding="utf-8",
     )
 
     # Product page
-    home = fill((CONTENT / "home.html").read_text(encoding="utf-8"),
+    home = fill(cross_refs((CONTENT / "home.html").read_text(encoding="utf-8"), numbers, "home"),
                 {"chapters": len(written), "tests": site.get("tests", ""), "mark": MARK, "repo": html.escape(repo or "book.html", quote=True)})
     (DIST / "index.html").write_text(
-        page("Odysseus: a personal AI agent you run yourself",
-             "A personal AI agent for Telegram that asks before it acts. Run it yourself, with your own keys.", f"<main>{home}</main>", "index.html"),
+        page("Odysseus: an assistant that does the work, and asks before it matters",
+             "A personal AI agent that lives in your chat, works on your accounts and asks before anything that cannot be undone. "
+             "Open source, and explained in a textbook.", f"<main>{home}</main>", "index.html"),
         encoding="utf-8",
     )
 
@@ -256,7 +271,7 @@ def build():
                   "been published. Everything below describes exactly how it is installed and deployed, and will work as written once "
                   "the repository address appears in step 1. Until then this page is a description, not something you can follow.</p></div>")
         clone = "<p>Get the code from the project's repository (its address will appear here when it is published) and open a terminal in its folder.</p>"
-    deploy = fill((CONTENT / "deploy.html").read_text(encoding="utf-8"), {"repo_notice": notice, "clone": clone})
+    deploy = fill(cross_refs((CONTENT / "deploy.html").read_text(encoding="utf-8"), numbers, "deploy"), {"repo_notice": notice, "clone": clone})
     (DIST / "deploy.html").write_text(
         page("Deploy your own | Odysseus", "Step-by-step guide to running your own Odysseus on your computer and on a small server.",
              f'<main><article class="guide">{deploy}</article></main>', "deploy.html"),

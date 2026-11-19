@@ -1,0 +1,237 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Split an agent into parts that can each be bought or built, and say which parts must be your own.</li>
+<li>Apply the rule "buy unless building is verifiably better", and explain why the burden of proof sits on building.</li>
+<li>Ask four questions of any benchmark, and tell a maker's claim from an independent result.</li>
+<li>Decide between vendors by measuring them on your own data when the published evidence is thin.</li>
+<li>Order a build as thin vertical slices, and look up how a thing is normally done before designing it.</li>
+</ul></div>
+
+<h2 id="problem">The problem: every part has a seller</h2>
+<p>An agent is assembled from many parts, and for almost every one a company will sell you a finished product with a page saying it is the best. Take one case. Your agent needs a browser, for sites that have no interface for programs. You can rent a hosted browser whose vendor supplies its own browsing agent; you can rent a plain browser and have your own model drive it click by click; or you can run Chrome yourself on your own server. One hosted-browser company publishes a comparison of every vendor's success at getting past websites' defences against automated visitors, and ranks itself first at 90.5%. Which do you choose, and on what evidence?</p>
+<p>This chapter teaches a method for that decision. The current choices for Odysseus come at the end, but they will date and the method will not.</p>
+
+<h2 id="concepts">The concepts</h2>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Stack</dt><dd>The full set of parts a system is assembled from: which model, which hosting, which libraries, which outside services.</dd></dl></div>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Buy or build decision</dt><dd>For one part, the choice between adopting someone else's product or library and writing the part yourself. The point is who writes and maintains the code, not whether money changes hands. It is possible only for a part with a narrow boundary; a part whose job is smeared across the program cannot be swapped.</dd></dl></div>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Benchmark</dt><dd>A fixed set of tasks with a way of scoring the answers, used to compare products. Its number means only what the tasks, the scoring and the people who ran it allow.</dd></dl></div>
+<p>Evidence on this site carries one of four grades: <span class="g v">Verified</span> (read at the source or measured with the method stated), <span class="g s">Secondary</span> (reported by others, including a vendor writing about a rival), <span class="g c">Maker's claim</span> (a company about its own product, including benchmarks it ran on itself) and <span class="g u">Not tested</span>. A buy or build decision should record the grade of the evidence it rests on, because the grade says how soon the decision ought to be revisited.</p>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Bake-off</dt><dd>A comparison of vendors that you run yourself, on your own inputs, with a scoring rule you wrote before seeing the results.</dd></dl></div>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Thin slice</dt><dd>The smallest version of a system that runs from one end to the other. It does very little, but every part that will exist later is present in some simple form, so that problems between the parts show up early.</dd></dl></div>
+
+<h2 id="design">Splitting an agent into parts</h2>
+<p>An agent of the kind this book builds splits naturally into five layers. A <em>channel</em> carries the conversation (Telegram, WhatsApp). A <em>model and loop</em> choose actions. <em>Hands and senses</em> reach the world: search, mail and calendar, other apps, a browser, reading files, hearing voice. The <em>control layer</em> decides what may run and records what did: the gate, the budget, the journal, the delivery of results. <em>State</em> keeps memory and the schedule. Under all of it sits <em>hosting</em>, and beside it a way of <em>observing</em> what happened.</p>
+<figure>
+<svg viewBox="0 0 720 330" width="100%" role="img" aria-label="Layers of the agent, each marked bought or built.">
+<g font-family="var(--sans)" font-size="13">
+<rect x="20" y="14" width="680" height="40" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="34" y="39" fill="var(--ink)">Channel</text><text x="200" y="39" fill="var(--ink-2)">Telegram library; WhatsApp through Meta's own interface</text><text x="640" y="39" fill="var(--accent)" font-weight="600">bought</text>
+<rect x="20" y="64" width="680" height="40" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="34" y="89" fill="var(--ink)">Model and loop</text><text x="200" y="89" fill="var(--ink-2)">the model maker's models and its agent library</text><text x="640" y="89" fill="var(--accent)" font-weight="600">bought</text>
+<rect x="20" y="114" width="680" height="54" rx="5" fill="var(--paper-2)" stroke="var(--ok)" stroke-width="2"/>
+<text x="34" y="138" fill="var(--ink)">Control</text><text x="200" y="138" fill="var(--ink-2)">gate, budget and ledger, journal, delivery of results,</text><text x="200" y="156" fill="var(--ink-2)">stop; the parts that decide whether the system can be trusted</text><text x="640" y="146" fill="var(--ok)" font-weight="600">built</text>
+<rect x="20" y="178" width="680" height="40" rx="5" fill="var(--paper-2)" stroke="var(--ok)" stroke-width="2"/>
+<text x="34" y="203" fill="var(--ink)">State</text><text x="200" y="203" fill="var(--ink-2)">memory in plain files; a table of scheduled jobs</text><text x="640" y="203" fill="var(--ok)" font-weight="600">built</text>
+<rect x="20" y="228" width="680" height="40" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="34" y="253" fill="var(--ink)">Hands and senses</text><text x="200" y="253" fill="var(--ink-2)">search, connectors, vendors' own servers, browser, reading, hearing</text><text x="640" y="253" fill="var(--accent)" font-weight="600">bought</text>
+<rect x="20" y="278" width="330" height="40" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="34" y="303" fill="var(--ink)">Hosting</text><text x="250" y="303" fill="var(--accent)" font-weight="600">bought</text>
+<rect x="370" y="278" width="330" height="40" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="384" y="303" fill="var(--ink)">Observing (traces)</text><text x="640" y="303" fill="var(--accent)" font-weight="600">bought</text>
+</g>
+</svg>
+<figcaption>The parts of Odysseus by layer. Notice that only two layers are built, and they are the two that hold the rules and the owner's state. Everything that reaches outside, and everything that is ordinary engineering others have done well, is bought.</figcaption>
+</figure>
+
+<h3>Buy unless building is verifiably better</h3>
+<p>The rule for each part is: buy it, unless building it is verifiably better. The burden of proof sits on building. A vendor maintains the part when the services it talks to change, which for an agent is constantly; and every line you write is a line you must test, which this book shows is far more work than writing it ({{ch:testing-and-evaluation}}).</p>
+<p>"Verifiably better" has two quite different forms, and Odysseus has examples of both.</p>
+<p><strong>Better because the part decides trust.</strong> The gate, the journal, the budget and the delivery of results decide whether the system can be trusted. If they belong to someone else, you cannot say what they do, or show where the asking happens. Owning and understanding them is the product. The same argument rules out running a ready-made open-source agent as the whole system: it would give a conversation, file memory and a scheduler in an afternoon, but its control layer would be somebody else's. It remains a sensible baseline to measure against.</p>
+<p><strong>Better on the evidence.</strong> For memory and scheduling, no vendor was found to perform measurably better than a simple build. For memory the makers' scores did not reproduce (worked example below), and plain files matched or beat a dedicated product in two small independent tests. Three independent systems studied in the research had arrived at the same shape: a short file always loaded, dated notes searched when needed, a save before the conversation is condensed, and a later tidy-up. That agreement is better evidence than any single score. For scheduling, nothing beats a table of jobs for one user ({{ch:memory}}, {{ch:acting-unasked}}).</p>
+<div class="box definition"><div class="label">Principle</div>
+<p>Where the evidence shows a simple build performing as well as the products on sale, the simple build is the best-performing choice. Choosing a vendor to satisfy the wording of an instruction such as "use the most performant vendors" would defeat its purpose.</p></div>
+
+<h3>A bought part still needs a boundary you own</h3>
+<p>Buying a part does not mean handing it the keys. The connector service that reaches mail holds the tokens that open the owner's mailbox, and every message read passes through its servers; if it were breached, the gate would be irrelevant, because the gate guards what Odysseus does. The owner accepted that cost for the coverage. What keeps the choice reversible is that mail is reached through a few narrow tools of Odysseus's own, so the supplier behind them can be changed without disturbing anything else ({{ch:mail-and-calendar}}).</p>
+<p>When a service can be reached more than one way, prefer the vendor's own server: it offers more tools, the vendor maintains them, and one company fewer sees the data. For the firm's customer database it offered 58 tools, including synced emails, meetings and call recordings that the general connector's list did not ({{ch:services-with-their-own-server}}).</p>
+
+<h2 id="benchmarks">How to read a benchmark</h2>
+<p>Most published comparisons of agent parts turn out to be run by one of the companies they rank. When a research pass read what the leading assistants connect to, it reported for every category (search, browser, connectors, text recognition, tracing) that most comparisons were written by one of the vendors compared. That does not make them useless. It means each must be read with four questions.</p>
+<ol>
+<li><strong>Who ran it?</strong> A company testing itself chooses the conditions.</li>
+<li><strong>How were the test cases chosen?</strong> A sample picked where one product is known to do well measures the picking.</li>
+<li><strong>Who judged the answers?</strong> When a model marks the work, its mistakes become part of the score.</li>
+<li><strong>Has anyone else reproduced it?</strong> A number that only its owner can obtain is a claim.</li>
+</ol>
+<div class="box example"><div class="label">Worked example: a claimed score an independent test contradicted</div>
+<p><strong>A memory product.</strong> <span class="g c">Maker's claim</span> One vendor of memory for agents reports scores above 92% on two standard tests (<a href="https://mem0.ai/blog/state-of-ai-agent-memory-2026">its report</a>). <span class="g s">Secondary</span> An independent test of the same vendor's open-source edition reported 32.4% on one of them (<a href="https://dev.to/everest_an/-i-benchmarked-ai-agent-memory-in-2026-and-the-numbers-tell-a-different-story-than-the-marketing-2ae4">write-up</a>).</p>
+<p>Apply the questions. The high figure was run by the maker (question 1), and the independent run did not reproduce it (question 4). The two tested different editions with different settings, so neither settles how good the product is. What the pair settles is narrower: a decision should not rest on the headline number. A separate audit reportedly found that the automated judge on a widely used memory test accepts a large share of deliberately wrong answers, which is question 3 failing for the whole field.</p>
+<p><strong>A browser service.</strong> <span class="g c">Maker's claim</span> The hosted-browser company of the opening scenario ranks itself first at 90.5% (<a href="https://browser-use.com/cloud-browsers">its comparison</a>). Its own write-up says the sites were chosen where its product had historically succeeded and ordinary Chrome had not. That is question 2, answered candidly by the company itself.</p></div>
+<h3>Which part of a vendor's ranking to believe</h3>
+<p>A vendor's comparison is not equally biased throughout. The vendor has an interest in its own position, and usually none in which rival comes second. So the order of the <em>other</em> vendors in a vendor's test is more believable than the top line. In the browser comparison, one rival was the only vendor that scored well on a test it did not run, which is worth more than the winner's figure.</p>
+
+<h2 id="measure">When the evidence is thin, measure on your own data</h2>
+<p>Sometimes the four questions leave nothing standing. The venture firm of this book's worked application needs a paid source of data about young companies and their founders ({{ch:sourcing}}). Seven vendors sell it. The one independent benchmark found is European and says nothing about companies in the country where the firm invests. But the firm has what no benchmark has: its own records of companies it already knows. So the decision is made by measurement: look up each known company in every vendor and count what comes back, with <code>scripts/bakeoff.py</code>.</p>
+<figure>
+<svg viewBox="0 0 720 300" width="100%" role="img" aria-label="Decision flow for one part of the stack.">
+<defs><marker id="bb-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>
+<g font-family="var(--sans)" font-size="13" text-anchor="middle">
+<rect x="20" y="20" width="200" height="54" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/><text x="120" y="43" fill="var(--ink)">Does this part decide</text><text x="120" y="61" fill="var(--ink)">whether it can be trusted?</text>
+<rect x="20" y="200" width="200" height="40" rx="5" fill="var(--paper-2)" stroke="var(--ok)" stroke-width="2"/><text x="120" y="225" fill="var(--ink)">Build it</text>
+<rect x="260" y="20" width="200" height="54" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/><text x="360" y="43" fill="var(--ink)">Is there independent evidence</text><text x="360" y="61" fill="var(--ink)">on data like yours?</text>
+<rect x="260" y="200" width="200" height="54" rx="5" fill="var(--paper-2)" stroke="var(--warn)" stroke-width="2"/><text x="360" y="223" fill="var(--ink)">Run a bake-off on</text><text x="360" y="241" fill="var(--ink)">your own data</text>
+<rect x="500" y="20" width="200" height="54" rx="5" fill="var(--paper-2)" stroke="var(--rule)"/><text x="600" y="43" fill="var(--ink)">Does a simple build match</text><text x="600" y="61" fill="var(--ink)">the best vendor?</text>
+<rect x="500" y="120" width="200" height="40" rx="5" fill="var(--paper-2)" stroke="var(--ok)" stroke-width="2"/><text x="600" y="145" fill="var(--ink)">Build the simple thing</text>
+<rect x="500" y="200" width="200" height="40" rx="5" fill="var(--paper-2)" stroke="var(--accent)" stroke-width="2"/><text x="600" y="225" fill="var(--ink)">Buy the best vendor</text>
+</g>
+<g stroke="var(--ink-2)" fill="none" stroke-width="1.4">
+<path d="M120 74V196" marker-end="url(#bb-arrow)"/><path d="M220 47H256" marker-end="url(#bb-arrow)"/>
+<path d="M360 74V196" marker-end="url(#bb-arrow)"/><path d="M460 47H496" marker-end="url(#bb-arrow)"/>
+<path d="M600 74V116" marker-end="url(#bb-arrow)"/><path d="M460 227H496" marker-end="url(#bb-arrow)"/>
+<path d="M660 74Q690 140 660 196" marker-end="url(#bb-arrow)"/>
+</g>
+<g font-family="var(--sans)" font-size="12" fill="var(--ink-2)">
+<text x="128" y="140">yes</text><text x="226" y="40">no</text><text x="368" y="140">no</text><text x="466" y="40">yes</text>
+<text x="608" y="100">yes</text><text x="686" y="140">no</text><text x="466" y="220">result</text>
+</g>
+</svg>
+<figcaption>Deciding one part. Notice that reading published comparisons is only one route; when they do not cover your data, a bake-off answers the same last question: is a vendor clearly better?</figcaption>
+</figure>
+
+<h2 id="mechanism">The mechanism: a bake-off in code</h2>
+<p>A bake-off has three pieces: a test set, a way to ask each vendor the same question, and a scoring rule fixed in advance. The rule decides whether the result means anything, and the script's documentation states it:</p>
+<pre><code># scripts/bakeoff.py (module documentation)
+What a row of the result means, per vendor and company:
+  found     the answer names the company's own website, or its exact name
+  people    the answer names a founder or team member the firm has on record for that company
+  funding   the answer mentions a round, an amount raised or an investor
+  chars     how much came back, as a crude measure of depth
+A lookup is one read of the vendor, by website if the company has one and by name otherwise. Free tiers allow about a
+hundred reads a day, so a run stops at the limit given and can be continued the next day; rows already done are kept.</code></pre>
+<p>Each column answers a partner's question of a vendor: does it know the company, the people, the money. None asks a model to judge, deliberately: a model as judge would put the judge's mistakes into the score, which is question 3 again. The rule is one function:</p>
+<pre><code># scripts/bakeoff.py
+def judge(answer: str, company: dict[str, str]) -&gt; dict[str, object]:
+    low, flat = answer.lower(), norm(answer)
+    site, name = company.get("domain", "").lower(), norm(company.get("name", ""))
+    found = bool((site and site in low) or (name and len(name) &gt;= 4 and re.search(rf"\b{re.escape(name)}\b", flat)))
+    people = [p for p in (x.strip() for x in company.get("people", "").split(";")) if p]
+    return {"found": found, "people": bool(found and any(norm(p) in flat for p in people)) if people else "",
+            "funding": bool(found and _MONEY.search(answer)), "chars": len(answer) if found else 0}</code></pre>
+<p>Three details carry the weight. A name shorter than four characters never counts as found, because a short name matches by accident. People and funding count only if the company was found, so a vendor cannot score for describing someone else's founders. And when the firm has no people on record, the people column is left empty rather than false, so no vendor is marked down for a question that could not be asked.</p>
+<p>Each vendor names its lookup tool and its input differently. The script picks one from the names alone:</p>
+<pre><code># scripts/bakeoff.py
+def choose(tools: dict[str, dict]) -&gt; tuple[str, str] | None:
+    """The tool and input most likely to look one company up, from names alone. Checked by eye with `tools`."""
+    best = None
+    for name, row in tools.items():
+        low = name.lower()
+        if "compan" not in low and "organization" not in low and "entity" not in low:
+            continue
+        if not re.search(r"search|lookup|find|enrich|get|typeahead|resolve|snapshot", low):
+            continue
+        props = ((row.get("inputs") or row.get("input_schema") or {}).get("properties") or {})
+        field = next((p for p in _BY_SITE if p in props), None) or next((p for p in _BY_TEXT if p in props), None)
+        if field is None:
+            continue
+        score = (2 if field in _BY_SITE else 1) + (1 if re.search(r"enrich|lookup|typeahead|resolve|snapshot", low) else 0) - (1 if "list" in low else 0)
+        if best is None or score > best[0]:
+            best = (score, name, field)
+    return (best[1], best[2]) if best else None</code></pre>
+<p>An input that takes a website scores higher than free text, which encodes the main lesson of the measurement: a name finds the wrong company. The guess is "checked by eye": the <code>tools</code> command prints every vendor's tools and the choice made, and a fixed table, <code>LOOKUPS</code>, overrides it. A bake-off with badly chosen lookups would measure the guesser, not the vendors. Finally, the loop that asks:</p>
+<pre><code># scripts/bakeoff.py, inside run()
+        for c in companies:
+            if (app.slug, c["name"]) in seen or made &gt;= limit:
+                continue
+            value = c["domain"] if (field in _BY_SITE and c["domain"]) else c["name"]
+            if field in _BY_SITE and not c["domain"]:
+                continue                # this vendor's lookup is by website and the firm has none on record
+            got = await handlers[f"{app.slug}_run"]({"tool": tool, "arguments": {field: [value] if field == "domains" else value}})
+            answer = got["content"][0]["text"]
+            row = {"vendor": app.slug, "name": c["name"], "error": bool(got.get("is_error")), **judge("" if got.get("is_error") else answer, c)}
+            done.append(row)
+            made += 1
+            with done_file.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row) + "\n")</code></pre>
+<p>Every row is written as soon as it exists, and rows already done are skipped: at about a hundred free reads a day, a bake-off across seven vendors takes days, and a crash on day three must not start it again. An error is recorded and judged as an empty answer, so a failing vendor is not silently dropped from its own denominator. Everything read and written stays in a folder kept out of the repository, because the test set is the firm's own pipeline.</p>
+
+<h2 id="worked">A worked example: two answers, one rule</h2>
+<p>The test set is a CSV file of companies. Take one invented row: name <code>Orbit Labs</code>, domain <code>orbitlabs.example</code>, people <code>Jo Rivera; Sam Lee</code>.</p>
+<p><strong>Vendor A</strong> is looked up by website and answers: "Orbit Labs (orbitlabs.example) raised a $2M seed round. Founded by Jo Rivera." The judge lower-cases the answer and finds <code>orbitlabs.example</code> in it, so <em>found</em> is true. It normalises the answer to <code>orbit labs orbitlabs example raised a 2m seed round founded by jo rivera</code> and finds <code>jo rivera</code> there, so <em>people</em> is true. The pattern for money matches "raised", so <em>funding</em> is true. <em>chars</em> is the length of the answer.</p>
+<p><strong>Vendor B</strong> is looked up by name and answers about a different business: "Orbit Labs Inc, a logistics firm at orbit-labs.example." The website check fails, because <code>orbitlabs.example</code> is not in the text. But the normalised answer begins <code>orbit labs inc</code>, and the name <code>orbit labs</code> appears there as whole words, so <em>found</em> is true. People and funding are false. The vendor is credited with finding a company it did not find.</p>
+<p>Two lessons follow. The scoring rule is crude: the column is called "found", not "correct". And this fault is why website lookup is preferred throughout the script: a company's website is close to a unique identifier, and its name is not. A bake-off's result should be read with the same four questions as anyone else's benchmark: we ran it, the cases come from the firm's own records (so lean towards companies it already met), and a regular expression judges, with the blind spot just shown.</p>
+<p>The state of this example in reality: a test set of 29 companies was written from the firm's database, 28 with a website and 12 with people on record. <span class="g v">Verified</span>: all seven vendors' addresses answer as servers of the right kind, three at addresses their own documentation gives and four at addresses on their own domains that were tried and answered. <span class="g u">Not tested</span>: any lookup at all. No vendor is connected, because each needs an account that only the owner can open, and <code>choose</code> has been tried only on invented tool names.</p>
+
+<h2 id="slices">Building in thin vertical slices</h2>
+<p>Choosing the parts is half the decision; the other half is the order in which they are joined. Building each part fully and joining them at the end postpones the hardest discoveries, which are found at the joins: a scheduler that runs a job but cannot deliver its result to the chat, or a stop command that the browser worker never hears. One builder's account describes scheduled jobs that ran correctly for a week and delivered nothing, and looked exactly like "nothing to report" (<a href="https://techsambad.substack.com/p/building-an-ai-assistant-3-mistakes">write-up</a>). <span class="g s">Secondary</span></p>
+<p>Odysseus was built in six slices, each with a test stated before it began: a thread (a stranger gets no answer, "stop" ends a task mid-reply, a task over budget ends and says so); memory (a preference stated on Monday is used unprompted on Thursday); a schedule (every run ends as delivered, nothing to say, or failed, and a failure is announced); the gate, then mail (a planted instruction in a test email cannot cause a send without a tap); the browser; and measurement (a score checked by something other than the agent, with its sample size).</p>
+<h3>Why the order matters</h3>
+<p>Stop, budget and log come first, because every later slice is observed and halted through them: an agent that cannot be stopped should not be given anything worth stopping it from. Memory and scheduling come before any account, because they touch nothing outside the system. The browser comes last, because it is the largest piece and reads whatever any page chooses to show it.</p>
+<p>The rule that matters most is that <strong>the gate is built before the first tool that needs it</strong>. If mail were connected first and the gate added afterwards, there would be a period in which the model could send mail unchecked; built in the other order, that period never exists. Even reading mail early is a risk, because it puts untrusted text before the model, and any tool added before the gate would be reachable by instructions planted in that text. A strict order removes the need to reason about each case ({{ch:the-gate}}, {{ch:untrusted-content}}).</p>
+
+<h2 id="lookup">Look up how the thing is done before designing it</h2>
+<p>Before buy or build comes knowing what the thing should be. The worked application needed a layout for the firm's database: what a deal is, its stages, what is recorded about it. A first draft was made from the firm's earlier design and common sense. Asked whether it matched how early-stage funds work, the honest answer was that nobody had checked. Reading the database vendor's guide for venture firms, and one consultancy's write-up (sales material), found six gaps, among them no rule for when a deal leaves a stage, a single reason for passing where several are needed, and nothing recorded about a holding after investing.</p>
+<div class="box definition"><div class="label">Principle</div>
+<p>Look up how the thing is done before designing it. A design made from first principles reads as complete to the person who made it. The same was found of tests ({{ch:testing-and-evaluation}}) and of a whole program read by someone who did not write it ({{ch:a-second-reading}}).</p></div>
+<p>The lesson bears on buying too. A search for a document-sharing vendor's server found nothing; the vendor's own page of integrations, pointed out by the owner a day later, listed one. Searching is not the same as looking where the vendor publishes.</p>
+
+<h2 id="choices">The current choices, part by part</h2>
+<div class="tablewrap"><table>
+<caption>The stack as the code stands. "Evidence" grades the reason, not the product.</caption>
+<thead><tr><th>Part</th><th>Choice</th><th>Reason</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><th>Model for conversation</th><td>Claude Sonnet 5.5</td><td>Mid-priced ($2 in, $10 out per million tokens); the maker advises the cheapest model that passes your tests</td><td>Price <span class="g v">Verified</span>; no head-to-head of our own</td></tr>
+<tr><th>Model for unattended routines</th><td>Claude Haiku 5.5</td><td>Runs often and needs little judgement</td><td>Not benchmarked for this job</td></tr>
+<tr><th>Agent loop</th><td>Claude Agent SDK, run in our own process</td><td>The maker's own loop for these models, with a place to attach the gate in code</td><td>No public head-to-head of loops on assistant tasks</td></tr>
+<tr><th>Channel</th><td>Telegram through aiogram; WhatsApp through Meta's own Cloud API</td><td>The only Telegram library found supporting the current Bot API; Meta's route has no company in between, where an unofficial library breaks WhatsApp's terms</td><td><span class="g v">Verified</span> at the source</td></tr>
+<tr><th>Web search</th><td>Exa</td><td>Published comparisons disagree and differ by a few points; price and free credit read at the source</td><td>Weak on quality; price <span class="g v">Verified</span></td></tr>
+<tr><th>Mail, calendar, other apps</th><td>Composio</td><td>Widest coverage found (1,700+ apps), with sign-in handled by the service</td><td>Coverage <span class="g v">Verified</span>; no independent reliability test exists for any such service</td></tr>
+<tr><th>Services with their own server</th><td>The vendor's own server where one exists</td><td>More tools, maintained by the vendor, one company fewer sees the data</td><td>Tool counts <span class="g v">Verified</span> live</td></tr>
+<tr><th>Browser</th><td>Browser Use Cloud, its own browsing agent</td><td>Leads the one cross-vendor test of getting past bot defences; the owner chose to use it at full capability</td><td>Weak: <span class="g c">Maker's claim</span></td></tr>
+<tr><th>Reading files, hearing voice</th><td>Mistral</td><td>Text recognition that keeps headings and tables; the same key serves speech-to-text</td><td><span class="g s">Secondary</span>; not compared with a rival by us</td></tr>
+<tr><th>Traces</th><td>Langfuse</td><td>Ordinary work others have done well, with instrumentation for the agent library</td><td><span class="g s">Secondary</span>; not compared with a rival by us</td></tr>
+<tr><th>Memory</th><td>Plain files with search; built</td><td>The makers' scores did not reproduce; plain files matched or beat a product in two small tests</td><td>Medium; the independent tests are small</td></tr>
+<tr><th>Scheduling</th><td>Our own table of jobs; built</td><td>No vendor performs measurably better for one user</td><td>Not a question of performance</td></tr>
+<tr><th>Gate, budget, journal</th><td>Built</td><td>They decide whether the system can be trusted</td><td>A design argument, not a measurement</td></tr>
+<tr><th>Hosting</th><td>Fly.io, one small machine with a disk (prepared); the owner's laptop (in use)</td><td>With the browser hosted elsewhere, the server runs only the bot and the agent</td><td>Price <span class="g v">Verified</span>; ran for five minutes (see {{ch:staying-up}})</td></tr>
+<tr><th>Company and people data</th><td>None yet</td><td>To be chosen by the bake-off above</td><td><span class="g u">Not tested</span></td></tr>
+</tbody></table></div>
+<p>A later review concluded that nothing chosen should be replaced, but it read comparisons mostly written by vendors, so it carries their weakness.</p>
+
+<h2 id="wrong">What goes wrong</h2>
+<p><strong>A promised comparison that never runs.</strong> The browser was to be settled by running two vendors on the sites the owner uses. That has not been run. A provisional decision becomes permanent once code is built around it; the defence is to keep the missing comparison on the status map ({{ch:what-is-built}}).</p>
+<p><strong>A requirement picks the product, not just the vendor.</strong> The chosen browser vendor lets its automatic handling of bot checks be switched off only on its plain browser, not on its browsing agent. When the owner decided that bot checks should not come to them, that decision picked the design: the vendor's agent deciding each click inside the vendor's service ({{ch:the-browser}}).</p>
+<div class="box example"><div class="label">Case note: three proposals in one day</div>
+<p>The stack was proposed three times on the day it was chosen. The first proposal was the cheapest that works: one small server running the bot, the agent and a copy of Chrome, with a mid-priced model. The owner asked instead for the most performant vendors, which moved three choices: the top-priced model, a hosted browser, and one connector service for every app. The owner then restored the mid-priced model on cost: its rival's list price is four times higher, and nobody has published what a month of a single-user assistant costs. A stack decision is a series of decisions, and each reversal should be recorded with its reason rather than tidied away.</p></div>
+
+<h2 id="testing">How to test a buy or build decision</h2>
+<p>A decision to buy is tested the way a feature is: by something other than the vendor's word. The test must use your inputs, a scoring rule fixed before the results are seen, a baseline that cannot score (a lookup that returns nothing must score zero), and a stated sample size.</p>
+<p>What exists today is limited. The bake-off script has no automated tests of its own; its scoring rule has been checked only by reading it, and its tool chooser only on invented names. No vendor has been compared with another by Odysseus on real use, for any part. The one decision resting on measurement is memory, and that was two small independent tests read by research, not runs of ours. The model choice rests on price and the maker's guidance.</p>
+
+<div class="box caution"><div class="label">What is proven and what is not</div>
+<p><span class="g v">Verified</span>: prices and coverage read at the source; that seven data vendors answer as servers of the right kind; that a test set of 29 known companies exists. <span class="g c">Maker's claim</span>: every quality figure for the browser vendor. <span class="g u">Not tested</span>: any bake-off lookup; the comparison of two browser vendors on the owner's sites; any head-to-head of models on the owner's errands; the monthly cost of the whole stack.</p>
+<p>What we are least sure of, in order. The browser vendor, the weakest choice on the evidence. The company-data vendor, to be chosen by a measurement not yet run. The model maker: the comparison leans towards one maker partly because its documentation was the easiest to read, which is a fact about our research, and the tools used to research and draft this project run on that maker's models, so weigh the recommendation by the evidence cited. And the monthly bill, which will be known only after weeks of running ({{ch:cost}}).</p></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>Split the agent into parts with narrow boundaries, so each can be bought, swapped or built on its own.</li>
+<li>Buy unless building is verifiably better. Building wins where a part decides trust (gate, budget, journal) or where the evidence shows a simple build matching the best product (memory, scheduling).</li>
+<li>Most comparison pages are written by a vendor in them. Ask who ran it, how cases were chosen, who judged, and whether it was reproduced. A maker's score above 92% met an independent 32.4%.</li>
+<li>When published evidence does not cover your data, run a bake-off on records you already hold, with a scoring rule fixed in advance, no model as judge, and lookups by a unique identifier, since a name finds the wrong company.</li>
+<li>Build in thin vertical slices, with stop, budget and log first and the gate before the first tool that needs it.</li>
+<li>Look up how a thing is normally done before designing it.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Exercises</div>
+<ol>
+<li>A vendor's benchmark ranks itself first and three rivals second to fourth. Which part of the ranking deserves more trust, and why?</li>
+<li>Explain why memory and scheduling were built while search and the browser were bought, using the rule "buy unless building is verifiably better".</li>
+<li>In the worked example, Vendor B was credited with finding a company it did not find. Change <code>judge</code> so that, when the firm has a website on record, a match by name alone is reported separately from a match by website. What new column would you add to the printed summary, and what would it tell you?</li>
+<li>The bake-off has no baseline. Write a stand-in vendor that returns an empty answer for every lookup, and state what its row of the summary must show. Then write a second stand-in that returns the company's name and nothing else. What does its row reveal about the scoring rule?</li>
+<li>Design the browser comparison that was promised and never run: which sites, what counts as success, who or what judges, how many runs per site, and what result would make you switch vendors. Say which of the four benchmark questions your design is weakest on.</li>
+<li>(Open.) The company-data bake-off draws its test set from companies the firm already met, which biases it towards companies that are easy to find. Propose a way to build a test set of companies the firm had not yet met at the time, without using any vendor's data to choose them, and argue whether the bias you remove is larger than the one you introduce.</li>
+</ol></div>

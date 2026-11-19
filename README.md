@@ -5,11 +5,11 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 384 automated tests. The parts
-that read (search, mail, calendar, public pages, files) have each run once against the
-real services. The parts that act have not: no email has been sent, no event created, no
-work done in a connected app, and no reminder has fired at its real time. Nothing has
-been proven over weeks. The book in `site/content/chapters/` says for each part what was and was not tested.
+**Status: in development, used by one person.** It has 384 automated tests. Reading, filing into a customer database,
+reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
+once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
+few minutes, and nothing has been proven over weeks. The book's closing chapter
+(`site/content/chapters/what-is-built.html`) says for each part what was and was not tested.
 
 ## What you need
 

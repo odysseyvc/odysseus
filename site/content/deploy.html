@@ -86,7 +86,7 @@ fly volumes create odysseus_data --app your-app-name --region sin --size 1</code
 fly logs</code></pre></div>
 <p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> We reported our first deployment as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
 <h3>Optional: WhatsApp as a second channel</h3>
-<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. Chapter 16 of the book explains what that changes. We have built and tested this channel without Meta and have not yet connected it, so treat these steps as untried.</p>
+<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. We have built and tested this channel without Meta and have not yet connected it, so treat these steps as untried.</p>
 <ol>
 <li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions.</li>
 <li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
@@ -113,7 +113,7 @@ fly logs</code></pre></div>
 <tr><th><code>ODYSSEUS_BROWSER_ASK_SIGNED_IN</code></th><td>on</td><td>You are asked before every browser run that is signed in as you. Set to <code>0</code> to let such runs start without asking</td></tr>
 </tbody>
 </table></div>
-<div class="callout bad"><p><b>Think before turning that last one off.</b> You are asked before a browser run signed in as you starts, but nothing asks before a click inside it. With the setting at <code>0</code> such a run starts without asking and is only reported afterwards. If you sign the browser in to anything that can spend money or speak for you, leave it on. <a href="hands-the-browser.html#door">Chapter 11</a> explains what is at stake.</p></div>
+<div class="callout bad"><p><b>Think before turning that last one off.</b> You are asked before a browser run signed in as you starts, but nothing asks before a click inside it. With the setting at <code>0</code> such a run starts without asking and is only reported afterwards. If you sign the browser in to anything that can spend money or speak for you, leave it on. <a href="the-browser.html#door">Chapter 11</a> explains what is at stake.</p></div>
 
 <h2>What you are trusting</h2>
 <p>Running Odysseus yourself means nobody stands between you and your data except the services you choose to connect. Each one sees something:</p>

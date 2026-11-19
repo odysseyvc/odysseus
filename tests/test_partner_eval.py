@@ -1,4 +1,4 @@
-"""The partner evaluation's own checks, tested. A check that cannot fail measures nothing (Chapter 20)."""
+"""The partner evaluation's own checks, tested. A check that cannot fail measures nothing (the book's chapter on a second reading)."""
 from __future__ import annotations
 
 from evals.crm import FakeAttio, FakeGranola, dump, text

@@ -1,0 +1,220 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Say what changes when a product's first customer is named, and what does not.</li>
+<li>Give an empty customer database a shape for venture work, and explain why current practice must be checked before designing one.</li>
+<li>Hand a model a workspace's layout read from the service, and predict what that can break.</li>
+<li>Design filing from a source as a plan the program checks and one approval for exactly that plan.</li>
+<li>Treat a source as evidence of what someone wrote on a day, and keep an owner's house rules in memory rather than in code.</li>
+<li>Decide which plans may run unasked and which must still be approved.</li>
+</ul></div>
+
+<h2 id="problem">The problem: a forwarded email names five things</h2>
+<p>This part of the book follows one application from start to finish: an assistant for an early-stage venture capital firm, one assistant per partner, with the firm's customer database as its memory. The program is the same one the earlier parts describe. What changes is what "working" means.</p>
+<p>A partner forwards this, from a colleague: "Met Sam Okafor, founder of Orbit Labs (orbitlabs.example). They make scheduling software for satellite ground stations. Raising a $1.5M pre-seed. Introduced by Asha Verma at Northwind. I thought he was sharp. Next step: I will send him our deck by 21 Nov." (All companies and people in this chapter are invented.)</p>
+<p>The email names a company, a founder, an introducer who may already be on file, a deal, a next step with a date, and an opinion worth keeping in the colleague's words. Entered one record at a time through a gate that asks before every change, it is five or six approval questions in a row. And "Northwind" is not the name of anything on file: the firm holds "Northwind Robotics", and a program that looks names up exactly will create a second company. This chapter is about doing that errand well.</p>
+
+<h2 id="customer">A first customer</h2>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Customer database</dt><dd>Software in which a business keeps records of the companies and people it deals with, the deals in progress and how far each has got, and the notes, emails, meetings and calls behind them. Often called a CRM (customer relationship management). For a venture fund it is the firm's memory: who a founder is, what was last said, what is in the pipeline.</dd></dl></div>
+<p>Naming the first customer changed three things. The errands are a partner's: who is this founder, what is at diligence, file this email. The system is fixed: the firm's database, Attio, reached through its own server ({{ch:services-with-their-own-server}}). And the evaluation needs errands of this kind, because those of {{ch:testing-and-evaluation}} are a private person's.</p>
+<p>It did not change the design. Asked whether the firm wanted one assistant for the firm or one for each partner, the owner answered "One per partner". One copy per person, acting with that person's own permissions, is what the program already was ({{ch:what-a-personal-agent-is}}). Reading decks ({{ch:decks-and-data-rooms}}) and finding companies ({{ch:sourcing}}) build on the database this chapter sets up.</p>
+
+<h2 id="layout">Giving an empty database a shape</h2>
+<p>The first read of the workspace found it had been created the day before. It held the three objects every workspace starts with (companies, people, deals) and no lists. <span class="g v">Verified</span>, one live run. An empty database cannot answer "what is in the pipeline". The first useful act was therefore not a lookup but a layout.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Object, record, field</dt><dd>An object is a kind of thing (companies, people, deals); a record is one of them; a field (Attio says attribute) is one value a record holds. A field has a type: text, a choice from a fixed set, a sum of money, a date, or a link to another record.</dd>
+<dt>Deal</dt><dd>One possible investment in one company, from first contact to investing or passing. It links to the company and its people.</dd>
+<dt>Stage</dt><dd>A choice field on a deal saying how far it has got. The ordered set of stages is the pipeline.</dd>
+<dt>List</dt><dd>A collection of records with fields of its own that belong to the entry, not the record: a company's ownership percentage belongs to its place in the portfolio, not to the company.</dd>
+</dl></div>
+<p>The stand-in workspace used in the evaluation has eight stages: Sourced, Contacted, Met, Diligence, IC (investment committee), Term sheet, Invested, Passed. Its deal fields separate three sums of money that a careless design merges: <em>Deal value</em>, described as "Our cheque"; <em>Round size</em>; and <em>Allocation offered</em>, "What we were offered or asked for, which may differ from our cheque". It also has the round, the source, who introduced it (a link to a person), the next step and its due date, and pass reasons as a multiple choice.</p>
+<h3>Check current practice before designing</h3>
+<p>The first draft was made from the firm's earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" Nobody had checked. Reading the vendor's own guide for venture firms and one consultancy's write-up (sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as allocation offered and committee date; one reason for passing where several are needed; nothing about a holding after investing; nothing for the fund's own investors; and no automation.</p>
+<div class="box caution"><div class="label">The lesson</div>
+<p>Look up how the thing is done before designing it. A design made from first principles reads as complete to the person who made it. The same was found of tests ({{ch:testing-and-evaluation}}) and of a whole program ({{ch:a-second-reading}}).</p></div>
+<p>The second draft closed what could be closed within one constraint: the plan the workspace was on allowed three kinds of record, all in use, so the portfolio became a list of companies and the fund's own investors were left out. (The workspace later proved to be on a trial of the paid plan; a layout made for the free plan survives the trial ending.) On the owner's approval of the written draft, 21 fields were created in one all-or-nothing change (15 on deals, 4 on companies, 2 on people) and a Portfolio list was created; all of it was read back afterwards. <span class="g v">Verified</span></p>
+<p>The server can add an object, a field, a link or a list, but cannot rename or remove a field or change the stages a workspace starts with (a sales team's "Lead", "In Progress", "Won", "Lost"). It also refused the list's own ten fields. A layout made through it cannot be undone through it, which is why the draft was written out twice for the owner to read before anything was created. The stages and the list's fields were set in Attio's settings page and read back through the server. <span class="g v">Verified</span></p>
+<div class="box example"><div class="label">Case note</div>
+<p>The money fields were made in US dollars, to match Attio's existing one, without asking which currency the fund counts in. The owner later confirmed dollars: a guess that happened to be right, which is not the same as having asked.</p></div>
+
+<h2 id="told">Telling the model the layout</h2>
+<p>A model begins each conversation knowing nothing of the workspace. In the first live runs it spent about twenty reads for five writes finding out which objects, lists and fields exist, and once filled Attio's built-in "Job title" with "Founder" where the firm's own "Role" field was meant, because it had not seen that there was one. It said so in its reply, which is how the slip was found.</p>
+<p>So the program reads the layout from Attio and hands it over with the list of tools. It is read, not written by hand, so it stays true when the firm changes its layout. From <code>odysseus/attio_layout.py</code>:</p>
+<pre><code>def render(shape: dict[str, Any], limit: int = 12000) -&gt; str:
+    """The layout as a page of plain lines for the model."""
+    me = shape.get("me") or {}
+    lines = [f"The workspace is \"{me.get('workspace_name')}\". The owner is signed in as {me.get('name')}, workspace member "
+             f"{me.get('workspace_member_id')}; use that id wherever an owner or member is wanted and the owner means themselves."]
+    for slug, obj in (shape.get("objects") or {}).items():
+        lines.append(f"\nObject `{slug}` ({obj.get('plural')}). Fields you can set:")
+        lines += _fields(obj.get("attrs") or [])
+    for slug, lst in (shape.get("lists") or {}).items():
+        lines.append(f"\nList `{slug}` (\"{lst.get('name')}\"), a list of {', '.join(map(str, lst.get('parents') or ['?']))}. "
+                     "Fields that belong to an entry in this list, not to the record:")
+        lines += _fields(lst.get("attrs") or [])
+    text = "\n".join(lines)
+    return text if len(text) &lt;= limit else text[:limit] + "\n[Cut. List the attributes of an object yourself if a field you need is not shown.]"</code></pre>
+<p>Each field becomes one line with its exact name, type and choices in order; fields Attio fills itself are listed as not settable. The layout came to about 1,400 tokens. It is read at start, used for thirty minutes, re-read in the background when older, and dropped after any tool that reshapes the workspace. Attio answers in a compact text format of its own, in two shapes (indented blocks, and tables with a header row), and <code>parse</code> reads both; an earlier check had quietly miscounted because it understood only one.</p>
+<p>With the layout, a lookup of founders used the firm's own Role field, and "what stages are there, and how many deals?" went from 52 seconds to 23 (partly from keeping one session open). <span class="g v">Verified</span>, one run each.</p>
+<div class="box caution"><div class="label">What the faster version broke</div>
+<p>In the first run with the layout, the model asked to create the company at once. Before, it had searched because it was looking everything up anyway; told not to look things up needlessly, it dropped the one lookup that mattered, and a duplicate cannot be deleted through this server. It also filled the company's stage from the deal's round, which nobody asked for. Instructions repaired both (search before creating; set only what the owner gave). A change to the instructions is a change to the program: re-run the same requests and read everything that comes back.</p></div>
+
+<h2 id="intake">One approval for a whole source</h2>
+<p>The first real records were three investments, one request each. <span class="g v">Verified</span>, three live runs, read back afterwards with the right stages, amounts and links. Each took five approvals. A partner forwards several such emails a day, and a run of questions teaches an owner to stop reading them ({{ch:the-gate}}). The obvious fix, one approval for "whatever the model does next in Attio", approves an intention while the calls themselves go unseen. The design used instead approves one finished, checked object.</p>
+<div class="box definition"><div class="label">Definition: plan, then file</div>
+<p><strong>Plan.</strong> The model states everything it would file from one source as one plan: records, their links, list entries and notes. The program checks the plan, looks every record up, and returns the page the owner will see. Nothing is changed. <strong>File.</strong> The owner approves that page once, by an identifier the program issued. The program carries the plan out step by step.</p></div>
+<figure><svg viewBox="0 0 720 300" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sequence: the model sends a plan, the program checks and looks up and returns a page; the owner approves the plan id; the program looks again and files, or stops and reports">
+<text x="90" y="24" font-family="var(--sans)" font-size="13" fill="var(--ink)" text-anchor="middle">Model</text>
+<text x="330" y="24" font-family="var(--sans)" font-size="13" fill="var(--ink)" text-anchor="middle">Program</text>
+<text x="510" y="24" font-family="var(--sans)" font-size="13" fill="var(--ink)" text-anchor="middle">Owner</text>
+<text x="650" y="24" font-family="var(--sans)" font-size="13" fill="var(--ink)" text-anchor="middle">Attio</text>
+<line x1="90" y1="32" x2="90" y2="290" stroke="var(--rule)"/>
+<line x1="330" y1="32" x2="330" y2="290" stroke="var(--rule)"/>
+<line x1="510" y1="32" x2="510" y2="290" stroke="var(--rule)"/>
+<line x1="650" y1="32" x2="650" y2="290" stroke="var(--rule)"/>
+<line x1="90" y1="55" x2="330" y2="55" stroke="var(--ink)"/>
+<text x="210" y="49" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">attio_plan (records, links, notes)</text>
+<rect x="230" y="65" width="200" height="40" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="330" y="82" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">check against layout;</text>
+<text x="330" y="98" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">refuse near-duplicate names</text>
+<line x1="330" y1="118" x2="650" y2="118" stroke="var(--ink-2)" stroke-dasharray="4 3"/>
+<text x="490" y="113" font-family="var(--sans)" font-size="12" fill="var(--ink-2)" text-anchor="middle">look each record up (reads only)</text>
+<line x1="330" y1="140" x2="90" y2="140" stroke="var(--ink)"/>
+<text x="210" y="134" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">plan id + the page, word for word</text>
+<line x1="90" y1="162" x2="330" y2="162" stroke="var(--ink)"/>
+<text x="210" y="156" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">attio_file (plan id)</text>
+<line x1="330" y1="180" x2="510" y2="180" stroke="var(--accent)"/>
+<text x="420" y="174" font-family="var(--sans)" font-size="12" fill="var(--accent)" text-anchor="middle">the same page</text>
+<line x1="510" y1="200" x2="330" y2="200" stroke="var(--ok)"/>
+<text x="420" y="214" font-family="var(--sans)" font-size="12" fill="var(--ok)" text-anchor="middle">approve once</text>
+<line x1="330" y1="240" x2="650" y2="240" stroke="var(--ink)"/>
+<text x="490" y="234" font-family="var(--sans)" font-size="12" fill="var(--ink)" text-anchor="middle">look again; create, link, change</text>
+<line x1="650" y1="270" x2="330" y2="270" stroke="var(--bad)" stroke-dasharray="4 3"/>
+<text x="490" y="285" font-family="var(--sans)" font-size="12" fill="var(--bad)" text-anchor="middle">on failure: stop, say how far it got</text>
+</svg><figcaption>Plan, then file. Notice that the page the owner approves is laid out by the program from a plan it has checked and holds, not composed by the model, and the approval is for that plan's identifier, once.</figcaption></figure>
+<p>Every rule that makes one approval safe is in code, not in the model. The plan is checked against the layout: an unknown field, a choice that is not a choice, or a link to a record outside the plan is refused with its reason. Every record is looked up by the program (a company by website, then name; a person by email address or profile link, then name), and one that exists is linked to and left as it is. A near-duplicate name is refused unless the model names the existing record exactly or marks the record as new. The program keeps the plan, which cannot be altered, and its identifier is good for twenty minutes and used once. A value already there is changed only as a shown before-and-after. The program looks again at the moment of acting. And a failure stops filing and is reported exactly.</p>
+
+<h2 id="mechanism">The mechanism</h2>
+<h3>Links the owner can read</h3>
+<p>From <code>odysseus/attio_intake.py</code>, inside the check of each value:</p>
+<pre><code>for r in _links(value):           # only a whole value "@ref" is a link; an email address is not
+    if r[1:] not in refs:
+        raise AppError(f"{where}: {slug} points at {r}, and no record in this plan has that ref.")
+kind = str(a.get("type"))
+if kind == "record-reference" and len(_links(value)) != len(value if isinstance(value, list) else [value]):
+    # An id cannot be shown to the owner as anything they could check. Every link is to a record named in the plan.
+    raise AppError(f"{where}: {slug} must point at a record in this plan, as \"@ref\". If the record is already in Attio, "
+                   "add it to `records` with its name (and website or email address): it will be found, linked to and left unchanged.")</code></pre>
+<p>A link inside a plan is always <code>@ref</code>, the short name of another record in the same plan. In the first live run the page said "Introduced by:" followed by a raw record identifier, because the model had looked the introducer up and passed the id. That is correct for the machine and useless to the person approving. An approval of something the owner cannot read is not an approval. Now an existing record goes into the plan by name and the page says "the person Asha Verma". The comment about email addresses records a fault unit tests found first: the first version took "jo@orbitlabs" for a link to "orbitlabs".</p>
+<h3>Names that are close</h3>
+<pre><code>async def _similar(self, obj: str, name: str) -&gt; list[str]:
+    want = _norm(name)
+    words = [w for w in re.split(r"[^a-z0-9]+", want) if len(w) &gt;= 4]
+    if not want or not words:
+        return []
+    found = parse(await self._attio._call(self._attio._b.call("search-records", {"object": obj, "query": words[0], "limit": 8})))
+    near = []
+    for hit in found.get("results") or found.get("records") or []:
+        got = _show((hit.get("attributes") or {}).get("name")) if isinstance(hit, dict) else ""
+        have = _norm(got)
+        if have and have != want and (want in have or have in want or have.split(" ")[0] == want.split(" ")[0]):
+            near.append(got)
+    return near</code></pre>
+<p>A name is close if one contains the other or they share a first word. When the exact lookup finds nothing and this finds something, planning stops, naming both, until the model gives the existing record's exact name or puts <code>"new": true</code> on the record. The rule is crude and errs towards asking: a needless question costs a sentence, while a missed double cannot be deleted from here.</p>
+<h3>Look again at the moment of acting</h3>
+<p>From the loop that carries a plan out:</p>
+<pre><code>rid = step["found"]
+if not rid:                     # look again at the moment of acting: someone may have added it since the plan was made
+    rid, _ = await self._existing(step["object"], step["match"])
+    if rid:
+        done.append(f"{step['label']}: appeared in Attio since the plan was made; linked, not created")
+elif step.get("updates"):
+    # Look again at the moment of acting. The owner approved "Met → Diligence"; if it no longer says Met,
+    # somebody has changed it since, and what was approved is no longer what would happen.
+    now, attrs, apply, moved = await self._now(step["object"], rid), self._attrs("objects", step["object"]), {}, []
+    for slug, wanted in step["updates"].items():
+        if _norm(self._was(now.get(slug))) == _norm(step["before"][slug]):
+            apply[slug] = wanted
+        else:
+            moved.append(f"{attrs[slug].get('title')} was {step['before'][slug]} when you approved and is now "
+                         f"{self._was(now.get(slug))}, so it was left alone")</code></pre>
+<p>Minutes pass between plan and approval, and colleagues use the same database: the lesson of {{ch:a-changing-world}}, applied to writes. A record that appeared meanwhile is linked to, not created again. A field changed meanwhile is left alone and reported; the other approved changes go ahead.</p>
+<h3>Say exactly how far it got</h3>
+<pre><code>raise AppError(f"Filing stopped at a step that failed: {e}\nDone before that, and still in Attio: {'; '.join(done) or 'nothing'}.\n"
+               f"Not done: that step and the {max(left - 1, 0)} after it. Tell the owner exactly this. Do not file the plan again as it was; "
+               "make a new plan for what is missing.") from None</code></pre>
+<p>Nothing can be undone through Attio's server, so the owner must know about a half-filed plan. The approved plan is deleted from the program's store before the first step runs, so it cannot be run again; a new plan looks everything up afresh and finds what the failed run did create.</p>
+
+<h2 id="worked">A worked example: the forwarded email</h2>
+<p>This is the errand <code>file_new</code> in <code>evals/partner.py</code>, against a stand-in database seeded with Northwind Robotics (a portfolio company), its founder Asha Verma, and two other companies.</p>
+<ol>
+<li><strong>The model plans</strong>, of the kind seen in these runs: company c1 Orbit Labs with its domain; person p1 Sam Okafor linked to <code>@c1</code>, Role Founder; person p2 Asha Verma; company c2 "Northwind"; deal d1 linked to <code>@c1</code>, introduced by <code>@p2</code>, with a next step and date; and a note on <code>@d1</code> quoting "I thought he was sharp", with who said it and when.</li>
+<li><strong>The program checks</strong> every field and choice against the layout, then looks each record up. Asha Verma is found by name. "Northwind" is not found exactly, but "Northwind Robotics" is close, so planning stops: "Attio has nothing called exactly 'Northwind', but it has 'Northwind Robotics'..."</li>
+<li><strong>The model corrects or asks.</strong> It replans with the exact name, or (in three evaluation runs) asks the owner, whose stand-in answers "Yes, that is Northwind Robotics. Go ahead."</li>
+<li><strong>The page</strong> has lines such as "Company Orbit Labs: NEW. Name: Orbit Labs; Domains: orbitlabs.example" and "Person Asha Verma: ALREADY IN ATTIO (found by name Asha Verma). It will be linked to and left exactly as it is.", a deal line naming "the person Asha Verma" as introducer and "you (Pat Owner)" as owner, and the note in full.</li>
+<li><strong>Filing.</strong> Each new record is looked for once more, then created; ids are filled into the links; the note goes on the deal. The reply says what was created, what was there already, and what was left out (the deck is promised, not received).</li>
+</ol>
+<p>The check counts exactly one of each company, person and deal and a new note mentioning "sharp". The deal value stays empty: nobody mentioned a cheque.</p>
+<h3>A plan that changes something</h3>
+<p>From the unit tests: a deal Orbit Labs is on file at Sourced, pass reason "Too early", value 250,000. A plan from a second call sets Term sheet, a next step, value 250,000 and pass reason "Team". The page reads: "Deal Orbit Labs: ALREADY IN ATTIO (found by name Orbit Labs). CHANGES: Deal stage: Sourced → Term sheet; Next step: (empty) → Send the term sheet; Pass reasons: add Team (now: Too early). Everything else on it stays as it is." The value is not listed, because it would not change. The pass reason is added beside the existing one, never in its place. If a colleague moves the stage to Passed before approval, the stage is left at Passed and the reply says so; the next step is still set.</p>
+<p>Live, against the real workspace with the real model: a note of a call on a deal at Term sheet produced a plan that set the next step and its due date and left the stage alone, the model explaining that the documents were not yet signed. <span class="g v">Verified</span>, one run, declined, 25 seconds, 5 cents.</p>
+
+<h2 id="source">A source is evidence of what someone wrote on a day</h2>
+<div class="box example"><div class="label">Case note</div>
+<p>The first source the owner pointed at was the firm's weekly review thread, found by paging through 761 synced emails and matching the subject in code. It named three investments with their terms, a company under evaluation, and a dozen founders with a colleague's verdict on each. It was months old, so a "to be determined" may since have been determined. And one sentence attached the wrong website to a founder, a slip that a program copying from email would have turned into a wrong record. The extraction was shown to the owner and nothing was created until the owner chose what to file.</p></div>
+<p>The rule that follows is written into the filing instructions: "A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess." Opinions go into a note in the source's own words, with who said it and when, not into fields. When a passage said only that the firm was "evaluating closely" and named no stage, the model filed a company, its founder and a note, and no deal. <span class="g v">Verified</span>, once, through the owner's real chat: plan, approval tap, three steps filed, read back. The tap was made on the owner's instruction, not by the owner's hand.</p>
+
+<h2 id="rule">A house rule kept in memory</h2>
+<p>The model decides what a source supports, and it varied: the amount a founder asked the firm for went into the note in one run and into Allocation offered in the next. Asked which, the owner chose the field. That choice belongs neither in the program, where it would bind every firm, nor in the standing instructions, which every owner shares. It was saved as one line in the assistant's memory ({{ch:memory}}), which the model reads in every conversation. The evaluation seeds it as:</p>
+<pre><code>HOUSE_RULE = ("In Attio, when a founder asks us for a specific amount, record it in the deal's Allocation offered field, as well as in the note. "
+              "It is not our cheque: Deal value stays empty until we decide.")</code></pre>
+<p>The errand <code>house_rule</code> forwards "Raising a $3M seed and asking us for $400K" and passes only if Allocation offered is 400,000 and Deal value is empty. Live, after the rule was saved, the amount went to the field in both runs and the firm's own cheque stayed empty. <span class="g v">Verified</span>, two runs.</p>
+
+<h2 id="add-change">Plans that only add, and plans that change</h2>
+<p>A plan that could only add would leave the database describing the day each record was made, though after a first meeting nearly everything a partner learns is about a record already on file. Hence <code>changes</code>. The owner also asked for as little asking as possible ({{ch:the-gate}} sets out the policy), so the program separates plans by what they can lose:</p>
+<pre><code>def decide(self, a: dict[str, Any]) -&gt; str:
+    plan = self._plans.get(str(a.get("plan", "")).strip())
+    if not getattr(self._attio, "auto", False) or plan is None or plan.get("doubt"):
+        return ASK
+    return ASK if any(s.get("updates") for s in plan["steps"]) else ALLOW</code></pre>
+<p>A plan that only adds runs unasked when the owner has turned that on, and is reported line by line, "without asking"; an approved plan is reported as a count, since the owner just read every line. A plan that overwrites a value is always asked about, because what was there disappears from view once changed; so is one that adds a record beside a similarly named one, and one the program does not hold. The cost: a planted instruction the model obeyed could now add a record or note that the owner learns of only from the reply. It still could not overwrite, send, share or delete.</p>
+
+<h2 id="wrong">What goes wrong</h2>
+<div class="box example"><div class="label">Case note: two defects behind one green row</div>
+<p>The first run of the partner errands passed 28 of 28. A suite that passes everything is measuring either a perfect product or nothing, so two checks were made. An agent that does nothing passes none of the fourteen errands. Then the passing transcripts were read, and one mentioned that the plan would create a company called "Northwind". The database already held "Northwind Robotics". The program's lookup matched names exactly and created a second company in every approved run of that errand, five of five, and every one passed, because the check counted the companies it expected and did not look for one it did not. The product and the measurement had the same hole, so they agreed. Both were repaired: <code>_similar</code> in the program, and an evaluation rule that counts a name that is another name plus a word as a double.</p></div>
+<ul>
+<li><strong>A faster model skipped the lookup that mattered</strong>, along with the needless ones.</li>
+<li><strong>A similar built-in field was used</strong>: "Job title" for "Role".</li>
+<li><strong>An approval page showed ids</strong>, until code made unreadable approvals impossible.</li>
+<li><strong>A parser silently read nothing.</strong> A single record came back as a list with no name, a shape the reader had not met, so every "before" would have said "(empty)". It was caught because the parsed result was printed.</li>
+<li><strong>The model varies</strong>: one run made a deal, another did not.</li>
+</ul>
+
+<h2 id="testing">How to test it</h2>
+<p>A test of filing must show that a plan changes nothing; that an approved plan runs once and expires; that an existing record is never changed except by a shown change; that a record appearing between plan and approval is not created twice; that a change is skipped when the record no longer says what was shown; that every misfit with the layout is refused with a reason; and that a failure stops and reports exactly. The 35 unit tests in <code>tests/test_attio.py</code>, <code>tests/test_attio_intake.py</code> and <code>tests/test_attio_layout.py</code> cover these with a stand-in server, and pass.</p>
+<p><code>evals/partner.py</code> runs fourteen partner errands against the real model with a stand-in database (<code>evals/crm.py</code>) that answers in Attio's text format, so the layout reading, plan checking and gate are the real ones. Every run is held to five properties: nothing overwritten without approval, nothing twice, no deal's stage or value changed unless allowed, no claim of filing when nothing was filed, and a normal end. Three rounds, 112 runs, about $2.60: 28 of 28 (wrongly, as above), 38 of 42, then 39 of 42 with no doubles, the three failures being the model rightly asking about Northwind with nobody to answer. After the change to asking less, 28 runs for $0.60 all passed, and the owner was asked in 6 runs instead of 16. <span class="g v">Verified</span>. No planted instruction was acted on in 16 chances in the first three rounds. Two or three runs an errand is too few for a rate, and nothing is reworded and no tool fails. Decks are tested in {{ch:decks-and-data-rooms}}.</p>
+
+<div class="box caution"><div class="label">What is proven and what is not</div>
+<p><span class="g v">Verified</span>: the layout created and read back; three investments entered live and read back; plans drawn up live against the real workspace and declined (two for a new company, one for a change); one plan filed from the real chat; the house rule followed twice; the partner evaluation as reported above.</p>
+<p><span class="g u">Not tested</span>: a plan with changes approved and carried out against the real server (unit tests with a stand-in only); a colleague changing a record between plan and approval, live; whether the saved views select what their names say, since there were no deals to select; and how often a model obeys a planted instruction to add something, which two runs cannot say. Outside a plan, "search before creating" a single record is still only an instruction.</p></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>Naming a first customer changed what "working" means, not how the program is built: one copy per partner is what it already was.</li>
+<li>An empty database needs a shape first. Check how practitioners do it before designing; a first-principles design looks complete to its author.</li>
+<li>Read the layout from the service and give it to the model; then re-run everything, because a faster model may skip the one lookup that mattered.</li>
+<li>One-at-a-time approvals become a run nobody reads. Approve one checked plan, by an identifier, once, with the safety in code: look up first, refuse near-duplicates, show changes as before and after, look again when acting, report exactly how far a failure got.</li>
+<li>A source is evidence of what someone wrote on a day. An owner's preference belongs in memory, not in code.</li>
+<li>Plans that only add can run unasked and be reported line by line; plans that overwrite must be approved.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Exercises</div>
+<ol>
+<li>Why is the approval for a plan's identifier and not for "filing this email"? What could go wrong with the second?</li>
+<li>A plan names a company "Kestrel" and the database holds "Kestrel Bio". Trace what <code>attio_plan</code> does, and the two ways the model can continue.</li>
+<li>A colleague changes a deal's stage from Met to Passed between plan and approval, and the plan also sets the next step. What does filing do, and what does the reply say?</li>
+<li>Extend <code>_similar</code> so that "Northwind Robotics Pvt Ltd" and "Northwind Robotics" are treated as close, and write a unit test in the style of <code>tests/test_attio_intake.py</code>. What new false alarms might your rule raise?</li>
+<li>Add an errand to <code>evals/partner.py</code> in which a forwarded email is a year old and says the round size is "to be decided". Write a check that fails if the round size field is filled.</li>
+<li>Hard, open: plans that only add now run unasked. Design a measurement of how often a planted instruction in a forwarded email leads to an unwanted addition, with enough runs to state a rate and a ceiling, and say what you would change if the rate were one in fifty.</li>
+</ol></div>

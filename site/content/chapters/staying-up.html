@@ -1,0 +1,276 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Separate what an agent holds only while its process runs from what must be kept on disk, and say where each part of a conversation lives.</li>
+<li>Explain why a task interrupted by a restart is announced to the owner and not resumed, and what the announcement must contain.</li>
+<li>Handle messages that arrive while the program is down, without carrying out stale instructions.</li>
+<li>Restart a program after its configuration changes using a supervisor, and explain why restarting inside the same process is not enough.</li>
+<li>Describe a hosting arrangement with no inbound port, and say what changes when a service must call back to the program.</li>
+<li>Name the two things that are easy to get wrong when moving such a program to a server.</li>
+</ul></div>
+
+<h2 id="problem">The problem: an assistant that is there tomorrow</h2>
+<p>At ten past four the owner asks their assistant to draft a reply to a supplier. The draft appears, and they go into a meeting. While they are out, the program is updated, which means it is stopped and started again. At five they write "Looks good, send it." A program that kept the conversation only in its running memory now answers "Send what?". Worse things are possible. If the update had come in the middle of the sending, the owner would have no way to tell whether the email had gone, and a program that simply carried on might send it twice.</p>
+<p>Restarts are not rare accidents. Every update is one, every crash is one, and on a laptop every lid closed is a kind of one. An agent that acts on its owner's behalf has to survive them without losing its place, without doing anything twice, and without leaving the owner to guess. It also has to run somewhere that stays awake, because a reminder set for seven in the morning is worth nothing if the computer is asleep at seven.</p>
+
+<h2 id="concepts">Where state lives</h2>
+<p>The first step is to sort everything the program knows into two piles: what vanishes when the process ends, and what is on disk.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Process</dt><dd>One running copy of the program. Everything held in its variables (open connections, a task in progress, a question waiting for an answer) ends when it ends.</dd>
+<dt>Session</dt><dd>One conversation as the agent library sees it: the sequence of messages and tool results the model is shown.</dd>
+<dt>Transcript</dt><dd>The agent library's own file of a session, from which the session can be picked up again.</dd>
+<dt>Resume</dt><dd>Starting the agent with the identifier of an earlier session, so that it continues that conversation instead of beginning a new one.</dd>
+<dt>Journal</dt><dd>Odysseus's append-only log: one line of JSON per step, such as a task starting, a tool being asked for, a reply being sent.</dd>
+</dl></div>
+<div class="tablewrap"><table>
+<caption>What survives a restart, and why.</caption>
+<thead><tr><th>Thing</th><th>Where it lives</th><th>After a restart</th></tr></thead>
+<tbody>
+<tr><th>Memory, the schedule, the journal</th><td>Files in the data folder</td><td>Kept</td></tr>
+<tr><th>The conversation</th><td>A small file holding the session's identifier, and the library's transcript, both in the data folder</td><td>Resumed</td></tr>
+<tr><th>The record of private details read from the owner's accounts</th><td>A file of short hashes in the data folder</td><td>Kept, so the check on what leaves through a search still works</td></tr>
+<tr><th>Sign-in tokens for connected services</th><td>Files in the data folder</td><td>Kept</td></tr>
+<tr><th>A task in progress</th><td>The process</td><td>Lost; announced to the owner</td></tr>
+<tr><th>Messages waiting behind that task</th><td>The process, with a copy of their first words in the journal</td><td>Lost; named in the announcement</td></tr>
+<tr><th>An approval question on the owner's screen</th><td>The process</td><td>Dead, by design; the announcement says so</td></tr>
+</tbody></table></div>
+<p>Two rows deserve a comment. The record of private details was once held only in the process. After the conversation began to survive restarts, the model still had the owner's mail in front of it while the check that stops mail leaving through a search had forgotten everything. The general lesson: once one piece of state outlives the process, every check that depends on it must outlive the process too. The second is the approval question. {{ch:the-gate}} explains that an approval covers exact inputs for one use and is held by the running program. Writing it to disk so that it could be honoured after a restart would let a tap made hours later approve something the owner can no longer see in context. It is allowed to die.</p>
+
+<h2 id="design">The design</h2>
+<figure><svg viewBox="0 0 720 320" width="100%" role="img" aria-label="Supervisor, process, data folder and outside services">
+<rect x="20" y="20" width="680" height="60" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="360" y="45" text-anchor="middle" font-family="var(--sans)" font-size="14" fill="var(--ink)">Supervisor (python -m odysseus)</text>
+<text x="360" y="66" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">starts the child; starts a new one when it exits with code 75; otherwise exits with the child's code</text>
+<rect x="20" y="100" width="420" height="110" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/>
+<text x="230" y="125" text-anchor="middle" font-family="var(--sans)" font-size="14" fill="var(--ink)">Child process (lost on every restart)</text>
+<text x="230" y="150" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">agent client, task in progress, waiting messages,</text>
+<text x="230" y="170" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">approvals, tracing client, Telegram poller</text>
+<text x="230" y="195" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">reads the journal at start, before writing to it</text>
+<rect x="20" y="240" width="420" height="60" rx="6" fill="var(--paper-2)" stroke="var(--ok)"/>
+<text x="230" y="265" text-anchor="middle" font-family="var(--sans)" font-size="14" fill="var(--ink)">Data folder (on a disk that outlives the machine)</text>
+<text x="230" y="285" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">memory, schedule, journal, session.json, agent/ transcripts, tokens</text>
+<rect x="500" y="100" width="200" height="110" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/>
+<text x="600" y="125" text-anchor="middle" font-family="var(--sans)" font-size="14" fill="var(--ink)">Outside services</text>
+<text x="600" y="150" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">Telegram, the model,</text>
+<text x="600" y="170" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">search, connectors</text>
+<line x1="440" y1="155" x2="500" y2="155" stroke="var(--ink-2)" stroke-width="1.5"/>
+<polygon points="500,155 490,150 490,160" fill="var(--ink-2)"/>
+<text x="470" y="145" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="var(--ink-2)">out</text>
+<line x1="230" y1="210" x2="230" y2="240" stroke="var(--ok)" stroke-width="1.5"/>
+<line x1="230" y1="80" x2="230" y2="100" stroke="var(--ink-2)" stroke-width="1.5"/>
+</svg>
+<figcaption>Three layers with different lifetimes. Notice that every arrow to the outside points outward: nothing outside starts a connection to the program. Notice also that the supervisor holds no state at all, which is why it can be trusted to start a clean child.</figcaption></figure>
+<p>The design answers five questions. For each, the obvious alternative and why it was not taken.</p>
+<div class="tablewrap"><table>
+<caption>Five choices and their alternatives.</caption>
+<thead><tr><th>Question</th><th>Choice</th><th>Obvious alternative, and why not</th></tr></thead>
+<tbody>
+<tr><th>How does a conversation survive?</th><td>Keep the session identifier and the library's transcript in the data folder, and resume</td><td>Rebuild the conversation from Odysseus's own journal. The library already knows how to resume; it had simply never been told the identifier.</td></tr>
+<tr><th>What happens to an interrupted task?</th><td>Announce it, with its first words, and do not carry it on</td><td>Resume it. The program cannot know how far it got, and an action done twice cannot be undone.</td></tr>
+<tr><th>What happens to a message that arrives while the program is down?</th><td>If it is more than ten minutes old on arrival, report it and do not act</td><td>Act on it. An hours-old instruction may already have been done by hand.</td></tr>
+<tr><th>How does the program restart itself?</th><td>Exit with a special code; a supervisor starts a fresh process</td><td>Restart inside the same process. Process-wide state, such as the tracing client, stayed shut.</td></tr>
+<tr><th>How do messages reach a server?</th><td>The program asks Telegram for them (long polling); no port is open</td><td>A webhook, where Telegram calls the server. That needs a public address and a defended door.</td></tr>
+</tbody></table></div>
+
+<h2 id="session">Mechanism: a conversation that survives</h2>
+<p>The agent runner in <code>odysseus/agent.py</code> keeps the session's identifier in a file beside the rest of the data, and tells the agent library to write its transcript there too:</p>
+<pre><code># The conversation outlives the program. Its id is kept in a small file beside the other data, and the agent
+# library's own transcript is kept there too (CLAUDE_CONFIG_DIR below), so that on a server both are on the
+# disk that survives an update. Before this, any restart began a new conversation without saying so.
+self._session_file = settings.data_dir / "session.json"
+self._transcripts = settings.data_dir / "agent"
+self.session_id: str | None = self._load_session() if persist else None</code></pre>
+<p>The options passed to the library then include <code>resume=self.session_id</code> and an environment variable, <code>CLAUDE_CONFIG_DIR</code>, pointing at that <code>agent</code> folder. The second half is easy to miss. On a server, the library's usual place for transcripts is inside the image, and an update replaces the image. An identifier pointing to a transcript that no longer exists would be worse than no identifier. Keeping both on the disk that survives an update is what makes the identifier worth keeping.</p>
+<p>The identifier is written after each task, when the library reports it, and deleted when the owner sends <code>/new</code>. A damaged file is read as "no conversation", not as an error. If the identifier is present but the session cannot be picked up, the runner starts a new one rather than failing every message from then on:</p>
+<pre><code>try:
+    await client.connect()
+except Exception as e:
+    if self.session_id is None:
+        raise
+    # The saved conversation could not be picked up (its transcript is gone or unreadable).
+    # Start a new one rather than fail every message from now on.
+    self._journal.write("error", where="agent.resume", error=type(e).__name__, message=str(e)[:200])
+    self.session_id, self._resumed, self._blank = None, False, True
+    self._save_session()
+    client = self._factory(options=self.options())
+    await client.connect()</code></pre>
+<p>Setting <code>_blank</code> matters: it tells the conversation that the model has no context, so the owner's memory is shown again with the next message ({{ch:memory}}). The <code>_resumed</code> flag is used by the restart notice to say whether the earlier conversation was kept.</p>
+<p>A conversation that never ends also grows without limit. The library condenses long conversations by itself, and the owner can send <code>/new</code> to start again on purpose. Memory, reminders and connections are untouched by <code>/new</code>; only the back-and-forth is dropped. {{ch:the-conversation}} covers the size and cost of a long thread.</p>
+
+<h2 id="notice">Mechanism: announce, do not resume</h2>
+<p>When the program starts, before it writes anything, it reads its own journal to find out what the last run left unfinished. The function is <code>unfinished</code> in <code>odysseus/__main__.py</code>:</p>
+<pre><code>for r in journal.read():
+    if r["kind"] == "start":
+        open_task, waiting = None, {}       # an earlier restart: whatever was lost then has been reported already
+    elif r["kind"] == "task_start":
+        open_task = {"preview": r.get("preview", ""), "asked": False}
+    elif r["kind"] == "task_end" and "routine" not in r:
+        open_task = None
+    elif r["kind"] == "queued" and "q" in r:
+        waiting[r["q"]] = r.get("preview", "")
+    elif r["kind"] == "dequeued":
+        waiting.pop(r.get("q"), None)
+    elif r["kind"] == "queue_cleared":
+        waiting = {}
+    elif r["kind"] == "gate" and r.get("verdict") == "asked" and open_task is not None:
+        open_task["asked"] = True
+    elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
+        open_task["asked"] = False</code></pre>
+<p>This works because the conversation writes the right lines at the right moments. Each task begins with a <code>task_start</code> line carrying the first eighty characters of the request. Each message that has to wait behind a running task is written as <code>queued</code> with its own number and first words, and as <code>dequeued</code> when its turn comes. A <code>start</code> line marks each run of the program, so what was lost before an earlier restart is reported once, not at every later start. And a routine's end is ignored, so a routine finishing in the background cannot hide an interrupted conversation task.</p>
+<p>Without the journal lines written <em>before</em> the work, there is nothing to find. A log that records only completions cannot tell a task that never started from one that died halfway.</p>
+<p>Why not carry on? Because the program cannot know how far the task got. A tool call can succeed even though its reply never arrived: {{ch:a-changing-world}} calls this the lost acknowledgement. A restart is the same uncertainty at a larger scale. The email may have left in the last instant before the process stopped. Telling the owner costs one message; a duplicate email cannot be recalled.</p>
+<p>The notice is sent to the owner after the agent client has connected, so that the program knows whether the conversation was resumed, and before the <code>start</code> line is written.</p>
+
+<h2 id="example">Worked example: a restart with work in flight</h2>
+<div class="box example"><div class="label">Worked example</div>
+<p><strong>Input.</strong> The owner asks "Summarise my inbox". While that task runs, they send three more messages. The journal ends like this when the process is stopped (fields trimmed):</p>
+<pre><code>{"kind": "task_start", "preview": "Summarise my inbox"}
+{"kind": "queued", "q": 1, "preview": "Remind me to call the plumber at 5"}
+{"kind": "queued", "q": 2, "preview": "What is on tomorrow?"}
+{"kind": "queued", "q": 3, "preview": "Book the dentist"}
+{"kind": "dequeued", "q": 1}</code></pre>
+<p><strong>What each part does.</strong> At start, <code>unfinished</code> walks the journal. The <code>task_start</code> opens a task. The three <code>queued</code> lines add three waiting messages, and the <code>dequeued</code> line removes the first, which had been reached before the stop. No <code>task_end</code> follows, so the task is still open. No <code>gate</code> line says a question was asked. The result is the summary <code>{"preview": "Summarise my inbox", "asked": False, "waiting": ["What is on tomorrow?", "Book the dentist"]}</code>.</p>
+<p>The runner connects and finds <code>session.json</code>, so it resumes. <code>restart_notice</code> then builds the text.</p>
+<p><strong>Output.</strong> The owner receives:</p>
+<p><em>I was restarted while I was working on something: "Summarise my inbox". It was not finished, and I have not carried on with it by myself. 2 messages you sent were waiting behind it and were lost: "What is on tomorrow?"; "Book the dentist". Ask me again if you still want these done.</em></p>
+<p>Had a question been on the owner's screen, the notice would add that the question "no longer counts, so tapping it will do nothing", because a button that silently does nothing looks like a fault. Had the conversation not been resumed, it would end with "I also no longer have our earlier conversation, only what I remember about you." A test in <code>tests/test_durability.py</code> uses this journal as its input.</p></div>
+
+<h2 id="down">Messages that arrive while the program is down</h2>
+<p>Telegram holds messages for a bot that is not running and hands them over when it returns, for about a day; WhatsApp holds them for about a day and a half. That is convenient and dangerous. "Send the contract to the agent", written at nine and delivered at three, may have been done by hand in between, or may no longer be wanted.</p>
+<p>So the Telegram wiring in <code>odysseus/telegram.py</code> checks the age of every message from the owner before passing it on:</p>
+<pre><code>user_id = message.from_user.id if message.from_user else 0
+sent = message.date if message.date.tzinfo else message.date.replace(tzinfo=timezone.utc)
+age = (datetime.now(timezone.utc) - sent).total_seconds()
+if age &lt;= STALE_AFTER_S or not conversation.is_owner(user_id):
+    return False
+loop_time = asyncio.get_running_loop().time()
+if loop_time - told_late[0] >= 60 or told_late[0] == 0.0:
+    told_late[0] = loop_time
+    await TelegramChat(bot, message.chat.id).send("Something you sent earlier has only just reached me, because I was not running at "
+                                                  "the time. I have not acted on it. Send it again if you still want it.")
+return True</code></pre>
+<p><code>STALE_AFTER_S</code> is 600 seconds. A message older than that on arrival is reported and not run. The owner is told at most once a minute, so a backlog of twenty messages produces one notice, not twenty. The WhatsApp channel has the same rule ({{ch:channels}}).</p>
+<p>Two other kinds of thing arrive, or fail to, while the program is down. A reminder whose time passed is sent once on return, marked as late and saying why, and a repeating one moves to its next future time rather than firing once for each missed day ({{ch:acting-unasked}}). Events from the owner's mail and calendar that a watch was waiting for are simply missed: nothing goes back for them.</p>
+
+<h2 id="restart">Restarting itself after a configuration change</h2>
+<p>Some changes need a restart. When the owner connects a new service from the chat ({{ch:services-with-their-own-server}}), the service brings new tools, and the set of tools is fixed when the agent client connects. The program has to start again to use them.</p>
+<p>The first version restarted inside the running process: stop polling, tear everything down, build it all again, all in one Python process. It worked six times in a row. Every trace after the first restart was nonetheless silently dropped. The tracing client exists once per process, the first run's clean-up had shut it, and nothing reopened it. No test found this; running the errand for real did.</p>
+<div class="box definition"><div class="label">Definition</div>
+<dl class="terms"><dt>Supervisor</dt><dd>A small parent process whose only job is to start the real program as a child and decide, when the child exits, whether to start another.</dd></dl></div>
+<p>A new process has none of the old one's history. So <code>python -m odysseus</code> now starts a supervisor, which runs the program as a child marked by an environment variable:</p>
+<pre><code>def supervise() -> int:
+    import os
+    import subprocess
+    env = {**os.environ, "ODYSSEUS_CHILD": "1"}
+    while True:
+        child = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "odysseus"], env=env)
+        try:
+            code = child.wait()
+        except KeyboardInterrupt:
+            child.terminate()
+            return 130
+        if code != RESTART:
+            return code</code></pre>
+<p>The child asks for a restart by exiting with the code <code>RESTART</code>, which is 75. Inside <code>main</code>, the function handed to the connector records the request and stops the Telegram poller one and a half seconds later; the clean-up in <code>main</code>'s <code>finally</code> block closes every client, and <code>main</code> returns 75. Any other exit code, including a crash, ends the supervisor with that code, and whatever runs the supervisor (a terminal, or a host's restart policy) decides what happens next. The restart re-uses the mechanism above: the new child resumes the session, and because <code>/connect</code> is refused while a task is running, there is no interrupted task to announce.</p>
+<p><span class="g v">Verified</span>, live, in the owner's real chat with real servers: nine connects and disconnects in a row each ended with the assistant back in about twenty seconds, and after the last it used the new service.</p>
+<div class="box example"><div class="label">Case note: a restart that failed on start-up code</div>
+<p>One restart failed because of a wrong argument in the code that assembles the program at start-up. No test had caught it, because every other test builds its pieces by hand and never runs <code>main</code>. <code>tests/test_startup.py</code> was added for that reason: it runs <code>main</code> with stand-ins for Telegram and the agent client, once with every optional service configured and once with none. The lesson is general. The code that runs only at start is the code a restart depends on, and it needs a test of its own.</p></div>
+
+<h2 id="hosting">A home that stays awake</h2>
+<p>A program with a scheduler cannot live on a laptop: it does its scheduled work only while the laptop is awake. The fix is a rented machine that does not sleep. A deployment of Odysseus consists of four things.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Image</dt><dd>A sealed package containing the program and everything it needs to run: the language version, the libraries, the code. The same image runs the same way anywhere.</dd>
+<dt>Machine</dt><dd>A small rented computer that runs one image.</dd>
+<dt>Volume</dt><dd>A disk attached to a machine that keeps its contents when the machine is replaced.</dd>
+<dt>Secret</dt><dd>A value such as a key, stored encrypted by the hosting service and handed to the program as an environment variable when it starts, never written in the code or the image.</dd>
+</dl></div>
+<div class="tablewrap"><table>
+<caption>What a deployment consists of.</caption>
+<thead><tr><th>Thing</th><th>What it holds</th><th>On an update</th></tr></thead>
+<tbody>
+<tr><th>Image</th><td>The program and its libraries. No keys, no data, no tests, no website.</td><td>Rebuilt and replaced</td></tr>
+<tr><th>Machine</th><td>One shared processor and one gigabyte of memory, always on</td><td>Restarted on the new image</td></tr>
+<tr><th>Volume</th><td>The data folder: memory, schedule, journal, session, transcripts, tokens</td><td>Untouched</td></tr>
+<tr><th>Secrets</th><td>The keys for Telegram, the model and each optional service, and the owner's Telegram identifier</td><td>Untouched</td></tr>
+</tbody></table></div>
+<p>The right-hand column is the point. Code changes often and is disposable. Data must never be lost by a change of code. Keys must be in neither. Because everything that must last is in one folder, the volume is mounted exactly there, and the image sets <code>ODYSSEUS_DATA_DIR=/data</code>.</p>
+<h3>No inbound port</h3>
+<p>Most programs on servers wait for connections from the internet, so they need an address and an open port, and must be defended against everyone who finds it. Odysseus opens none.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Long polling</dt><dd>A way to receive messages by asking the service for them repeatedly; each request waits until there is something to return or a timeout passes. Every connection is started by the program.</dd>
+<dt>Webhook</dt><dd>The reverse arrangement: the service calls an address the program publishes each time there is something new. The program must be reachable from the internet.</dd>
+</dl></div>
+<p>The Telegram bot uses long polling, and every other connection the program makes (to the model, search, the connector, the browser service) is outward too. Nothing on the internet can start a conversation with the machine, because nothing is listening. The hosting configuration says so by omission: <code>fly.toml</code> has no section describing a web service, and a comment explains that the absence is deliberate, so that nobody adds one out of habit.</p>
+<p>Long polling has one rule that matters: only one program may poll for a given bot at a time. Two copies take messages from each other. The copy on a laptop must be stopped before a server's copy starts, which creates the gap described below.</p>
+<h3>When a service must call back</h3>
+<p>Two features break the "no door" property, in different ways.</p>
+<p>The first is a channel that only works by webhook. WhatsApp's business interface calls the program each time a message arrives, so switching it on opens one port. {{ch:channels}} covers what that changes and how the calls are checked.</p>
+<p>The second is subtler: a sign-in that returns to the program. Services with their own server are connected by a sign-in exchange in which the owner approves in a browser and the service then sends that browser back to an address on the machine the program runs on, such as <code>127.0.0.1</code>, carrying a one-time code. The program listens on that port and waits up to ten minutes for the code. On a laptop where the owner is also reading the chat, this works. On a server it does not: the owner's phone cannot reach <code>127.0.0.1</code> on a machine in a data centre. A sign-in completes only on the machine the program runs on, and connecting from a phone cannot complete by design. Running it on a server would need a public return address, which is not built. {{ch:secrets-and-sign-ins}} covers the exchange itself and the ports a program opens for it.</p>
+<h3>Secrets and data on a host</h3>
+<p>Keys go into the host's secret store, imported from the local <code>.env</code> file, which is ignored by version control, never copied into the image and never shown to the model. The image runs the program as an ordinary user rather than the administrator, which limits what a fault could damage.</p>
+<p>The data folder is the sensitive part. Once the conversation is saved, mail text the model has read is on disk in the clear, in the transcripts. On the owner's laptop the data folder sat inside a folder that a file-syncing service copies to its own servers: another company holding the owner's mail, chosen by nobody. It was moved out (copies already taken are not recalled), the program now warns at start-up if its data folder is inside a synced one, and every agent, including the unattended ones, writes its transcript inside the data folder and nowhere else. Nothing backs up the volume beyond whatever the host does by default.</p>
+
+<h2 id="two">Two things that are easy to get wrong</h2>
+<h3>The clock</h3>
+<p>Servers keep time in UTC. The owner does not live in UTC. On a laptop this needs no thought, because the laptop's clock is already the owner's. On a server, a program that reads the machine's clock is silently wrong by the owner's offset: every reminder late, every message stamped with the wrong time, every "tomorrow" possibly the wrong day, and no error anywhere. For an owner five and a half hours ahead of UTC, "remind me at 7am" fires at half past twelve.</p>
+<p>The fix is one clock for the whole program, pinned to the owner's zone by a setting. In <code>odysseus/config.py</code>:</p>
+<pre><code>def make_clock(tz: str = ""):
+    """The one clock used for message stamps, memory dates and the schedule: local wall-clock time, no zone."""
+    if not tz:
+        return datetime.now
+    from zoneinfo import ZoneInfo
+    zone = ZoneInfo(tz)
+    return lambda: datetime.now(zone).replace(tzinfo=None)</code></pre>
+<p><code>main</code> builds this once and passes it to everything that needs the time. The daily budget uses the same zone, so "today" ends at the owner's midnight; it once ended at the machine's. The hosting configuration sets <code>ODYSSEUS_TZ</code>, and the deploy guide tells anyone copying it not to skip that line.</p>
+<h3>Who owns the disk</h3>
+<p>A freshly attached volume arrives owned by the administrator, and the program runs as an ordinary user who cannot write to it. A program that cannot write its memory fails at its first save. So the image's start command runs one step as administrator, hands the data folder to the program's user, and then starts the program as that user:</p>
+<pre><code>CMD ["sh", "-c", "chown -R app:app /data &amp;&amp; exec runuser -u app -- python -W ignore -m odysseus"]</code></pre>
+<p><span class="g v">Verified</span> On the server, the data folder and the files in it belonged to the program's user.</p>
+
+<h2 id="wrong">What goes wrong</h2>
+<p>Two failures have been described already: restarting in place, which left process-wide state shut and failed silently, and start-up code that no test ran. Three more follow.</p>
+<h3>A dead assistant is silent</h3>
+<div class="box example"><div class="label">Case note: five minutes on a server</div>
+<p>On 17 November 2026 the program was deployed to a hosting service and started there. It wrote its start record to the mounted disk, showing mail, the browser and file reading connected, and handled one message. The machine was checked thirty seconds after launch and found running. At five minutes the hosting service stopped it, under a limit on new accounts with no payment card. Nothing in the deploy output said so; the only trace was a line in the machine's log. The copy on the owner's laptop had been stopped beforehand, correctly, so that two copies would not compete for messages. For some minutes no copy was running anywhere, and nothing said so. The owner found out by sending a message and getting no answer.</p>
+<p>Three lessons, in order of generality. A check made at thirty seconds is evidence about thirty seconds. Stopping the old copy before the new one has proved itself removes the fallback at the moment it is most likely to be needed. And a system that announces its own failures still needs something outside itself to announce its death.</p></div>
+<p>The incident exposed a second gap. The journal recorded that the server's one task had finished and not whether its reply was sent, so whether that reply arrived is still unknown. Every reply is now recorded as sent, with the number of parts, or as failed, with how many parts got out. The watcher from outside is not built.</p>
+<h3>A lost conversation is not always announced</h3>
+<p>Reading the code shows one gap. When a saved session cannot be resumed, the runner writes an error to the journal and starts afresh, and the owner hears that the earlier conversation is gone only if the restart also interrupted a task, because only then is a notice sent. After a quiet restart with a damaged transcript, the owner's next "Looks good, send it" meets a model with no idea what "it" is. The memory block is shown again, so lasting facts survive; the thread does not.</p>
+<h3>Waiting messages vanished</h3>
+<p>Messages queued behind a task were once held only in the process. A restart lost them after the owner had been told "Noted. I'll do this as soon as the current task is finished." That is why each one is now written to the journal and named in the notice.</p>
+<h2 id="testing">How to test it</h2>
+<p>A test of this part must check that state survives a new process reading the same files, that what cannot survive is announced, and that the program can assemble itself at all. The tests use a trick worth copying: a "restart" is simulated by building a second runner or conversation on the same folder, which is exactly what a new process does, without starting one.</p>
+<ul>
+<li><code>tests/test_durability.py</code> (eleven tests) covers the waiting queue and <code>stop</code>, <code>/new</code>, the session identifier being saved, picked up and passed as <code>resume</code> with transcripts inside the data folder, a damaged session file, and every case of the restart notice described above.</li>
+<li><code>tests/test_startup.py</code> checks that the program assembles with everything and with nothing optional, and that the supervisor starts a fresh child each time one exits with 75 and stops on any other code.</li>
+</ul>
+<p>What the tests do not show: that the library actually resumes a real session, that the notice reaches a phone after a real restart, or that anything works on a real server. Those need live runs. One exists for resuming: an evaluation scenario in which the owner says "Looks good, send it" after a restart sent the email shown before the restart, in two runs with the real model ({{ch:a-changing-world}}). Before the session was kept, the agent could only ask what "it" was.</p>
+
+<div class="box caution"><div class="label">What is proven and what is not</div>
+<p><span class="g v">Verified</span> The sixteen tests in <code>tests/test_durability.py</code> and <code>tests/test_startup.py</code> pass. Resuming a conversation after a restart worked in an evaluation scenario with the real model, two runs. Restarting through the supervisor worked live nine times in a row. The image built, and on 17 November 2026 the program started on a hosting service, connected to the agent library, wrote to its volume as the right user, and handled one message.</p>
+<p><strong>The program has not run on a server for more than five minutes.</strong> That deployment was stopped by the host because the account had no payment card, and the program runs on the owner's laptop. Whether the reply to the server's one message was delivered is not known. No scheduled job has yet fired at its real time on either machine.</p>
+<p><span class="g u">Not tested</span> The restart notice reaching the owner's phone after a real restart mid-task. Memory and the schedule surviving a restart of the server's machine. A reminder firing at the right local time on a server. Whether one gigabyte of memory is enough. A conversation kept for weeks. Cost counted correctly across a resume: the library reports a running total per session, and whether it continues after a resume has not been measured ({{ch:cost}}). The stale-message rule for Telegram: it is written and has no test, because the stand-in for Telegram does not carry dates (the WhatsApp version has a unit test). Not built: a public return address for sign-ins, a backup of the volume, and anything outside the program that notices when it has died.</p></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>Sort state into what dies with the process and what lives on disk. Put everything that must last in one data folder, and make every check that depends on surviving state survive too.</li>
+<li>A conversation survives if two things are kept where data survives: the session identifier and the library's transcript. If it cannot be picked up, start a new one rather than fail every message.</li>
+<li>An interrupted task is announced, with its first words and any messages that were waiting, and not resumed: the program cannot know how far it got, and doing something twice cannot be undone. Approvals die with the process, and the notice says so.</li>
+<li>A message more than ten minutes old on arrival was written for a moment that has passed. Report it; do not act on it.</li>
+<li>Restart by exiting to a supervisor that starts a fresh process. Restarting in place leaves process-wide state behind.</li>
+<li>Long polling needs no inbound port. A webhook channel opens one, and a sign-in that returns to the program completes only on the machine the program runs on.</li>
+<li>Pin the clock to the owner's zone, and hand the data disk to the program's user at start. Then check again after ten minutes, not thirty seconds.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Exercises</div>
+<ol>
+<li>The session identifier is kept on the volume and the transcript is left where the library normally writes it, inside the image. Describe what happens at the next update, step by step through <code>_ensure</code>, and what the owner experiences.</li>
+<li>Give a case in which resuming an interrupted task automatically would do harm, and one in which it would be harmless. What would the program need to know to tell them apart, and where could it get that knowledge?</li>
+<li>Why does <code>unfinished</code> treat a <code>start</code> line as clearing everything before it? Construct a journal in which removing that rule produces a wrong notice.</li>
+<li>The time zone setting is left out on a server. At ten in the evening local time, five and a half hours ahead of UTC, the owner asks for a reminder "tomorrow at 7am". Trace what goes wrong and when the reminder arrives.</li>
+<li>Write a test for the Telegram stale-message rule. The stand-in does not carry dates: what would you add to it, and what should the test assert about a backlog of five old messages?</li>
+<li>Extend the supervisor so that a child that crashes three times within a minute is not restarted again, and the owner is told by a message sent from the supervisor itself. What does the supervisor need that it does not have now, and what must it still never hold?</li>
+<li>(Hard, open.) Design something outside the program that notices when it has died and tells the owner, without opening an inbound port on the server and without a second copy polling Telegram. Consider what "alive" should mean (the process exists, it polled recently, it answered a message), who sends the alarm, and how the alarm itself is tested.</li>
+</ol></div>

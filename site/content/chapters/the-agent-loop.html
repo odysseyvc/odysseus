@@ -1,0 +1,331 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Describe what a language model does in a single call, and what a tool call adds to it.</li>
+<li>Explain how a loop of model calls becomes one turn of a conversation, and list every way that loop can end.</li>
+<li>Say what context is, why it is finite, and what a long-running agent must do about that.</li>
+<li>State the principle "the model proposes, code grants" and point to the lines of code that enforce it.</li>
+<li>Trace one message from the chat, through the parts of a personal agent, to an answer.</li>
+<li>List what a minimal first version must have, and what it must not have yet.</li>
+</ul></div>
+
+<h2 id="problem">The problem: a model that cannot look things up</h2>
+<p>The owner writes: <em>"Is the museum on Harbour Street open on Monday, and what does a ticket cost?"</em></p>
+<p>A language model on its own can only answer from what it absorbed during training. Opening hours change; the model's knowledge stops at a date. It may answer confidently and wrongly. What it needs is to <em>look</em>: to search the web, read what comes back, perhaps search again with a better query, and only then answer, saying where the answer came from.</p>
+<p>The model cannot search by itself. It produces text and nothing else. So something has to sit around the model: a program that lets it ask for a search, runs the search, gives it the results, lets it ask again, and knows when to stop. That program must also refuse anything the model asks for that it should not have. The library this book's system is built on arrives with tools for running shell commands and editing files, because it was made for programming assistants. A personal agent on a server must have none of them.</p>
+
+<h2 id="call">What a model does in one call</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Language model</dt><dd>A program that, given a sequence of text, produces more text that plausibly continues it. Modern models are trained to continue a conversation: given messages, they write the next one.</dd>
+<dt>Token</dt><dd>The unit a model reads and writes, roughly a short word or part of a word. Models are priced per token, separately for tokens read and tokens written.</dd>
+<dt>Model call (step)</dt><dd>One request to the model and its one response. In this book a call is also called a step.</dd>
+<dt>System prompt</dt><dd>Fixed instructions sent at the start of every call, telling the model who it is, what it can do and how to behave.</dd>
+</dl></div>
+<p>A model call is a function from text to text. What goes in is the system prompt, the conversation so far and, if the model may use tools, a list of their descriptions. What comes out is the model's next message. (This is our general explanation of how such services work, not a finding of this project.)</p>
+<p>The most important property of a call is that the model keeps nothing between calls. It does not remember the previous call; everything it needs to know must be sent again each time. A conversation of twenty messages is, from the model's side, twenty separate calls, each containing all the messages before it. This is why a long conversation becomes slower and more expensive, and why "the model's memory" is really a question of what the surrounding program chooses to send ({{ch:memory}}).</p>
+<p>Calls cost money by the token. The system's code holds a price table, used to estimate a task's cost while it runs. For the mid-priced model it reads:</p>
+<pre><code># Dollars per million tokens: input, output, cache read, cache write.
+PRICES = {
+    "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
+    ...
+}</code></pre>
+<p>For this model, writing a token costs five times as much as reading one, and reading a token the service has cached from a recent call costs a twentieth of reading it fresh. The comment beside the table in <code>odysseus/agent.py</code> records that the input and output prices were read from the maker's price list in November 2026, and that the cache-write figures are an estimate. Because a long conversation resends its history on every call, the cheaper cached rate is what makes long conversations affordable at all ({{ch:cost}}).</p>
+
+<h2 id="tools">What a tool call is</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Tool</dt><dd>An action the model may request, described to it by a name, a sentence saying what it does, and a schema: a precise statement of what inputs it takes.</dd>
+<dt>Tool call</dt><dd>A structured message from the model naming a tool and giving inputs that fit its schema, in place of (or alongside) text for the person.</dd>
+<dt>Tool result</dt><dd>What the code that ran the tool hands back to the model, as the next message in the conversation.</dd>
+<dt>MCP</dt><dd>The Model Context Protocol, a standard format for describing tools to a model and calling them. In this system the tools are served by an MCP server that runs inside the same program.</dd>
+</dl></div>
+<p>A tool call is the model writing, in effect, "please run <code>web_search</code> with query <em>Harbour Street museum opening hours</em>". It is text with a fixed structure. Nothing happens in the world when the model writes it. Ordinary code receives the request, decides whether to honour it, runs it if so, and returns the result as a new message. The model then makes another call, now able to read the result.</p>
+<p>Tools are declared in <code>odysseus/tools.py</code>. Each is a handler function wrapped with its name, description and schema. The memory tool <code>forget</code> is a typical small one:</p>
+<pre><code>tool("forget", "Remove one saved entry by its id, when the owner says it is no longer true or asks you to forget it.",
+     {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(m["forget"]),</code></pre>
+<p>The description is all the model knows about when to use the tool. All the tools are gathered into one server named <code>odysseus</code>, so each has a full name of the form <code>mcp__odysseus__forget</code>, which is what the rules below refer to.</p>
+
+<h2 id="loop">From calls to a turn: the agent loop</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Agent loop</dt><dd>The repetition at the heart of an agent: call the model; if it requests a tool, decide, run it, append the result and call again; if it replies with text only, stop.</dd>
+<dt>Turn</dt><dd>Everything between one message from the owner and the agent's reply: one pass of the agent loop from start to finish, made of one or more steps.</dd>
+<dt>Task</dt><dd>The unit the system budgets, logs and can stop. In a conversation, one task is one turn.</dd>
+</dl></div>
+<figure>
+<svg viewBox="0 0 720 380" width="100%" role="img" aria-label="Flow of the agent loop: the owner's message goes to a model call; a tool request goes to the policy, which allows or refuses; an allowed tool runs and its result returns to the next model call; a text-only reply ends the turn. Limits, stop and errors can end the loop at any step.">
+<defs><marker id="al-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>
+<g font-family="var(--sans)" font-size="13" text-anchor="middle" fill="var(--ink)">
+<rect x="20" y="40" width="140" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="90" y="62">Owner's message</text><text x="90" y="80" font-size="12" fill="var(--ink-2)">+ time stamp</text>
+<rect x="220" y="40" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="300" y="62">Model call</text><text x="300" y="80" font-size="12" fill="var(--ink-2)">one step</text>
+<rect x="440" y="40" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="520" y="62">Tool request?</text><text x="520" y="80" font-size="12" fill="var(--ink-2)">or text only</text>
+<rect x="440" y="170" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--ok)"/><text x="520" y="192">Policy (code)</text><text x="520" y="210" font-size="12" fill="var(--ink-2)">allow, ask or refuse</text>
+<rect x="220" y="170" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="300" y="192">Tool runs</text><text x="300" y="210" font-size="12" fill="var(--ink-2)">result appended</text>
+<rect x="560" y="290" width="140" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="630" y="312">Reply delivered</text><text x="630" y="330" font-size="12" fill="var(--ink-2)">turn ends</text>
+<rect x="20" y="270" width="380" height="80" rx="6" fill="var(--paper-2)" stroke="var(--warn)"/><text x="210" y="296">Checked by code at every step</text><text x="210" y="318" font-size="12" fill="var(--ink-2)">step limit · money limit · owner's stop · errors</text><text x="210" y="336" font-size="12" fill="var(--ink-2)">any of these ends the turn and the owner is told why</text>
+</g>
+<g stroke="var(--ink-2)" fill="none" marker-end="url(#al-arrow)">
+<path d="M160 65H218"/><path d="M380 65H438"/><path d="M520 90V168"/><path d="M440 195H382"/><path d="M300 170V92"/><path d="M600 65H660V288"/>
+</g>
+<g font-family="var(--sans)" font-size="12" fill="var(--ink-2)">
+<text x="528" y="134">tool</text><text x="668" y="180">text only</text><text x="390" y="186">allowed</text><text x="306" y="134">next step</text>
+</g>
+</svg>
+<figcaption>The agent loop. Notice that the model appears in one box only. Every arrow out of the model goes through code before anything happens, and the conditions that end a turn early are checked by code without asking the model.</figcaption>
+</figure>
+<p>A turn can end in five ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
+<ul>
+<li><strong>done</strong>: the model replied with text and no further tool request.</li>
+<li><strong>stopped</strong>: the owner sent "stop". This is matched by the shell and never shown to the model ({{ch:the-conversation}}).</li>
+<li><strong>budget</strong>: the estimated cost of this task's steps reached the per-task limit, by default $0.50.</li>
+<li><strong>turn_limit</strong>: the task used more steps than allowed, by default 25.</li>
+<li><strong>error</strong>: something failed, and the owner is told it could not finish.</li>
+</ul>
+<p>Only the first is chosen by the model. The other four are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
+
+<h2 id="context">Context, and why it runs out</h2>
+<div class="box definition"><div class="label">Definitions</div>
+<dl class="terms">
+<dt>Context</dt><dd>Everything sent to the model in one call: the system prompt, the tool descriptions, the conversation so far, and every tool result in it.</dd>
+<dt>Context window</dt><dd>The largest context a model accepts in one call, fixed by the model's maker.</dd>
+<dt>Compaction</dt><dd>Replacing the older part of a long conversation with a summary, so that the context stays within the window. Details are lost when this happens.</dd>
+</dl></div>
+<p>Every step adds to the context. A search result of several pages of extracts is appended in full; so is the model's reply; so is the next message. Because the model keeps nothing between calls, all of it is sent again with each step. Three consequences follow.</p>
+<p>First, context is finite. A conversation kept open for days will, sooner or later, exceed the window. The agent library handles this by compaction: it summarises the older part and carries on.</p>
+<p>Second, anything that must not be lost cannot live only in the context. The owner's lasting preferences are kept in a separate memory store and shown to the model at the start of a conversation, and again after compaction. The library signals that it is about to compact, and the system's code responds by marking the context as blank, so that the memory is shown again with the next message:</p>
+<pre><code>async def _on_compact(self, hook_input: Any, tool_use_id: Any, context: Any) -> dict[str, Any]:
+    # The SDK is about to condense the conversation. What was shown at the start may not
+    # survive that, so the memory is shown again with the next message.
+    self._blank = True
+    self._journal.write("compact")
+    return {}</code></pre>
+<p><span class="g u">Not tested</span> Compaction has not yet happened in a live conversation; this path has been exercised only by a test that sends the signal by hand.</p>
+<p>Third, context costs money in proportion to its size, on every step. A document the owner sends (as opposed to a photo, which the model is shown directly) is therefore turned into text by a separate service, and the file itself is not put into the conversation, where it would be carried forward with every later message ({{ch:files-pictures-and-voice}}).</p>
+<p>The conversation must also survive a restart of the program: its id is saved to disk and the library resumes it ({{ch:staying-up}}).</p>
+
+<h2 id="principle">The model proposes, code grants</h2>
+<div class="box definition"><div class="label">Principle</div>
+<p><strong>The model proposes, code grants.</strong> The model may request any action. Whether the action happens is decided by code that the model cannot alter, on rules that do not depend on what the model was told or what it read.</p></div>
+<p>The principle is needed because of a property of language models that has not been engineered away. <span class="g v">Verified</span> One model maker's own documentation says its model "sometimes follows instructions found in page content even when they conflict with yours" (<a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/browser-use-tool">Anthropic</a>). <span class="g s">Secondary</span> A 2026 study of six leading models driving browsers reported that planted instructions succeeded about a quarter of the time on average (<a href="https://arxiv.org/pdf/2606.05233">paper</a>). A design that is safe only while the model behaves will fail.</p>
+<p>The tool call is what makes the principle possible. Because every action passes through code as a request, code can inspect it. The table shows where the boundary is held.</p>
+<div class="tablewrap"><table>
+<caption>Where code, not the model, holds the boundary.</caption>
+<thead><tr><th>Boundary</th><th>What the model can do</th><th>What code does</th></tr></thead>
+<tbody>
+<tr><th>Which tools exist</th><td>Request any tool name</td><td>Offers only the system's own tools; refuses any name without a rule</td></tr>
+<tr><th>Consequential actions</th><td>Request a send, a deletion, a share</td><td>Holds the request, shows the owner its real inputs, waits ({{ch:the-gate}})</td></tr>
+<tr><th>Stopping</th><td>Nothing; it is not consulted</td><td>Ends the task when the owner says stop</td></tr>
+<tr><th>Spending</th><td>Keep working</td><td>Counts steps and estimated cost, ends the task at the limit</td></tr>
+<tr><th>Who may speak</th><td>Read what the shell passes it</td><td>Drops messages from anyone but the owner; labels search results as material to read</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="parts">The parts of a personal agent</h2>
+<figure>
+<svg viewBox="0 0 720 400" width="100%" role="img" aria-label="Parts of a personal agent: owner, channel, conversation rules, agent runner and model, gate, tool server with search, memory, schedule and connected accounts, the journal, and a scheduler that can start a task.">
+<defs><marker id="al-arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>
+<g font-family="var(--sans)" font-size="13" text-anchor="middle" fill="var(--ink)">
+<rect x="10" y="150" width="90" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="55" y="180">Owner</text>
+<rect x="125" y="150" width="100" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="175" y="172">Channel</text><text x="175" y="190" font-size="12" fill="var(--ink-2)">telegram.py</text>
+<rect x="250" y="20" width="270" height="360" rx="8" fill="none" stroke="var(--accent)"/><text x="385" y="40" font-size="12" fill="var(--ink-2)">THE SHELL: ordinary code</text>
+<rect x="270" y="55" width="230" height="56" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="385" y="78">Conversation rules</text><text x="385" y="96" font-size="12" fill="var(--ink-2)">owner check, stop, daily budget</text>
+<rect x="270" y="135" width="230" height="56" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="385" y="158">Agent runner + model</text><text x="385" y="176" font-size="12" fill="var(--ink-2)">the loop, step and cost limits</text>
+<rect x="270" y="215" width="230" height="56" rx="6" fill="var(--paper-2)" stroke="var(--ok)"/><text x="385" y="238">Gate / policy</text><text x="385" y="256" font-size="12" fill="var(--ink-2)">allow, ask the owner, refuse</text>
+<rect x="270" y="295" width="230" height="56" rx="6" fill="var(--paper-2)" stroke="var(--warn)"/><text x="385" y="318">Journal</text><text x="385" y="336" font-size="12" fill="var(--ink-2)">one line per step; the ledger</text>
+<rect x="560" y="40" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="65">Web search</text>
+<rect x="560" y="95" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="120">Memory</text>
+<rect x="560" y="150" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="175">Schedule</text>
+<rect x="560" y="205" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="230">Mail, calendar, apps</text>
+<rect x="560" y="260" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="285">Browser</text>
+<rect x="560" y="330" width="150" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="635" y="355">Scheduler</text>
+</g>
+<g stroke="var(--ink-2)" fill="none" marker-end="url(#al-arrow2)">
+<path d="M100 175H123"/><path d="M225 165L268 90"/><path d="M385 111V133"/><path d="M385 191V213"/>
+<path d="M500 243H530V60H558"/><path d="M530 115H558"/><path d="M530 170H558"/><path d="M530 225H558"/><path d="M530 243V280H558"/>
+<path d="M560 350H500" stroke-dasharray="5 4"/>
+</g>
+<text x="530" y="392" font-family="var(--sans)" font-size="12" text-anchor="middle" fill="var(--ink-2)">the scheduler can start a task with no message</text>
+</svg>
+<figcaption>The parts of a personal agent as they appear in the code. The model sits inside the agent runner and reaches the tools on the right only through the gate. The conversation rules, the gate and the journal never consult the model.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+<caption>The core files of the system and their responsibilities.</caption>
+<thead><tr><th>File</th><th>Responsibility</th><th>Hands anything to the model?</th></tr></thead>
+<tbody>
+<tr><th><code>telegram.py</code>, <code>whatsapp.py</code></th><td>Carry messages and button taps between the chat service and the conversation rules</td><td>No</td></tr>
+<tr><th><code>conversation.py</code></th><td>Who may speak, what "stop" does, the daily budget, one task at a time, what the owner is told at the end</td><td>No</td></tr>
+<tr><th><code>agent.py</code></th><td>Runs one task through the loop; the options that restrict the library; per-task limits</td><td>Yes</td></tr>
+<tr><th><code>tools.py</code>, <code>search.py</code></th><td>Every tool the model can call, gathered into one server</td><td>Returns results to it</td></tr>
+<tr><th><code>gate.py</code></th><td>Decides allow, ask or refuse for every tool call</td><td>No</td></tr>
+<tr><th><code>journal.py</code></th><td>The log, one line per step, and the ledger of money spent per day derived from it</td><td>No</td></tr>
+</tbody>
+</table></div>
+<p>The right-hand column is the point of the arrangement. Only one file hands anything to the model, and the rules live in files that do not. The model is a guest inside the shell.</p>
+
+<h2 id="mechanism">The mechanism in code</h2>
+<h3>Restricting the library</h3>
+<p>The loop itself comes from a library, the Claude Agent SDK. Why a library and not a hand-written loop is a vendor decision ({{ch:build-or-buy}}). The library is configured by one method in <code>odysseus/agent.py</code>, <code>AgentRunner.options</code>:</p>
+<pre><code>def options(self) -> ClaudeAgentOptions:
+    return ClaudeAgentOptions(
+        model=self._model,
+        system_prompt=self._system_prompt,
+        tools=[],                          # none of the SDK's built-in tools (shell, files, ...)
+        mcp_servers={SERVER: self._server},
+        strict_mcp_config=True,            # ignore any tool servers configured on the machine
+        allowed_tools=sorted(self._allowed),
+        can_use_tool=self._policy,         # anything not listed above is refused by code
+        setting_sources=[],                # ignore settings files on the machine
+        include_partial_messages=True,
+        hooks={"PreCompact": [HookMatcher(hooks=[self._on_compact])]},
+        resume=self.session_id,            # after a restart of the client, carry the conversation on
+        # The agent library writes a transcript of every run. It is kept inside the data folder for every agent
+        # (conversation, routines, triage), so that mail text never ends up in a folder nobody chose.
+        env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key, "CLAUDE_CONFIG_DIR": str(self._transcripts.resolve())},
+    )</code></pre>
+<p>Four lines do the restricting. <code>tools=[]</code> asks for none of the library's built-in tools. <code>strict_mcp_config</code> and <code>setting_sources=[]</code> stop the library picking up tool servers or settings that happen to be configured on the machine it runs on. <code>allowed_tools</code> lists the tools that may run without consulting the policy, and <code>can_use_tool</code> names the function consulted about everything else. The rest turn on live previews, the compaction signal, resumption and a transcript folder of the system's choosing. Without the four, the agent would inherit a shell and a file editor, and whatever else was configured on the server.</p>
+<h3>The policy</h3>
+<p>The policy in its smallest form is in the same file:</p>
+<pre><code>def make_policy(allowed: frozenset[str]):
+    async def policy(tool_name: str, tool_input: dict[str, Any], context: Any):
+        if tool_name in allowed:
+            return PermissionResultAllow()
+        return PermissionResultDeny(message=f"{tool_name} is not available here.")
+    return policy
+
+
+tool_policy = make_policy(ALLOWED_TOOLS)</code></pre>
+<p>It has two of the gate's three answers, allow and refuse. The list it uses is defined in <code>odysseus/tools.py</code>:</p>
+<pre><code>SEARCH_TOOL = _name("web_search")
+MEMORY_TOOLS = tuple(_name(n) for n in ("remember", "forget", "note", "recall"))
+SCHEDULE_TOOLS = tuple(_name(n) for n in ("schedule", "list_schedule", "cancel_schedule"))
+ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
+ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})</code></pre>
+<p>Everything on the list either reads public information or writes only to the system's own files. A routine, run with nobody watching, gets the smaller <code>ROUTINE_TOOLS</code> set: it can read and write nothing.</p>
+<p>When the full gate is in use, the runner replaces this simple policy:</p>
+<pre><code>if gate is not None:
+    # With a gate, only tools it always allows skip the question; everything else goes through it.
+    self._allowed = frozenset(gate.always_allowed())
+    self._policy = gate.permission</code></pre>
+<p>A subtle point is hidden here. The search tool is not always allowed under the gate: its rule asks the owner when a query carries details read from the owner's private mail or calendar. So it is left off the skip list, and the gate is consulted on every search. Only tools whose rule is "allow" whatever their inputs may skip the check. Inside each consequential tool's handler the gate checks a second time, so if the first check were ever bypassed, the action would still not run unapproved. {{ch:the-gate}} explains both checks.</p>
+<h3>The loop</h3>
+<p>The heart of <code>AgentRunner.run</code> reads the stream of messages the library produces for one task:</p>
+<pre><code>await client.query(self._with_pictures(prompt, images) if images else prompt)
+async for msg in client.receive_response():
+    if isinstance(msg, StreamEvent):
+        ...    # (lines omitted here: fragments of text are passed to on_text for the live preview)
+    elif isinstance(msg, AssistantMessage):
+        text = "".join(b.text for b in msg.content if isinstance(b, TextBlock))
+        if text:
+            last = text
+        for b in msg.content:
+            if isinstance(b, ToolUseBlock):
+                self._journal.write("tool_request", name=b.name, input=b.input)
+        # One model call can arrive as several messages sharing an id; count it once.
+        key = msg.message_id or f"n{len(calls)}"
+        calls[key] = estimate_usd(self._model, msg.usage or {})
+        if self._limit is None and not self._stopped:
+            if len(calls) > self._s.max_turns:
+                self._limit = "turn_limit"
+            elif sum(calls.values()) >= self._s.task_usd:
+                self._limit = "budget"
+            if self._limit:
+                self._journal.write("limit", which=self._limit, steps=len(calls),
+                                    estimated_usd=round(sum(calls.values()), 4))
+                await client.interrupt()
+    elif isinstance(msg, ResultMessage):
+        result = msg</code></pre>
+<p>Three kinds of message arrive. A <code>StreamEvent</code> carries a fragment of text for the live preview. An <code>AssistantMessage</code> is one finished model message: its tool requests are journalled, and the step is counted and costed from its token counts. A <code>ResultMessage</code> arrives once, at the end, with the library's own cost figure.</p>
+<p>The library runs the tools itself, between messages, once the permission check (the skip list or the policy) has let them through. The runner's job is to watch, count and, when a limit is reached, interrupt. Notice that the setting is called <code>max_turns</code> but counts steps (model calls) within one task; the owner is told "it reached its limit of 25 steps". The names differ because the library uses "turn" for what this book calls a step.</p>
+<p>After the loop, the outcome is decided by code, in order of precedence:</p>
+<pre><code>if self._stopped:
+    status = "stopped"
+elif self._limit:
+    status = self._limit
+elif result.subtype == "success" and not result.is_error:
+    status = "done"
+else:
+    status = "error"</code></pre>
+<p>A stop by the owner outranks everything, a limit outranks the model's own success, and anything unexpected is an error. Whatever text the model had written by then is delivered with the explanation attached, so partial work is not thrown away.</p>
+<h3>A tool, end to end: search</h3>
+<p>The search tool, in <code>odysseus/search.py</code>, shows what a well-behaved tool handler does:</p>
+<pre><code>async def web_search(args: dict[str, Any]) -> dict[str, Any]:
+    query = str(args.get("query", "")).strip()
+    try:
+        # The library is synchronous; keep it off the event loop so "stop" stays responsive.
+        response = await asyncio.wait_for(asyncio.to_thread(spec.execute, args), SEARCH_TIMEOUT_S)
+        text = spec.format(response)
+    except (Exception, asyncio.TimeoutError) as e:
+        journal.write("tool", name="web_search", query=query, ok=False, error=type(e).__name__)
+        return {"content": [{"type": "text", "text": f"Search failed: {type(e).__name__}"}], "is_error": True}
+    count = len(getattr(response, "results", None) or [])
+    price = getattr(getattr(response, "cost_dollars", None), "total", None)
+    journal.write("tool", name="web_search", query=query, objective=str(args.get("objective", ""))[:300],
+                  ok=True, results=count, cost_usd=float(price) if isinstance(price, (int, float)) else 0.0)
+    return {"content": [{"type": "text", "text": f"{UNTRUSTED_NOTE}\n\n{text}"}]}</code></pre>
+<p>Four habits are visible. The search runs on a separate thread with a 40-second timeout, so a slow search cannot freeze the program and "stop" still works. Any failure, from bad arguments to a lost network, goes back to the model as a failed tool call it can reason about, not as a crash that ends the task. Every call is logged with its cost, which the daily ledger counts. And the results are prefixed with a fixed line saying they are material to read, not instructions from the owner. That line lowers the chance of the model being misled by a page; it guarantees nothing ({{ch:untrusted-content}}).</p>
+<p>The model supplies a <em>query</em> describing the page it hopes to find and an <em>objective</em> saying what the search is for; both reach the search service unchanged, as the service's own guidance recommends. The system prompt carries the service's recommended sentence about when to search, so the model looks things up rather than answer from stale knowledge.</p>
+
+<h2 id="worked">Worked example: one message, end to end</h2>
+<p>The owner sends <em>"Is the museum on Harbour Street open on Monday, and what does a ticket cost?"</em></p>
+<ol>
+<li><strong>Channel.</strong> <code>telegram.py</code> receives the message in a private chat and passes the sender's id and text on.</li>
+<li><strong>Conversation rules.</strong> The sender is the owner; the text is not a command such as <code>stop</code>; no task is running; today's spending is under the limit. A task starts and the journal records <code>task_start</code>.</li>
+<li><strong>Prompt assembly.</strong> The time is appended, for example <code>[Friday 20 November 2026, 10:15]</code>, so that "Monday" can be worked out. At the start of a conversation the owner's saved memory is put in front.</li>
+<li><strong>Step 1.</strong> The model replies with a tool call: <code>mcp__odysseus__web_search</code>, query <em>Harbour Street museum opening hours and admission prices</em>, objective <em>the museum's own page first; Monday hours and adult price</em>. The runner logs <code>tool_request</code> and counts one step.</li>
+<li><strong>Policy.</strong> The gate's rule for search finds nothing from the owner's mail or calendar in the query, so it allows it.</li>
+<li><strong>Tool.</strong> The search runs and is logged as <code>tool</code> with <code>ok: true</code> and its cost. The model receives the results under the line saying they are material to read.</li>
+<li><strong>Step 2.</strong> The model replies with text only: closed on Mondays, the adult price, and the page it came from. The words appear in the chat as they are written.</li>
+<li><strong>End.</strong> The <code>ResultMessage</code> arrives; the status is <code>done</code>; the task's cost is the new running total minus the old. The journal records <code>task_end</code> with status, cost, two steps and the seconds taken.</li>
+</ol>
+<p>The museum and its answer are invented for this example. The order of events and the journal entries are those the code produces. <span class="g v">Verified</span> For scale: in the first live measurement, one sample, a question that needed one search cost $0.0145.</p>
+
+<h2 id="minimal">What a minimal first version must have</h2>
+<p>The smallest system worth running is much smaller than the finished one. It must have:</p>
+<ol>
+<li>A channel that answers only its owner, and drops everyone else silently, before any model call.</li>
+<li>The agent loop, with the library's built-in tools removed and a policy that refuses anything not listed.</li>
+<li>One tool that only reads public information: web search.</li>
+<li>Stop, handled by the shell and never passed to the model.</li>
+<li>Limits on steps per task, money per task and money per day, enforced by the system's own code, with the owner told when one ends a task.</li>
+<li>A log of every step, from which the ledger of spending is derived.</li>
+<li>Instructions telling the model what it cannot yet do, so that it says so instead of pretending.</li>
+</ol>
+<p>Just as important is what it must not have: any tool that sends, pays, deletes or shares. With only a search, the worst outcome of a successful prompt injection is a wrong or strange reply. That stops being true the moment a consequential tool is added, which is why the gate must be built before the tools that need it.</p>
+
+<h2 id="wrong">What goes wrong</h2>
+<p><strong>Inheriting tools.</strong> An agent library built for one purpose carries tools for that purpose. Removing them is a matter of configuration, and configuration can silently not take effect. The system therefore removes the built-in tools and, separately, refuses any unlisted tool, so that if one measure fails the other holds. <span class="g v">Verified</span> Whether <code>tools=[]</code> removed every built-in tool was first known only from reading the library's documentation, which did not state it outright. The first live run settled it: the library's own start-up report listed exactly one tool, the search.</p>
+<p><strong>Using the library's limits.</strong> The library has its own step and money limits. They are fixed when a connection is made and count everything on that connection, so on a connection kept open between messages they cannot mean "per task". The system counts for itself, and its tests assert that the library's limits are left unset.</p>
+<p><strong>Counting a step twice.</strong> One model call can arrive as several messages sharing an id. Counting messages instead of ids would end tasks early. The loop keys its count on the message id, and a test checks that a call delivered in three pieces counts once.</p>
+<p><strong>Misreading cost.</strong> The library reports cost as a running total for the conversation, so the cost of a task is the new total minus the old one ({{ch:what-a-personal-agent-is}} tells how this was found).</p>
+<div class="box example"><div class="label">Case note</div>
+<p>The first version connected to the library afresh for every message. <span class="g v">Verified</span> In the first live runs a one-word reply took 8 to 17 seconds, nearly all of it start-up. Keeping one connection open between messages brought it to about 2 seconds, and stop then ended a real task in 0.13 seconds instead of 1.1. Nobody had listed start-up time as a risk before the run. A list of what is not known cannot contain what nobody thought of; only running the real thing finds those.</p></div>
+
+<h2 id="testing">How to test it</h2>
+<p>A test of the agent loop must check the boundaries, because those are what the model cannot be relied on for: that only listed tools are offered and allowed; that each limit ends a task and the owner is told; that stop ends a task even when the model ignores it; that a failed tool returns an error, not a crash; that cost is attributed to the right task.</p>
+<p><code>tests/test_slice.py</code> does this with a <em>stand-in</em> for the model library: test code that replays a fixed script of messages. Its 28 tests passed when this chapter was written. They cover the policy (search allowed; <code>Bash</code>, <code>Write</code>, a mail send and a web fetch refused), the options (no built-in tools, no machine settings, library limits unset), both per-task limits, a call delivered in pieces, cost as a difference of totals, the search's pass-through and labelling, a failed search, and a crash in the agent.</p>
+<p>A stand-in is fast, free and can produce rare cases on demand, such as a model that never stops. But it behaves as its authors believed the real library behaves, so passing tests show only that the code agrees with those beliefs. Live runs test the beliefs.</p>
+
+<div class="box caution"><div class="label">What is proven and what is not</div>
+<p><span class="g v">Verified</span> The restrictions on the library, the policy, the per-task limits and the search tool are covered by passing tests against a stand-in. Live runs showed that the library offered exactly one tool when only search existed, that stop ended a real task, what one ordinary question cost (one sample), and that keeping one connection open cut a reply from 8 to 17 seconds to about 2.</p>
+<p><span class="g u">Not tested</span> Compaction in a live conversation. The quality of the answers the loop produces. Whether the label on search results changes how often a real model is misled by a page; the design does not rely on it.</p></div>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>A model call turns text into text and keeps nothing between calls; everything it needs is sent each time, and paid for by the token.</li>
+<li>A tool call is the model asking, in structured text, for an action. Code decides, runs it, and returns the result.</li>
+<li>The agent loop repeats calls until the model answers in text. A turn is one pass of the loop; it can also end by stop, a step limit, a money limit or an error, all imposed by code.</li>
+<li>Context grows with every step and is finite. Compaction summarises it, so lasting facts must be kept outside it and shown again.</li>
+<li>The model proposes, code grants: built-in tools are removed, unlisted tools refused, and consequential ones sent to the gate.</li>
+<li>A minimal first version has a channel that answers only its owner, the restricted loop, one read-only tool, stop, limits and a log, and nothing that can change the world.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Exercises</div>
+<ol>
+<li>A conversation has ten messages. On the eleventh, the model makes two calls. How many times has the first message been sent to the model in total? What does your answer imply for the cost of a long conversation, and how does the cache-read price change it?</li>
+<li>List the five statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
+<li>The search tool is on <code>ALLOWED_TOOLS</code>, yet under the full gate it is not on the list of tools that skip the policy. Explain why, and what would go wrong if it were added to the skip list.</li>
+<li>Write a new read-only tool, <code>current_time</code>, that returns the date and time in the owner's zone. Give its description and schema, the handler, where it is registered in <code>make_tool_server</code>, and which lists it belongs on. Then write the test that proves the policy allows it.</li>
+<li>The loop counts a step when an <code>AssistantMessage</code> arrives. Suppose the library delivered a tool result between two pieces of the same model call. Would the count be wrong? Write a stand-in script that tests your answer.</li>
+<li>Remove the line <code>tools=[]</code> from <code>options</code> in your head. Which remaining line still prevents the model running a shell command, and is there any situation in which it would not?</li>
+<li>(Hard, open) The system keeps one long conversation and relies on compaction. Design an alternative in which each task starts with a fresh context assembled by code from memory and recent history. What would be gained in cost and predictability, what would be lost, and how would you test that nothing the owner said in the last hour is forgotten?</li>
+</ol></div>

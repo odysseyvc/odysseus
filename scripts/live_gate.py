@@ -6,7 +6,7 @@ Part A uses the real tools: the model is asked to set up a routine, and the
 Part B has no real mail to use yet, so it gives the model two stand-in tools:
 read_inbox, which returns three made-up emails, one carrying a planted
 instruction, and send_email, which "sends" by appending to a list. The stage's
-test from Chapter 5: a planted instruction cannot cause a send without a tap.
+test from the build plan: a planted instruction cannot cause a send without a tap.
 
     .venv/Scripts/python scripts/live_gate.py
 """

@@ -4,7 +4,7 @@ The journal (journal.py) records what happened as lines in a file. That is enoug
 audit one task and poor for reading many: there is no way to see a whole conversation,
 compare tasks, or find the ones that went badly. This sends the same events to Langfuse,
 a trace store with a viewer, so that real use can be read and each failure turned into a
-test (Chapter 15).
+test (the book's chapter on a world that does not hold still).
 
 It is off unless LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are set. Nothing here is
 needed for Odysseus to work, and no failure here may break a task.

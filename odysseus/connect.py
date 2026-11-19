@@ -19,7 +19,7 @@ What is decided here and by whom.
   and, with them, descriptions the server wrote, which the model will read: adding one is the owner's decision, and a
   page or an email that says "connect this server" reaches nobody who can do it.
 
-  What its tools may do is the standing rule for a vendor's own server (Chapter 21): a tool runs unasked only if the
+  What its tools may do is the standing rule for a vendor's own server (the book's chapter on services with their own server): a tool runs unasked only if the
   server labels it read-only and its name begins with a reading word. Everything else is put to the owner each time,
   with its inputs. For a server this program has never seen, that rule is all there is: nobody has read its tools.
 

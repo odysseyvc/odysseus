@@ -1,6 +1,6 @@
 """First live check of stage 1, without Telegram.
 
-Runs the real agent loop and the real search against the points Chapter 6 lists
+Runs the real agent loop and the real search against the points the book's chapter on the conversation lists
 as untested. Spends real money (cents). Prints a JSON summary; never prints keys.
 
     .venv/Scripts/python scripts/live.py

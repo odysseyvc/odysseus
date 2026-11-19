@@ -1,13 +1,16 @@
 <section class="cover">
 <div class="kicker">The book</div>
-<h1>How Odysseus is built</h1>
-<p class="sub">A personal AI agent you message on Telegram, which carries out errands on your behalf and asks before it does anything you cannot undo. This site records how it is being built, from nothing, so that a careful reader could build one too.</p>
-<div class="status"><b>Status on 19 November 2026.</b> Odysseus answers its owner in Telegram, searches the web, remembers facts between conversations, sends reminders and runs routines, reads mail and calendar, can draft, send and archive mail and create, change and delete events, can hand a task to a browsing agent, reads photos and documents, and asks for approval with a button before anything that reaches another person or cannot be undone. The parts that read have each run once against the real services. The parts that act have run only in a test world: no real email has been sent and no reminder has fired at its real time. It runs on its owner's laptop, because the one attempt at a server was stopped by the hosting service after five minutes. It now has a measurement. Chapter 14 describes a first errand suite that scored 97% and why that figure was weak evidence. It can now look at pictures and listen to voice notes (Chapters 12 and 18), and a restart no longer wipes its conversation (Chapter 17). It can be asked to say when something happens in mail or calendar, such as a reply arriving (Chapter 19). A WhatsApp channel can send to its owner's phone and cannot yet receive, for want of a server (Chapter 16). Chapter 15 describes what research on evaluation found and the version built from it, in which the same errands fail one time in eleven once they are reworded and tools start failing.</div>
+<h1>Building a personal agent, <em>from first principles.</em></h1>
+<p class="sub">A textbook for the technically minded on how to build an assistant that lives in a chat, holds its owner's accounts, acts without being asked, and asks before anything that cannot be undone. Every mechanism is explained from the idea down to the code that runs.</p>
+<div class="status"><b>What kind of book this is.</b> It describes a real, open-source system that one person uses every day and that is still being built. Every claim about what was run is graded by how it is known, and anything not yet run is marked as such. The grades are explained in <a href="evidence.html">How to read the evidence</a>. Read that page first; it takes three minutes.</div>
 </section>
 
-<section class="text" style="margin-top:34px">
-<h2 style="margin-top:0">What this site is</h2>
-<p>Three products set the standard for assistants of this kind in 2026: Instinct, Muse and Grok Bot. Each lets you send a message such as "move my dentist appointment to Friday and tell my sister" and have it done. Odysseus is an attempt to build something that works the same way, with Telegram as its first channel.</p>
-<p>The chapters are written like a textbook: each one states what you should be able to do after reading it, defines its terms before using them, works through examples and ends with questions. They are revised as the build goes on, and each carries the date it was last revised.</p>
-<p>One rule governs every chapter. Every factual claim is graded by how it is known: read at the source, reported second-hand, claimed by the company itself, or not yet tested. The grades are explained in <a href="evidence.html">How to read the evidence</a>, and it is worth reading that page first.</p>
+<section class="text" style="margin-top:34px;max-width:none">
+<h2 style="margin-top:0">How to read it</h2>
+<p style="max-width:68ch">The chapters are organised by idea, not by the order in which things were built. Each one states what you will be able to do, defines its terms before using them, shows the design and the reasons for it, walks through the code that runs, says what went wrong in practice, and ends with exercises. Chapters refer to each other by number, and can be read out of order once Part I is behind you.</p>
+<div class="paths">
+<div><h3>To understand how agents work</h3><p>Read Part I, then the chapters on the conversation, memory and the gate. That is the smallest complete picture.</p></div>
+<div><h3>To build one</h3><p>Read straight through to the end of Part IV with the repository open. Do the exercises; several ask you to change the code.</p></div>
+<div><h3>To make one safe</h3><p>Read Part III in full, then the chapters on evaluation and on a second reading in Part V.</p></div>
+</div>
 </section>
