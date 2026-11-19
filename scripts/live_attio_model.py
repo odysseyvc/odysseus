@@ -1,6 +1,6 @@
 """Live check of Attio from the chat, with the real model and without Telegram.
 
-Asks the real model one question that only reads Attio and one request that would change it,
+Asks the real model two questions that only read Attio and one request that would change it,
 and records what it does. The stand-in owner declines every approval, so nothing is changed in
 Attio. Run scripts/connect_attio.py first.
 
@@ -31,6 +31,7 @@ from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
 
 READ = "In Attio, what stages can a deal be in, and how many deals are in the pipeline right now?"
+FIELD = "Which people in Attio have the role Founder, and which company is each with?"
 WRITE = ("Add a company to Attio called Example Robotics, website example-robotics.example, and open a Seed deal for it: "
          "sourced inbound, our cheque 500,000 dollars, stage Sourced, next step 'intro call'.")
 
@@ -70,6 +71,8 @@ async def main():
     runner = AgentRunner(settings, journal, make_tool_server(spec, journal, memory, gate=gate, attio=attio), gate=gate,
                          system_prompt=conversation_prompt(False, with_attio=True))
     conv = Conversation(settings, journal, ledger, runner, memory, gate=gate, attio=attio)
+    attio.warm()            # as the program does at start-up
+    await attio.layout()
     out: dict = {}
 
     async def ask(label, text):
@@ -87,7 +90,8 @@ async def main():
                       "questions": [q[:1500] for q in chat.asks], "reply": "\n".join(chat.sent)}
 
     await ask("1_read", READ)
-    await ask("2_write_declined", WRITE)
+    await ask("2_field", FIELD)
+    await ask("3_write_declined", WRITE)
     await runner.close()
     out["errors"] = [{k: r.get(k) for k in ("where", "error", "message")} for r in journal.read() if r["kind"] == "error"]
     out["total_cost_usd"] = round(ledger.spent_today(), 4)

@@ -132,6 +132,8 @@ async def main() -> int:
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio)
+    if attio is not None:
+        attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
     bot = Bot(settings.telegram_token)
 
     # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.

@@ -98,6 +98,23 @@
 <div class="box caution"><div class="label">Whose approval this was</div>
 <p>The owner approved these three investments in conversation with the coding agent. A script then pressed "approve" on the owner's behalf, for a fixed list of actions with a limit on each, and would have declined anything else. So the gate was exercised with the real model and real writes, and every change was one the owner had agreed to. But the owner has still not pressed the assistant's own button in the chat for a change in Attio. That remains <span class="g u">Not tested</span>.</p></div>
 
+<h2 id="told">Telling the model the layout, and what that broke</h2>
+<p>The repair for the twenty lookups was to give the model the workspace's layout: every object and list, and every field with its exact name, type and choices. It is read from Attio by the program and not written by hand, so it stays true when the firm changes its layout. The program reads it at start-up, uses it for half an hour, and reads it again behind the scenes when it is older or after a change to the layout itself. It comes to about 1,400 tokens and is handed over with the list of tools.</p>
+<p>Attio answers in a compact text format of its own, not in a standard one, in two shapes depending on the size of the answer. A reader for both had to be written; an earlier check in this chapter had quietly miscounted because it understood only one.</p>
+<div class="table-wrap"><table>
+<caption>The same three requests to the real model, every change declined. One run each.</caption>
+<thead><tr><th>Request</th><th>Before</th><th>With the layout</th></tr></thead>
+<tbody>
+<tr><th>Which people have the role Founder?</th><td>Not asked</td><td>10 s, 2 lookups, the firm's own Role field used</td></tr>
+<tr><th>Add a company and a deal (declined at the first change)</th><td>16 s, 3 lookups before asking</td><td>7 s, 1 lookup before asking</td></tr>
+<tr><th>What stages are there, and how many deals?</th><td>52 s</td><td>23 s</td></tr>
+</tbody>
+</table></div>
+<p><span class="g v">Verified</span>, one run each, so the times are an indication and not a measurement. The 52 seconds also predates the kept-open session, which accounts for part of that row.</p>
+<div class="box caution"><div class="label">The faster version was worse in two ways</div>
+<p>In the first run with the layout, the model asked to create the company at once. It had stopped searching for an existing one first. Before, it had searched because it was looking everything up anyway; handed the layout and told not to look things up needlessly, it dropped the one lookup that mattered. A duplicate cannot be deleted through this server, so that lookup is the difference between a clean database and a slowly corrupted one. It also filled a field nobody had asked for, taking the company's stage from the deal's round, and said so only afterwards.</p>
+<p>Both were fixed in the instructions: search before creating, by website or email address and then by name, and set only what the owner gave. In the next run it searched twice before asking and set two fields. This is the third time in this book that a sentence added to the prompt changed behaviour somewhere else (Chapters 15 and 20 have the others). A change to the instructions is a change to the program, and the only way to know what it did is to run the same requests again and read all of what comes back.</p></div>
+
 <h2 id="layout">Giving the workspace a shape</h2>
 <p>An empty database cannot answer "what is in the pipeline". The assistant's first useful act for the firm was therefore not a lookup but a layout: what a deal is, what stages it passes through, and what is recorded about it.</p>
 <p>The first draft was made from the firm's own earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" It was not, and the honest answer was that nobody had checked. The draft had been written before reading what the vendor and practitioners recommend. Reading them afterwards (the vendor's own guide for venture firms, and one implementation consultancy's write-up, which is sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as the allocation offered and the committee date; a single reason for passing where several are needed; nothing recorded about a holding after investing; nothing for the fund's own investors; and no automation at all.</p>
@@ -115,7 +132,7 @@
 <h2 id="open">What is not done</h2>
 <ul>
 <li>The owner has not yet approved a change in Attio from the chat itself (Section 21.9).</li>
-<li>The model is not told what the firm's own fields are for, and rediscovers the workspace at the start of every conversation.</li>
+<li>The rule "search before creating" lives in the instructions, where the model may or may not follow it. Nothing in code refuses a creation that was not preceded by a search.</li>
 <li>The sign-in works only on the machine with the browser.</li>
 <li>Unattended routines and watches cannot read Attio.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
