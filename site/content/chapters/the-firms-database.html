@@ -133,6 +133,10 @@
 <p><span class="g v">Verified</span>, two live runs against the real workspace with the real model, the filing declined both times. The introducer was a real record and was found. <span class="g u">Not tested</span>: a plan approved and carried out against the real server. That is covered only by unit tests with a stand-in.</p></div>
 <p>The first live run showed a fault no unit test had been written for. The page said "Introduced by: 05d755bb-..." and "Deal owner: afef8c11-...". The model had looked the introducer up itself and passed the record's identifier. That is correct for the machine and useless to the person approving, who cannot tell from it who is meant. An approval of something the owner cannot read is not an approval. Now a link is only ever to a record named in the plan, an existing record is put in the plan by name and found by the program, and the page says "the person" and their name, "you" for the owner, and money with its currency.</p>
 <p>The unit tests found the other fault before any run did: an email address contains an @, and the first version took "jo@orbitlabs" for a link to a record called "orbitlabs".</p>
+<div class="box example"><div class="label">The first plan filed for real, from the chat</div>
+<p>The whole path was then run once as the product is meant to be used: a message in the owner's Telegram chat with the bot, quoting a passage from a colleague's email about a founder and his company; the bot's plan; a tap on Approve; the records in Attio. <span class="g v">Verified</span>, once: the bot's own log shows the plan made, the question asked, the approval and the filing of three steps, and the company was read back from Attio afterwards by a separate script. Eighty seconds from message to done, about half of it waiting for the tap; six cents.</p>
+<p>The plan was a company, its founder, and a note quoting the passage. It was not a deal. The passage said the firm was "evaluating closely" and named no stage, and the model filed what the source said and stopped. That restraint is the behaviour the instructions ask for, seen once.</p>
+<p>One thing about that run should be stated exactly. The owner had signed in to Telegram in a browser and said "do it for me". The project's coding agent typed the message and pressed Approve there, after reading the plan. So the button in the chat has now been pressed and the path works; it was pressed on the owner's instruction, not by the owner's hand.</p></div>
 <p>Two limits. The model decides what the source supports, and it varied between runs: the amount the founder asked for went into the note in one run and into the "allocation offered" field in the next. Both are defensible and the owner sees which before approving, but it is not yet consistent. And it is slow: about eighty seconds from message to question, most of it the model's own lookups before it plans.</p>
 
 <h2 id="layout">Giving the workspace a shape</h2>
@@ -151,7 +155,6 @@
 
 <h2 id="open">What is not done</h2>
 <ul>
-<li>The owner has not yet approved a change in Attio from the chat itself (Section 21.9).</li>
 <li>The rule "search before creating" lives in the instructions, where the model may or may not follow it. Nothing in code refuses a creation that was not preceded by a search.</li>
 <li>The sign-in works only on the machine with the browser.</li>
 <li>Unattended routines and watches cannot read Attio.</li>

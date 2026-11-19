@@ -98,7 +98,7 @@ async def wait_for_callback(timeout_s: float = 600) -> tuple[str, str | None, st
         server.close()
 
 
-def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None):
+def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None, url: str = ATTIO_URL, scope: str | None = SCOPE):
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import AuthorizationCodeResult, OAuthClientMetadata
 
@@ -106,19 +106,21 @@ def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | 
         code, state, iss = await wait_for_callback()
         return AuthorizationCodeResult(code=code, state=state, iss=iss)
 
-    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[CALLBACK], scope=SCOPE, token_endpoint_auth_method="none",
+    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[CALLBACK], scope=scope, token_endpoint_auth_method="none",
                                grant_types=["authorization_code", "refresh_token"], response_types=["code"])
-    return OAuthClientProvider(ATTIO_URL, meta, tokens, redirect_handler=show_link or _refuse, callback_handler=came_back)
+    return OAuthClientProvider(url, meta, tokens, redirect_handler=show_link or _refuse, callback_handler=came_back)
 
 
 @asynccontextmanager
-async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None = None) -> AsyncIterator[Any]:
-    """An open session with Attio's server. Without `show_link` it never starts a sign-in: it fails if one is needed."""
+async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None = None, url: str = ATTIO_URL,
+                  scope: str | None = SCOPE) -> AsyncIterator[Any]:
+    """An open session with a vendor's own server (Attio's unless another address is given). Without `show_link` it never
+    starts a sign-in: it fails if one is needed. `scope` None lets the server say what to ask for."""
     from mcp import ClientSession
     from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
-    async with create_mcp_http_client(auth=_provider(tokens, show_link)) as http:
-        async with streamable_http_client(ATTIO_URL, http_client=http) as streams:
+    async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope)) as http:
+        async with streamable_http_client(url, http_client=http) as streams:
             async with ClientSession(streams[0], streams[1]) as s:
                 await s.initialize()
                 yield s
@@ -172,9 +174,9 @@ class McpBackend:
     single task owns it and the calls are handed to that task through a queue.
     """
 
-    def __init__(self, tokens: FileTokens, idle_s: float = 120.0, opener: Any = None):
+    def __init__(self, tokens: FileTokens, idle_s: float = 120.0, opener: Any = None, url: str = ATTIO_URL, scope: str | None = SCOPE):
         self._tokens, self._idle = tokens, idle_s
-        self._open = opener or (lambda: session(self._tokens))
+        self._open = opener or (lambda: session(self._tokens, None, url, scope))
         self._queue: asyncio.Queue | None = None
         self._task: asyncio.Task | None = None
         self.opened = 0
