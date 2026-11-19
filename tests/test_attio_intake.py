@@ -294,3 +294,42 @@ async def test_a_name_close_to_one_already_there_is_not_quietly_added_as_new(tmp
     assert "- Company Northwind: NEW. Name: Northwind (Attio already has the similarly named Northwind Robotics; this is a separate record.)" in shown
     unrelated = {**short, "records": [{"ref": "c1", "object": "companies", "values": {"name": "Southwind"}}]}
     assert "- Company Southwind: NEW. Name: Southwind" in (await plan_id(h, unrelated))[1]
+
+
+# --- Asking as little as possible (the owner's choice, 19 November 2026) -------------
+
+def auto_rig(tmp_path, **kw):
+    backend = FakeAttio(**kw)
+    attio = Attio(backend, Journal(tmp_path / "j.jsonl"))
+    attio.shape = SHAPE
+    gate = make_gate(Journal(tmp_path / "g.jsonl"), attio=attio, auto_small=True)
+    return backend, attio, gate, attio.handlers()
+
+
+async def test_with_less_asking_a_plan_that_only_adds_is_filed_and_each_thing_is_reported(tmp_path):
+    backend, attio, gate, h = auto_rig(tmp_path)
+    pid, _ = await plan_id(h)
+    assert gate.decide(ATTIO_FILE, {"plan": pid}) == "allow"
+    out = text(await h["attio_file"]({"plan": pid}))
+    assert out.startswith("Filed. The owner was not asked first") and "Company Orbit Labs: created" in out
+    told = attio.pop_changes()
+    assert len(told) == 1 and told[0].startswith("filed in Attio without asking, because it only adds: Company Orbit Labs: created; ")
+    assert "note \"From Sam\" added" in told[0], "the owner is told each thing, not a count"
+    assert gate.decide(ATTIO_FILE, {"plan": pid}) == "ask" and gate.decide(ATTIO_FILE, {"plan": "nope"}) == "ask", "a plan the program does not hold"
+
+
+async def test_with_less_asking_a_plan_that_overwrites_a_value_is_still_the_owners_decision(tmp_path):
+    backend, attio, gate, h = auto_rig(tmp_path, existing=[("deals", {"name": "Orbit Labs", "stage": "Sourced"})])
+    with_deal_fields(attio)
+    pid, shown = await plan_id(h, FOLLOW_UP)
+    assert "CHANGES: Deal stage: Sourced → Term sheet" in shown
+    assert gate.decide(ATTIO_FILE, {"plan": pid}) == "ask"
+    out = text(await h["attio_file"]({"plan": pid}))
+    assert out.startswith("Filed, as the owner approved") and attio.pop_changes()[0].startswith("in Attio, from one approved plan")
+
+
+async def test_with_less_asking_a_record_beside_a_similarly_named_one_is_still_asked_about(tmp_path):
+    backend, attio, gate, h = auto_rig(tmp_path, existing=[("companies", {"name": "Northwind Robotics"})])
+    plan = {"source": "Email from Meera", "records": [{"ref": "c1", "object": "companies", "new": True, "values": {"name": "Northwind"}}]}
+    pid, shown = await plan_id(h, plan)
+    assert "similarly named Northwind Robotics" in shown and gate.decide(ATTIO_FILE, {"plan": pid}) == "ask"

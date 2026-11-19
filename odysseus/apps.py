@@ -435,6 +435,16 @@ class Apps:
         import tzlocal
         return tzlocal.get_localzone_name()
 
+    async def events_between(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        """The calendar's events in a stretch of time, as the service gives them. For code (brief.py), not for the model."""
+        data = await self._call("calendar_list", "GOOGLECALENDAR_EVENTS_LIST", {
+            "calendarId": "primary", "timeMin": self._rfc3339(start), "timeMax": self._rfc3339(end),
+            "singleEvents": True, "orderBy": "startTime", "maxResults": 20})
+        self._remember_events(data)
+        data = _unwrap(data)
+        items = data if isinstance(data, list) else _first(data, "items", "events", default=[]) if isinstance(data, dict) else []
+        return [e for e in items if isinstance(e, dict)]
+
     def _rfc3339(self, local: datetime) -> str:
         from zoneinfo import ZoneInfo
         return local.replace(tzinfo=ZoneInfo(self._zone())).isoformat()

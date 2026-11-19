@@ -281,3 +281,40 @@ async def test_labels_are_learned_when_tools_are_found_and_a_failure_to_learn_ch
     plain = AnyApp(SimpleNamespace(find=lambda task: found, labels=broken), Journal(tmp_path / "k.jsonl"))
     await plain.handlers()["app_find"]({"task": "list my pipeline"})
     assert plain.decide(run) == "ask" and plain.decide({"tool": "ATTIO_GET_COMPANY", "arguments": {}}) == "allow"
+
+
+# --- Asking as little as possible (the owner's choice, 19 November 2026) -------------
+
+def auto_rig(tmp_path):
+    journal = Journal(tmp_path / "journal.jsonl")
+    backend = FakeConnector(connected=True)
+    anyapp = AnyApp(backend, journal)
+    gate = make_gate(journal, anyapp=anyapp, auto_small=True)
+    h = anyapp.handlers()
+    return SimpleNamespace(journal=journal, backend=backend, anyapp=anyapp, gate=gate, h=h, run=gate.guarded(APP_RUN, h["app_run"]))
+
+
+async def test_with_less_asking_an_edit_in_the_owners_own_google_file_runs_and_is_reported(tmp_path):
+    x = auto_rig(tmp_path)
+    asked = approving(x)
+    row = call(APPEND, spreadsheetId="s1", values=[["a"]])
+    assert x.gate.decide(APP_RUN, row) == "allow"
+    assert "is_error" not in await x.run(row) and asked == [] and x.backend.calls == [(APPEND, {"spreadsheetId": "s1", "values": [["a"]]})]
+    told = x.anyapp.pop_changes()
+    assert told[0].startswith(f"ran {APPEND} in Googlesheets without asking (") and '"spreadsheetId": "s1"' in told[0]
+    assert x.gate.decide(APP_RUN, call("GOOGLEDOCS_CREATE_DOCUMENT", title="Memo")) == "allow"
+
+
+def test_with_less_asking_everything_that_reaches_someone_or_cannot_be_put_back_still_asks(tmp_path):
+    x = auto_rig(tmp_path)
+    for slug in ("GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", "GOOGLEDRIVE_DELETE_FILE", "GOOGLESHEETS_CLEAR_VALUES", "GOOGLEDRIVE_MOVE_FILE",
+                 "GOOGLEDOCS_REPLACE_ALL_TEXT", "GOOGLESHEETS_FROBNICATE",        # a word on no list is not an edit
+                 "NOTION_CREATE_PAGE", "SLACK_UPDATE_MESSAGE", "GITHUB_CREATE_ISSUE", "PASTEBIN_CREATE_PASTE"):     # not the owner's own files
+        assert x.gate.decide(APP_RUN, call(slug, id="1")) == "ask", slug
+    x.anyapp._labels["GOOGLESHEETS_UPDATE_SHEET"] = frozenset({"destructiveHint"})
+    assert x.gate.decide(APP_RUN, call("GOOGLESHEETS_UPDATE_SHEET", id="1")) == "ask", "an edit the connector labels destructive"
+
+
+def test_without_the_owners_choice_every_change_asks_as_before(tmp_path):
+    x = rig(tmp_path, connected=True)
+    assert x.gate.decide(APP_RUN, call(APPEND, spreadsheetId="s1", values=[["a"]])) == "ask"

@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 328 automated tests. The parts
+**Status: early.** It was built in three days and has 343 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -84,6 +84,11 @@ reminders fire in UTC.
 - The browser hands a whole task to a third-party browsing agent. A browser run signed in
   as you asks you first, showing the task; nothing asks before a click inside it. Set
   `ODYSSEUS_BROWSER_ASK_SIGNED_IN=0` to let such runs start without asking.
+- Small changes that can be put back run without asking and are listed in the reply: additions to Attio, additions
+  and edits in your own Google files, a routine set up from your own words alone. Sending, sharing, inviting, deleting
+  and overwriting a value in Attio still ask. Set `ODYSSEUS_ASK_EVERY_CHANGE=1` to be asked before every change.
+- Half an hour before a meeting with someone outside your firm, a brief is sent. For it, code sends the guest's name
+  and the domain of their address to the search service, and nothing else. `ODYSSEUS_MEETING_BRIEFS=0` turns it off.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.

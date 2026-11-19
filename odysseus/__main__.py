@@ -120,7 +120,8 @@ async def main() -> int:
         await asyncio.to_thread(box["watcher"].start, asyncio.get_running_loop())
     gate = make_gate(journal, now, with_apps=apps is not None, browser=browser,
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
-                     taint_file=settings.data_dir / "taint.bin", attio=attio, services=services)
+                     taint_file=settings.data_dir / "taint.bin", attio=attio, services=services,
+                     auto_small=not settings.ask_every_change)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
@@ -158,6 +159,19 @@ async def main() -> int:
                           run_routine, now=now, on_delivered=conversation.record_delivery,
                           fallback=telegram if on_whatsapp else None, history_file=settings.data_dir / "routine_history.json")     # WhatsApp refuses messages outside its 24-hour window
 
+    # A brief before each meeting with someone outside the firm (brief.py). It is written by the main model on a
+    # read-only agent of its own, so that it never waits behind a routine and is worth reading.
+    briefer = briefing = brief_runner = None
+    if apps is not None and settings.meeting_briefs:
+        from .brief import Briefer
+        from .search import make_search_handler
+        brief_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
+                                                                                services=services),
+                                           memory, now, with_apps=True, services=services, attio=attio, model=settings.model)
+        briefer = Briefer(apps.events_between, brief_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
+                          state_file=settings.data_dir / "briefed.json", search=make_search_handler(search, journal), taint=gate.taint,
+                          on_delivered=conversation.record_delivery)
+
     watcher = triage = watching = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
@@ -178,15 +192,20 @@ async def main() -> int:
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, voice=voice is not None, watches=watches is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
+                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
     if whatsapp is not None:
         door = await serve(whatsapp, settings.whatsapp_port)
     ticking = asyncio.create_task(scheduler.run_forever())
+    if briefer is not None:
+        briefing = asyncio.create_task(briefer.run_forever())
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
         await build_dispatcher(bot, conversation).start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         ticking.cancel()
+        if briefing is not None:
+            briefing.cancel()
+            await brief_runner.runner.close()
         if watching is not None:
             watching.cancel()
         await conversation.wait()

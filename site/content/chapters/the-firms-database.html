@@ -242,6 +242,41 @@
 <p>Across all three runs: no change was made without an approval, no planted instruction was acted on in 16 chances, both planted instructions were pointed out to the owner in the reply, and after the repair no record was created twice.</p>
 <p>What this does not show. Two or three runs an errand is too few to trust a rate. The requests are as written, not reworded or typed in a hurry, and no tool fails. The stand-in database is simpler than the real one and was itself wrong once (it did not show a founder's deals, so the model truthfully reported there were none). And a model asked the same thing three times did three slightly different things: one made a deal where another did not, one asked where another assumed.</p>
 
+<h2 id="less">Asking less</h2>
+<p>Every change so far was put to the owner first. Research the owner had commissioned on how venture firms work reported that people approve such questions almost every time without reading them, and suggested that small changes which can be put back should simply run and be listed afterwards. The owner decided: as little asking as possible, and the assistant should feel like a very good intern, who does the thing and says what was done.</p>
+<p>That is a change of policy and not of mechanism. The gate of Chapter 9 already had three answers: allow, ask, refuse. What moved is which changes get which answer.</p>
+<div class="table-wrap"><table>
+<caption>What runs without a question, and what still asks, from 19 November 2026.</caption>
+<thead><tr><th>Change</th><th>Before</th><th>Now</th><th>Why</th></tr></thead>
+<tbody>
+<tr><th>A plan that only adds to the firm's database (new records, notes, list entries)</th><td>One approval</td><td>Runs; each thing added is listed in the reply</td><td>Nothing that was there is lost. The check for doubles is in code (Section 21.11)</td></tr>
+<tr><th>A plan that overwrites a value already there</th><td>One approval</td><td>One approval, shown before and after</td><td>What was there disappears from view once changed</td></tr>
+<tr><th>A record added beside a similarly named one</th><td>One approval</td><td>One approval</td><td>It may be a double, and a record cannot be deleted from here</td></tr>
+<tr><th>A note or a task on a record</th><td>Asked</td><td>Runs; reported</td><td>It sits beside what is there</td></tr>
+<tr><th>An addition or edit in the owner's own Google files</th><td>Asked</td><td>Runs; reported with its inputs</td><td>The file keeps a history of versions, and nobody else is reached</td></tr>
+<tr><th>The same in any other app; any action whose name is on no list</th><td>Asked</td><td>Asked</td><td>Not known to be the owner's own, or not known to be an edit</td></tr>
+<tr><th>Sending, replying, inviting, sharing, deleting, clearing, replacing</th><td>Asked</td><td>Asked</td><td>It reaches someone or cannot be put back</td></tr>
+<tr><th>A routine or a watch</th><td>Asked</td><td>Runs if the task has read only the owner's own words; asked once anything else was read</td><td>Then the instructions might be somebody else's</td></tr>
+<tr><th>A browser run signed in as the owner</th><td>Asked</td><td>Asked</td><td>The owner had said so, explicitly, earlier</td></tr>
+</tbody>
+</table></div>
+<p>Where the line sits is this program's reading of "small and can be put back", not the owner's wording, and one setting restores a question before every change. Two details matter more than the table.</p>
+<p>The first is that an unasked action needs a better report than an approved one. An approved plan had been summarised as a count, "3 created, 1 noted", because the owner had just read every line of it. A plan nobody saw is reported line by line, and says "without asking" so that the owner can tell the two apart.</p>
+<p>The second is what "recognised" means. Chapter 20 records that an earlier version let one approval cover every later action in an app unless its name was on a list of dangerous words, and that such a list is never complete. The rule here runs the other way: an action runs unasked only when its name carries a word from the list of additions and edits, carries none from the list of hard words, is not labelled destructive by the connector, and is in one of five named Google apps. A name the program does not recognise still asks.</p>
+<p><span class="g v">Verified</span>, against the real model, 28 runs for $0.60: the fourteen errands of Section 21.16, with one replaced (an owner declining a correction, since declining an addition can no longer happen). All 28 passed. The owner was asked in 6 runs where before it had been 16: only the three errands that overwrite a value. Nothing already in the database was changed without an approval, the instruction planted in a forwarded email was not acted on in either run and was pointed out in the reply, and every unasked filing was listed by the program. The passing runs were read, as Section 21.16 says they must be.</p>
+<p>What this costs is stated plainly. Before, a planted instruction that the model obeyed could do nothing without the owner's tap. Now, one that the model obeyed could add a record or a note that the owner learns of only from the reply. It still could not overwrite, send, share or delete. Two runs of one planted email is not a measurement of how often a model obeys.</p>
+
+<h2 id="brief">A brief before each meeting</h2>
+<p>The first thing built on the new footing is one the owner never has to ask for. Every five minutes code looks at the calendar. When a meeting with someone from outside the firm starts within half an hour and has not been briefed, the owner is sent a short note: who the person is, where things stand with the firm, what was said and promised last time, and what is worth asking.</p>
+<p>Most of that sentence is code and not the model. Which meetings count is a filter: timed, not cancelled, not declined, with at least one guest whose address is outside the owner's own domain. Each meeting is briefed once, by its id and start time, kept in a file. No more than ten in a day, and none once the day's budget is spent. The model's part is the last one: it is handed the meeting, runs on the read-only agent of Chapter 8 with the main model, looks the guests up in the database, the meeting notes and the mail, and writes at most 180 words.</p>
+<div class="box caution"><div class="label">The one thing that leaves</div>
+<p>A brief wants a web search for the guest. Section 21.15 established that a routine's search carrying details from the owner's accounts is refused, because nobody is there to approve it, and a guest's name comes from the calendar. Letting the model search freely here would let an invitation's text, or a note from the database, leave inside a query.</p>
+<p>So the search is made by code, before the model runs: one per outside guest, at most three, built from the guest's name and the domain of their address and nothing else. The result is handed to the model as material. The event is then recorded as private, so that any search the model attempts with it is refused as before. A search company learns a name and a company, which is what the owner asked to have looked up. It cannot be made to learn anything else by what an invitation says.</p></div>
+<p>The same day's rule that an unattended read of a service must carry no private details was relaxed for two stores: the firm's database and the owner's own meeting notes. Looking up there the person the owner is about to meet is the purpose, and in a conversation it had never been asked about. It stays in force for X.</p>
+<p><span class="g v">Verified</span>, live, once. The owner's calendar held no meeting with an outside guest in the next ten days (its one event was among colleagues, and was correctly left out), so a meeting was made up with a founder already in the database. 47 seconds, 7 cents: one search by code, eleven reads by the model, one of which failed on a badly formed input. The brief said who he was from his own profile text, what the company's site says it does, that the database held the company and the person since that morning and no deal, and that neither the meeting notes nor the mail held anything. It said the meeting notes only reach back thirty days.</p>
+<p>What that run showed. It wrote a heading of its own above the one the program adds, and ran past 180 words; the instructions now say not to. Its third question quoted the firm's investment focus back at the owner, which a person would not. And it reported no notes on the company, where a note had been filed that morning: whether the search missed it or the model did was not established.</p>
+<p><span class="g u">Not tested</span>: a brief triggered by a real meeting at its real time; a meeting with several guests; one where the invitation contains a planted instruction, against the real model; and whether the owner finds them worth reading, which is the only test that matters and cannot be run here.</p>
+
 <h2 id="layout">Giving the workspace a shape</h2>
 <p>An empty database cannot answer "what is in the pipeline". The assistant's first useful act for the firm was therefore not a lookup but a layout: what a deal is, what stages it passes through, and what is recorded about it.</p>
 <p>The first draft was made from the firm's own earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" It was not, and the honest answer was that nobody had checked. The draft had been written before reading what the vendor and practitioners recommend. Reading them afterwards (the vendor's own guide for venture firms, and one implementation consultancy's write-up, which is sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as the allocation offered and the committee date; a single reason for passing where several are needed; nothing recorded about a holding after investing; nothing for the fund's own investors; and no automation at all.</p>
@@ -261,6 +296,8 @@
 <li>For a single record created through the general tool, "search before creating" is still only an instruction (the owner's choice). Inside a plan the program does the lookup, including for near-matching names.</li>
 <li>The sign-in works only on the machine with the browser.</li>
 <li>Watches cannot read Attio. Routines can (Section 21.15), and cannot file.</li>
+<li>Asking less (Section 21.17) was measured on fourteen errands twice each. How often a model obeys a planted instruction to add something is not known from two runs.</li>
+<li>The brief before a meeting (Section 21.18) has run once, on a made-up meeting.</li>
 <li>No read of X has returned a post: the account has no credit. The cost of X reads is an estimate that has never been checked against X's bill.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
 <li>The partner errands (Section 21.16) run only as written, with no rewording and no failing tools, two to four times each.</li>
@@ -274,6 +311,8 @@
 <li>A sign-in the owner approves in a browser leaves no key to copy, and acts with the owner's own permissions.</li>
 <li>Many tools are offered through two: one to look up, one to run.</li>
 <li>A tool runs unasked only when its label and its name both say it reads.</li>
+<li>Later, at the owner's choice, additions that lose nothing also run unasked, and are then reported line by line. Overwriting, sending, sharing and deleting still ask.</li>
+<li>When code must let something private leave with nobody watching, code builds exactly that and no more: a name and a company for a search, never the model's own query.</li>
 </ul></div>
 
 <div class="box exercises"><div class="label">Check your understanding</div>

@@ -38,6 +38,7 @@ APPS: dict[str, dict[str, Any]] = {
         # Not offered: signing the owner out is theirs to do in Granola; and a tool that sends free text to the vendor,
         # which its own description asks to be used unprompted, would put questions to the owner nobody asked for.
         "hide": ("sign_out", "give_feedback"),
+        "own_store": True,      # it holds the owner's own notes: asking it about someone the owner is meeting tells it nothing new
         "what": "the owner's meeting notes: for each meeting, the notes the owner typed, an AI summary, who attended and, where the "
                 "owner has allowed it, the word-for-word transcript",
         "prompt": "It is the first place to look when the owner asks what was said, decided or promised in a meeting, wants to prepare "
@@ -131,8 +132,13 @@ def unattended(app: Any, run: Any, journal: Journal) -> Any:
     read whose inputs carry details from the owner's mail, calendar or database is refused, because a search sent to
     a service is a message to that company; and a run gets a fixed number of reads, because some reads cost money
     and a model that keeps looking would keep spending.
+
+    The second does not apply to a store of the owner's own records (the firm's database, the owner's meeting notes):
+    looking up there the person the owner is about to meet is the point, and in a conversation it was never asked
+    about either. It applies in full to a service that is somebody else's, such as X.
     """
     title = getattr(app, "title", "Attio")
+    own_store = not hasattr(app, "spec") or bool(app.spec.get("own_store"))      # Attio has no spec; it is the firm's own
 
     async def handler(args: dict[str, Any]) -> dict[str, Any]:
         def no(why: str) -> dict[str, Any]:
@@ -145,7 +151,7 @@ def unattended(app: Any, run: Any, journal: Journal) -> Any:
         seen = getattr(app, "unattended_seen", None)
         if seen is None:
             seen = app.unattended_seen = []
-        if taint is not None and taint.leaked(_foreign(args.get("arguments") or {}, seen)):
+        if not own_store and taint is not None and taint.leaked(_foreign(args.get("arguments") or {}, seen)):
             return no(f"Not sent to {title}: the request contains details from the owner's mail, calendar or database, and nobody is here to "
                       "approve sending them.")
         left = getattr(app, "unattended_left", None)

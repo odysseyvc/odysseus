@@ -40,12 +40,13 @@ async def _bounded(runner: AgentRunner, journal: Journal, prompt: str, seconds: 
 
 def make_routine_runner(settings: Settings, journal: Journal, read_only_server: Any, memory: MemoryStore,
                         now: Callable[[], datetime] = datetime.now,
-                        client_factory: Callable[..., Any] = ClaudeSDKClient, with_apps: bool = False, services: Any = (), attio: Any = None):
+                        client_factory: Callable[..., Any] = ClaudeSDKClient, with_apps: bool = False, services: Any = (), attio: Any = None,
+                        model: str | None = None):
     reads = "".join(s.routine_prompt() for s in services)
     if attio is not None:
         reads += ("\n\nYou can read Attio, the firm's customer database, with attio_find and attio_run, for example to check whether a "
                   "company or person is already known to the firm. You cannot file or change anything there.")
-    runner = AgentRunner(settings, journal, read_only_server, client_factory, model=settings.background_model,
+    runner = AgentRunner(settings, journal, read_only_server, client_factory, model=model or settings.background_model,
                          system_prompt=ROUTINE_PROMPT + (ROUTINE_APPS_PROMPT if with_apps else "") + reads,
                          allowed_tools=routine_tools(with_apps, services, attio))
 

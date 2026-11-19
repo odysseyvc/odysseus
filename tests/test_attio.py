@@ -169,3 +169,21 @@ def test_a_sign_in_link_asks_only_for_the_permissions_the_program_was_told_to_as
     assert narrow["scope"] == ["tweet.read users.read offline.access"], "the wider list the library chose is replaced, not added to"
     assert narrow["state"] == ["s1"] and narrow["code_challenge"] == ["c1"] and narrow["redirect_uri"] == ["http://127.0.0.1:8765/callback"]
     assert pin_scope(wide, None) == wide, "with no list of its own, the program leaves the service's choice alone"
+
+
+# --- Asking as little as possible (the owner's choice, 19 November 2026) -------------
+
+async def test_with_less_asking_a_note_runs_and_is_reported_and_everything_else_still_asks(tmp_path):
+    backend = FakeAttio()
+    attio = Attio(backend, Journal(tmp_path / "j.jsonl"))
+    gate = make_gate(Journal(tmp_path / "g.jsonl"), attio=attio, auto_small=True)
+    h = attio.handlers()
+    note = {"tool": "create-note", "arguments": {"title": "Call", "content": "They are raising in March."}}
+    assert gate.decide(ATTIO_RUN, note) == "ask", "not looked up yet: still nothing is known of it"
+    listing = (await h["attio_find"]({}))["content"][0]["text"]
+    assert "create-note  (runs at once; the owner is told afterwards)" in listing
+    assert gate.decide(ATTIO_RUN, note) == "allow"
+    for other in ("merge-records", "update-record", "create-record", "delete-record", "update-data-model", "create-list", "never-heard-of"):
+        assert gate.decide(ATTIO_RUN, {"tool": other, "arguments": {}}) == "ask", other
+    await h["attio_run"](note)
+    assert attio.pop_changes() == ['did "Create note" in Attio without asking'], "what ran unasked is said to be so"

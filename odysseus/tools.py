@@ -116,8 +116,13 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
               with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None,
-              services: Any = ()) -> Gate:
+              services: Any = (), auto_small: bool = False) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
+
+    `auto_small` is the owner's choice (19 November 2026) to be asked as little as possible: small changes that can be
+    put back run at once and are listed in the reply. That covers additions to Attio, additions and edits in the
+    owner's own Google files, and a routine or watch set up in a task that has read nothing other people wrote.
+    Sending, sharing, inviting, deleting, overwriting a value in Attio and a signed-in browser run still ask.
 
     Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
     and so that what is read from the accounts is remembered for the check on what leaves through search.
@@ -134,9 +139,11 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
         browser_mod.add_rules(gate, browser_ask_signed_in, taint)
     if anyapp is not None:
         anyapp.taint = taint
+        anyapp.own_apps = anyapp_mod.OWN_APPS if auto_small else frozenset()
         anyapp.add_rules(gate)
     if attio is not None:
         attio.taint = taint
+        attio.auto = auto_small
         attio.add_rules(gate)
     for service in services:        # any other service with a server of its own: mcpapp.py
         service.taint = taint
@@ -162,14 +169,19 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
         # message to the owner and to nobody else: allowed, and reported by code in the same reply. For one day it was
         # asked about once the task had read anything other people wrote, as memory still is. The owner withdrew that:
         # most reminders follow a look at the calendar, and unlike memory a reminder is not shown to the model again.
-        return ASK if str(a.get("kind", "")).strip().lower() == "routine" else ALLOW
+        # Since 19 November 2026, with auto_small: a routine set up from the owner's own words alone is not asked about
+        # either. It can only read, it is cancelled with one command, the day's budget bounds it, and code reports it in
+        # the reply. Once the task has read what other people wrote, the instructions may be theirs: the owner is asked.
+        if str(a.get("kind", "")).strip().lower() != "routine":
+            return ALLOW
+        return ALLOW if auto_small and not taint.sources else ASK
 
     def schedule_question(a: dict[str, Any]) -> str:
         return describe_routine(a, now, with_apps, [s.title for s in services] + (["Attio"] if attio is not None else []))
     gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
-        gate.rule(WATCH_TOOL, ASK, describe_watch)
+        gate.rule(WATCH_TOOL, lambda a: ALLOW if auto_small and not taint.sources else ASK, describe_watch)
         gate.rule(_name("list_watches"), ALLOW)
         gate.rule(_name("cancel_watch"), ALLOW)
     return gate

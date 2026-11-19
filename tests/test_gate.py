@@ -333,3 +333,18 @@ async def test_a_malformed_routine_is_not_shown_to_the_owner(tmp_path):
     gate.set_asker(asker)
     out = await gate.permission(SCHEDULE_TOOL, {"kind": "routine", "text": "x", "when": "last Tuesday"})
     assert isinstance(out, PermissionResultDeny) and asked == []
+
+
+# --- Asking as little as possible: routines and watches ------------------------------
+
+def test_with_less_asking_a_routine_from_the_owners_own_words_is_not_asked_about_until_something_was_read(tmp_path):
+    from odysseus.journal import Journal
+    routine = {"kind": "routine", "text": "Send the top AI headline.", "when": "2026-11-20T08:00", "repeat": "daily"}
+    gate = make_gate(Journal(tmp_path / "a.jsonl"), auto_small=True, with_watches=True)
+    gate.taint.start_task()
+    assert gate.decide(SCHEDULE_TOOL, routine) == "allow"
+    assert gate.decide("mcp__odysseus__watch", {"text": "A reply from Jo", "about": "mail"}) == "allow"
+    gate.taint.saw("web search results")
+    assert gate.decide(SCHEDULE_TOOL, routine) == "ask", "the instructions may now be somebody else's"
+    assert gate.decide("mcp__odysseus__watch", {"text": "A reply from Jo", "about": "mail"}) == "ask"
+    assert make_gate(Journal(tmp_path / "b.jsonl")).decide(SCHEDULE_TOOL, routine) == "ask", "without the owner's choice, as before"

@@ -180,6 +180,12 @@ async def test_with_nobody_watching_private_details_are_not_sent_but_a_services_
     assert gate.taint.leaked("88120045551"), "what X returned is remembered like anything else that was read"
     back = await run({"tool": "get_users_by_ids", "arguments": {"ids": ["88120045551"]}})
     assert not back.get("is_error") and backend.calls[-1] == ("get_users_by_ids", {"ids": ["88120045551"]}), "X is told nothing by its own id"
+    # The owner's own meeting notes are a different case: looking up there the person the owner is about to meet is the point.
+    notes_backend, notes, notes_gate, nh = rig(tmp_path / "n")
+    await nh["granola_find"]({})
+    notes_gate.taint.add("Meeting with priya@lumenhealth.example at 15:00", "your calendar")
+    own = unattended(notes, nh["granola_run"], Journal(tmp_path / "n.jsonl"))
+    assert not (await own({"tool": "query_granola_meetings", "arguments": {"query": "priya@lumenhealth.example"}})).get("is_error")
 
 
 def test_a_routine_is_offered_a_services_reading_tools(tmp_path):
