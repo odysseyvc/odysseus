@@ -34,7 +34,8 @@ Go through the pages in order. For each page that has something drawn on it, wri
 - A chart or graph: what is plotted, the axes and their scale if there is one (say so if there is none), each value you can read or, without numbers, the relative heights in order, the overall shape, and anything in it that does not agree with the words on the same page.
 - A table set as a picture: its rows and columns.
 - Logos: the names you can read.
-- A screenshot, diagram or photograph: what it shows, in a line or two.
+- A screenshot or diagram: what it shows, in a line or two.
+- A photograph of a person: only that there is one and whose the caption says it is. Do not describe how anyone looks. A company's own logo or decoration: leave it out.
 - Small, faint or oddly placed writing that the text below does not contain: quote it and say where it sits and how it looks.
 Leave out a page that shows nothing beyond its text. Say "by eye" where a figure is your own reading of a picture. Describe; do not judge the file, summarise it, or advise anyone.
 
