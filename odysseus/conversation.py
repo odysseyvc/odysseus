@@ -65,6 +65,7 @@ class Conversation:
                  services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None):
         self._s = settings
         self._viewing = False
+        self._connector = None       # set by the program once it can restart itself: connect.py
         self._deckview = deckview    # reads a DocSend document in a browser, giving the owner's address: deckview.py
         self._links = links          # fetches a PDF from a link in the owner's own message: links.py
         self._pages = pages          # looks at a short PDF's pages in a run of its own: pages.py
@@ -170,6 +171,18 @@ class Conversation:
                 await chat.send("Open this link to use my browser yourself, and sign in to any site you want me to be able to use "
                                 "as you. Treat the link like a password: anyone who has it can control that browser. It closes by "
                                 f"itself after 20 minutes.\n\n{link}\n\nWhen you have finished, send /browser done so that your sign-ins are saved.")
+            return
+
+        # Connecting a service that has a server of its own, by name or by address. No model is involved: connect.py.
+        if command.split()[0] in ("/connect", "/disconnect", "/services"):
+            if self._connector is None:
+                await chat.send("Connecting services from the chat is not set up here.")
+            elif self.busy:
+                await chat.send("I'm in the middle of a task. Send stop first, or wait until it is done, because connecting restarts me.")
+            elif command.startswith("/disconnect"):
+                await self._connector.disconnect(text[len("/disconnect"):], chat.send)
+            else:
+                await self._connector.connect(text[len(command.split()[0]):] if not command.startswith("/services") else "", chat.send)
             return
 
         # Which accounts are connected, with a link to connect any that are not. No model is involved.

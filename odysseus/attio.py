@@ -23,7 +23,8 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 ATTIO_URL = "https://mcp.attio.com/mcp"
-CALLBACK_PORT = 8765
+# The port a sign-in comes back to on this machine. Another program may hold it; ODYSSEUS_CALLBACK_PORT names another for one sign-in.
+CALLBACK_PORT = int(__import__("os").environ.get("ODYSSEUS_CALLBACK_PORT", 8765))
 CALLBACK = f"http://127.0.0.1:{CALLBACK_PORT}/callback"
 SCOPE = "openid offline_access mcp"
 
@@ -76,22 +77,22 @@ async def _refuse(_: str) -> None:
     raise NotSignedIn("Attio is not connected, or its sign-in has lapsed. The owner has to connect it again.")
 
 
-async def wait_for_callback(timeout_s: float = 600) -> tuple[str, str | None, str | None]:
-    """Listen once on this machine for the browser coming back from Attio. Returns (code, state, issuer)."""
+async def wait_for_callback(timeout_s: float = 600, port: int | None = None) -> tuple[str, str | None, str | None]:
+    """Listen once on this machine for the browser coming back from the service. Returns (code, state, issuer)."""
     done: asyncio.Future[tuple[str, str | None, str | None]] = asyncio.get_running_loop().create_future()
 
     async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         line = (await reader.readline()).decode("latin-1")
         query = parse_qs(urlsplit(line.split(" ")[1] if " " in line else "").query)
         ok = bool(query.get("code"))
-        body = b"Attio is connected. You can close this tab." if ok else b"Attio did not send a code. Nothing was connected."
+        body = b"Connected. You can close this tab." if ok else b"The service did not send a code. Nothing was connected."
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
         await writer.drain()
         writer.close()
         if ok and not done.done():
             done.set_result((query["code"][0], (query.get("state") or [None])[0], (query.get("iss") or [None])[0]))
 
-    server = await asyncio.start_server(serve, "127.0.0.1", CALLBACK_PORT)
+    server = await asyncio.start_server(serve, "127.0.0.1", port or CALLBACK_PORT)
     try:
         return await asyncio.wait_for(done, timeout_s)
     finally:
@@ -112,15 +113,29 @@ def pin_scope(link: str, scope: str | None) -> str:
     return urlunsplit(parts._replace(query=urlencode(query + [("scope", scope)])))
 
 
-def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None, url: str = ATTIO_URL, scope: str | None = SCOPE):
+def _return_port(tokens: FileTokens, port: int | None) -> int:
+    """Where this sign-in comes back to. A service remembers the address a program registered with, so a program that
+    has registered before must come back to that same port; a first sign-in may use any free one."""
+    try:
+        raw = (tokens._read().get("client") or {}).get("redirect_uris") or []
+        known = urlsplit(str(raw[0])).port if raw else None
+    except Exception:
+        known = None
+    return known or port or CALLBACK_PORT
+
+
+def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None, url: str = ATTIO_URL, scope: str | None = SCOPE,
+              port: int | None = None):
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import AuthorizationCodeResult, OAuthClientMetadata
 
+    back = _return_port(tokens, port)
+
     async def came_back():
-        code, state, iss = await wait_for_callback()
+        code, state, iss = await wait_for_callback(port=back)
         return AuthorizationCodeResult(code=code, state=state, iss=iss)
 
-    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[CALLBACK], scope=scope, token_endpoint_auth_method="none",
+    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[f"http://127.0.0.1:{back}/callback"], scope=scope, token_endpoint_auth_method="none",
                                grant_types=["authorization_code", "refresh_token"], response_types=["code"])
     async def shown(link: str) -> None:
         await (show_link or _refuse)(pin_scope(link, scope))
@@ -130,13 +145,13 @@ def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | 
 
 @asynccontextmanager
 async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None = None, url: str = ATTIO_URL,
-                  scope: str | None = SCOPE) -> AsyncIterator[Any]:
+                  scope: str | None = SCOPE, port: int | None = None) -> AsyncIterator[Any]:
     """An open session with a vendor's own server (Attio's unless another address is given). Without `show_link` it never
     starts a sign-in: it fails if one is needed. `scope` None lets the server say what to ask for."""
     from mcp import ClientSession
     from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
-    async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope)) as http:
+    async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope, port)) as http:
         async with streamable_http_client(url, http_client=http) as streams:
             async with ClientSession(streams[0], streams[1]) as s:
                 await s.initialize()

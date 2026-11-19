@@ -58,7 +58,8 @@ async def main() -> int:
         asked = (parse_qs(urlsplit(link).query).get("scope") or ["(whatever the service chooses)"])[0]
         print(f"THIS SIGN-IN ASKS FOR: {asked}\nOPEN THIS LINK AND APPROVE:\n{link}\n", flush=True)
 
-    async with session(tokens, show, SERVERS[name]["url"], SERVERS[name]["scope"]) as s:
+    from odysseus.connect import free_port
+    async with session(tokens, show, SERVERS[name]["url"], SERVERS[name]["scope"], free_port()) as s:
         tools = (await s.list_tools()).tools
         rows = [{"name": t.name, "labels": (t.annotations.model_dump(exclude_none=True) if t.annotations else {}),
                  "description": " ".join((t.description or "").split())[:600], "inputs": t.input_schema} for t in tools]

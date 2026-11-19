@@ -10,7 +10,9 @@ from exa_py import Exa
 from .agent import AgentRunner, conversation_prompt
 from .anyapp import AnyApp
 from .attio import Attio, FileTokens, McpBackend
+from .connect import Connector
 from .mcpapp import connected as connected_services
+from .mcpapp import load_custom as load_custom_services
 from .apps import Apps, ComposioBackend
 from .browser import Browser, BrowserUseBackend
 from .config import ConfigError, load, make_clock
@@ -109,6 +111,7 @@ async def main() -> int:
     # Attio, the firm's customer database, through Attio's own server. It exists once the owner has signed in (scripts/connect_attio.py).
     attio_tokens = FileTokens(settings.data_dir / "attio.json")
     attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
+    load_custom_services(settings.data_dir)                          # servers the owner connected from the chat, by address
     services = connected_services(settings.data_dir, journal)       # other services with a server of their own, once signed in to
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
         if settings.browser_use_api_key else None
@@ -210,9 +213,17 @@ async def main() -> int:
     ticking = asyncio.create_task(scheduler.run_forever())
     if briefer is not None:
         briefing = asyncio.create_task(briefer.run_forever())
+    dispatcher = build_dispatcher(bot, conversation)
+    again = []
+
+    def restart() -> None:
+        # A newly connected service brings tools that are fixed when the program starts, so it starts again, in place.
+        again.append(True)
+        asyncio.get_running_loop().call_later(1.5, lambda: asyncio.ensure_future(dispatcher.stop_polling()))
+    conversation._connector = Connector(settings.data_dir, journal, restart)
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
-        await build_dispatcher(bot, conversation).start_polling(bot, allowed_updates=["message", "callback_query"])
+        await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         ticking.cancel()
         if briefing is not None:
@@ -232,8 +243,12 @@ async def main() -> int:
         if close_http is not None:
             await close_http()
         tracing.close()
-    return 0
+    return RESTART if again else 0
 
+
+RESTART = 75
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    while (code := asyncio.run(main())) == RESTART:
+        pass
+    sys.exit(code)

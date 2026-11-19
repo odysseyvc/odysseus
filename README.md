@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 367 automated tests. The parts
+**Status: early.** It was built in three days and has 375 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -97,6 +97,9 @@ reminders fire in UTC.
 - A DocSend link you type is opened in a browser. If it asks for an email address, yours is given (the connected
   mailbox's, or `ODYSSEUS_VIEWER_EMAIL`), and the sender is told who looked. If it sends a verification email, code
   reads that one link from your mailbox and opens it in the same browser. It never accepts an agreement or tries a passcode.
+- `/connect` in the chat connects a service that runs its own server: by name (Granola, X, DocSend) or by any https
+  address. You approve on the service's own page, in a browser on the machine the program runs on. Tools the server
+  labels read-only run unasked; everything else asks. Only you can do this; the assistant cannot connect anything.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
