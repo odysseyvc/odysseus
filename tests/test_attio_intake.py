@@ -124,7 +124,7 @@ async def test_filing_always_asks_and_then_creates_links_and_notes_in_order(tmp_
     assert deal["stage"] == "Sourced"
     assert made[3][1] == {"list": "portfolio", "parent_object": "companies", "parent_record_id": "new101", "entry_values": {"ownership": 5}}
     assert made[4][1]["parent_record_id"] == "new103" and made[4][1]["parent_object"] == "deals"
-    assert "Company Orbit Labs: created" in out and attio.pop_changes() == ["filed 5 things in Attio from one approved plan"]
+    assert "Company Orbit Labs: created" in out and attio.pop_changes() == ["in Attio, from one approved plan: 3 created, 1 added to a list, 1 noted"]
     again = await h["attio_file"]({"plan": pid})
     assert again.get("is_error") and "no such plan" in text(again), "an approved plan is carried out once"
 
@@ -267,3 +267,30 @@ async def test_a_change_must_fit_the_workspace_like_any_other_value(tmp_path):
     for changes, why in (({"stage": "Won"}, "'Won' is not a choice for stage"), ({"colour": "red"}, "no field 'colour'")):
         out = await h["attio_plan"]({"source": "x", "records": [{"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"}, "changes": changes}]})
         assert out.get("is_error") and why in text(out)
+
+
+async def test_the_line_added_to_the_reply_counts_what_was_done_not_what_was_planned(tmp_path):
+    existing = [("companies", {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}), ("deals", {"name": "Orbit Labs", "stage": "Sourced"})]
+    backend, attio, _, h = rig(tmp_path, existing=existing)
+    with_deal_fields(attio)
+    plan = {"source": "x", "records": [{"ref": "c1", "object": "companies", "values": {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}},
+                                       {"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"}, "changes": {"next_step": "Call"}}],
+            "notes": [{"on": "@d1", "title": "t", "content": "said"}]}
+    pid, _ = await plan_id(h, plan)
+    await h["attio_file"]({"plan": pid})
+    assert attio.pop_changes() == ["in Attio, from one approved plan: 1 changed, 1 noted; 1 already there and left as it was"]
+
+
+async def test_a_name_close_to_one_already_there_is_not_quietly_added_as_new(tmp_path):
+    backend, _, _, h = rig(tmp_path, existing=[("companies", {"name": "Northwind Robotics", "domains": ["northwind.example"]})])
+    short = {"source": "an email that says 'Asha at Northwind'", "records": [{"ref": "c1", "object": "companies", "values": {"name": "Northwind"}}]}
+    out = await h["attio_plan"](short)
+    assert out.get("is_error") and "nothing called exactly 'Northwind', but it has 'Northwind Robotics'" in text(out)
+    exact = {**short, "records": [{"ref": "c1", "object": "companies", "values": {"name": "Northwind Robotics"}}]}
+    pid, shown = await plan_id(h, exact)
+    assert "- Company Northwind Robotics: ALREADY IN ATTIO" in shown
+    other = {**short, "records": [{"ref": "c1", "object": "companies", "new": True, "values": {"name": "Northwind"}}]}
+    pid, shown = await plan_id(h, other)
+    assert "- Company Northwind: NEW. Name: Northwind (Attio already has the similarly named Northwind Robotics; this is a separate record.)" in shown
+    unrelated = {**short, "records": [{"ref": "c1", "object": "companies", "values": {"name": "Southwind"}}]}
+    assert "- Company Southwind: NEW. Name: Southwind" in (await plan_id(h, unrelated))[1]

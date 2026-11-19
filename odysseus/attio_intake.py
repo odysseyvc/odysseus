@@ -66,6 +66,16 @@ def _find_id(v: Any, key: str = "record_id") -> str | None:
     return None
 
 
+def _tally(done: list[str]) -> str:
+    """What an approved plan actually did, counted from what was done and not from what was planned."""
+    n = lambda *marks: sum(1 for d in done if any(m in d for m in marks))
+    parts = [f"{k} {w}" for k, w in ((n(": created"), "created"), (n(": changed ("), "changed"), (n("added to the list"), "added to a list"),
+                                     (n("note \""), "noted")) if k]
+    left = n("already there; linked", ": not changed", "linked, not created")
+    return ("in Attio, from one approved plan: " + (", ".join(parts) or "nothing changed")
+            + (f"; {left} already there and left as {'it was' if left == 1 else 'they were'}" if left else ""))
+
+
 _LINK = re.compile(r"@[\w-]+")
 
 
@@ -166,6 +176,25 @@ class Intake:
                     return str(hit["record_id"]), f"{field} {_show(match[field])}"
         return None, ""
 
+    async def _similar(self, obj: str, name: str) -> list[str]:
+        """Names already in Attio that are close to this one without being it: "Northwind Robotics" for "Northwind".
+
+        An exact lookup misses these, and they are how a database fills with doubles: an email says "Asha at Northwind"
+        and a second company called Northwind appears beside the first. Only the program can stop that reliably.
+        """
+        want = _norm(name)
+        words = [w for w in re.split(r"[^a-z0-9]+", want) if len(w) >= 4]
+        if not want or not words:
+            return []
+        found = parse(await self._attio._call(self._attio._b.call("search-records", {"object": obj, "query": words[0], "limit": 8})))
+        near = []
+        for hit in found.get("results") or found.get("records") or []:
+            got = _show((hit.get("attributes") or {}).get("name")) if isinstance(hit, dict) else ""
+            have = _norm(got)
+            if have and have != want and (want in have or have in want or have.split(" ")[0] == want.split(" ")[0]):
+                near.append(got)
+        return near
+
     async def _now(self, obj: str, rid: str) -> dict[str, Any]:
         """A record's values as they are in Attio at this moment."""
         got = parse(await self._attio._call(self._attio._b.call("get-records-by-ids", {"object": obj, "record_ids": [rid]})))
@@ -227,9 +256,15 @@ class Intake:
                 raise AppError(f"record {ref}: give at least one of {', '.join(MATCH_BY.get(obj, ('name',)))}, so it can be looked up first.")
             noun = {"companies": "the company", "people": "the person", "deals": "the deal"}.get(obj, obj)
             labels[ref] = f"{noun} {_show(values.get('name') or next(iter(match.values())))}"
-            checked.append((ref, obj, attrs, values, match, changes))
-        for ref, obj, attrs, values, match, changes in checked:
+            checked.append((ref, obj, attrs, values, match, changes, r.get("new") is True))
+        for ref, obj, attrs, values, match, changes, said_new in checked:
             found, by = await self._existing(obj, match)
+            near = await self._similar(obj, _show(values.get("name"))) if not found and obj in ("companies", "people") and values.get("name") else []
+            if near and not said_new:
+                raise AppError(f"record {ref}: Attio has nothing called exactly '{_show(values.get('name'))}', but it has {', '.join(repr(n) for n in near)}. "
+                               "If one of those is the same one, give its exact name (and its website or email address if you know it) in `values`, so "
+                               "that it is linked to and not added twice. If it really is a different one, put \"new\": true on this record; the owner "
+                               "will be shown both names.")
             label = labels[ref][4].upper() + labels[ref][5:] if labels[ref].startswith("the ") else labels[ref]      # "Company Orbit Labs"
             updates, before = {}, {}
             if found and changes:
@@ -248,7 +283,8 @@ class Intake:
                 lines.append(f"- {label}: ALREADY IN ATTIO (found by {by}). It will be linked to and left exactly as it is.")
             if not found:
                 values = {**values, **changes}         # a record that does not exist yet is simply created with everything said about it
-                lines.append(f"- {label}: NEW. {self._said(attrs, values, labels)}")
+                also = f" (Attio already has the similarly named {', '.join(near)}; this is a separate record.)" if near else ""
+                lines.append(f"- {label}: NEW. {self._said(attrs, values, labels)}{also}")
             steps.append({"do": "record", "ref": ref, "object": obj, "values": values, "match": match, "found": found, "label": label,
                           "updates": updates, "before": before})
         for e in entries:
@@ -355,7 +391,7 @@ class Intake:
                            f"Not done: that step and the {max(left - 1, 0)} after it. Tell the owner exactly this. Do not file the plan again as it was; "
                            "make a new plan for what is missing.") from None
         self._journal.write("tool", name="attio_file", ok=True, plan=plan_id, steps=len(plan["steps"]))
-        self._attio._changes.append(f"filed {len(plan['steps'])} things in Attio from one approved plan")
+        self._attio._changes.append(_tally(done))
         return "Filed, as the owner approved:\n- " + "\n- ".join(done)
 
     def handlers(self) -> dict[str, Any]:
@@ -379,6 +415,8 @@ SCHEMAS = {
                        "records": {"type": "array", "items": {"type": "object", "required": ["ref", "object", "values"], "properties": {
                            "ref": {"type": "string", "description": "A short name for this record within the plan: c1, p1, d1."},
                            "object": {"type": "string", "description": "companies, people or deals."},
+                           "new": {"type": "boolean", "description": "Only when attio_plan has told you a similarly named record exists and "
+                                   "this one is nevertheless a different company or person."},
                            "changes": {"type": "object", "description": "Only for something the source says that should be set on this record "
                                        "even if it is already in Attio: a new stage, a next step, a date. Field slug to new value. The owner is "
                                        "shown each as before → after. A choice from several is added to those already there, never removed."},
@@ -397,4 +435,4 @@ SCHEMAS = {
 
 PROMPT = """
 
-Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan with everything the source supports, then attio_file with the plan's id; the owner approves the whole plan with one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio. To change one of those, put only what the source newly says in that record's `changes` (a stage the deal has moved to, the next step, a date); the owner is shown each change as before and after. Never use `changes` to tidy, to fill a gap from a guess, or to empty a field. After a meeting about a company already in Attio, the usual plan is: the company and the deal as they are, the deal's stage and next step in `changes` if the meeting moved them, and a note of what was said. After filing, tell the owner what was created, what was already there, and what in the source you left out and why."""
+Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan with everything the source supports, then attio_file with the plan's id; the owner approves the whole plan with one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio. To change one of those, put only what the source newly says in that record's `changes` (a stage the deal has moved to, the next step, a date); the owner is shown each change as before and after. Never use `changes` to tidy, to fill a gap from a guess, or to empty a field. Use a plan for any change to a record that is already in Attio, including a single correction the owner dictates ("our cheque was 750,000, not 500,000"): give the owner's own words as the source, name the record in `records`, and put the new value in `changes`. That way the owner approves a line that names the record and shows before and after; run through attio_run they would be shown an id and no before. After a meeting about a company already in Attio, the usual plan is: the company and the deal as they are, the deal's stage and next step in `changes` if the meeting moved them, and a note of what was said. After filing, tell the owner what was created, what was already there, and what in the source you left out and why."""

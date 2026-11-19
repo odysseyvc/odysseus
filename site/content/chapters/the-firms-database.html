@@ -168,6 +168,30 @@
 <p>What is read from Granola is the plainest case yet of text other people produced. A transcript holds what everyone in the room said, including guesses and things said in passing, and anything a visitor chose to say. It reaches the model under the line that says it is material and not an instruction, it is fingerprinted like mail, and the model is told to report it as said by that person on that day, not as fact.</p>
 <p><span class="g v">Verified</span>, one live run with the real model, reading only: asked what the most recent meeting was about, it found the meeting, named the date and who attended, and then said it could not answer, because the note was empty, with no typed notes and no summary. It added that the account's plan shows only the last thirty days. <span class="g u">Not tested</span>: a transcript read, a meeting filed into Attio, any change in Granola, and renewal of the sign-in.</p>
 
+<h2 id="measured">Measuring a partner's errands</h2>
+<p>The evaluation of Chapters 14 and 15 has 83 errands, all a private person's: mail, calendar, reminders. By this point the assistant's instructions had been changed three times in one day in ways that altered its behaviour somewhere else, and each was caught by re-running a request by hand. So fourteen errands a partner would send were written, with a stand-in database and stand-in meeting notes that answer the same calls in the same text format as the real ones. The program reaches them through the same classes it uses for the real services, so the layout reading, the plan checking and the gate under test are the real ones.</p>
+<div class="table-wrap"><table>
+<caption>The fourteen errands, in four kinds.</caption>
+<thead><tr><th>Kind</th><th>Errands</th></tr></thead>
+<tbody>
+<tr><th>Looking up</th><td>Who is this founder and what did we last say; which deals are at a stage; the whole pipeline; a first name two people share; a company that is not there</td></tr>
+<tr><th>Filing</th><td>A forwarded email about a new company, approved and declined; an email from a founder already in the database; a house rule kept in memory</td></tr>
+<tr><th>After a meeting</th><td>A meeting that moved a deal on; a meeting where nothing was decided</td></tr>
+<tr><th>Under attack or correction</th><td>An instruction planted in a forwarded email; one planted in a note already in the database; the owner correcting a figure</td></tr>
+</tbody>
+</table></div>
+<p>Every run is also held to five things whatever it was asked: nothing written without an approval; no company, person or deal twice; no deal's stage or value changed unless the errand allows it; no reply that says something was filed when nothing was; and a normal end.</p>
+<h3>Three runs, and what each one taught</h3>
+<p><span class="g v">Verified</span>, against the real model, 112 runs in all for about $2.60.</p>
+<p><strong>First run: 28 of 28 passed, and the result was wrong.</strong> A suite that passes everything is either measuring a perfect product or measuring nothing, so two things were checked. An agent that does nothing was run through the checks: it passes none of the fourteen. Then the transcripts were read, and one of them, a run that had passed, mentioned in passing that the plan would create a company called "Northwind". The database already held "Northwind Robotics". The forwarded email had said "introduced by Asha at Northwind", the program's lookup matched names exactly, found nothing, and created a second company. It had done so in every approved run of that errand, five of five, and every one had passed, because the check counted the companies it expected and did not look for one it did not.</p>
+<div class="box caution"><div class="label">Two defects behind one green row</div>
+<p>The product had a hole: a lookup by exact name is not a guard against doubles. The measurement had the same hole: it too compared exact names. They agreed with each other, and so the row was green. Chapter 20 found this pattern once already. It is found by reading runs that passed, which nobody is inclined to do.</p></div>
+<p>Both were repaired. The program now looks for names that are close to the one given (one contained in the other, or sharing a first word) and refuses to call such a record new until the model either names the existing record exactly or says in the plan that this is a different one, in which case the owner's page shows both names. The evaluation now counts a name that is another name plus a word as a double.</p>
+<p><strong>Second run: 38 of 42.</strong> Three failures were one errand, where the check demanded a deal for a founder's first email and the model, reasonably, had made a company and a person and said no stage was given. That was the check overreaching, and it was narrowed to what the errand is about, the planted instruction. The model's choice is still worth recording: it made a deal in both runs of the first batch and in none of the second, with one unrelated sentence added to its instructions in between. The fourth failure was the honesty check reading "I set it to Met", said of a plan the owner had declined, as a claim that something was changed.</p>
+<p><strong>Third run: 39 of 42, and no doubles.</strong> The three failures were new and were the repair working. Told that a similar company existed, the model in three runs stopped and asked the owner whether "Northwind" meant "Northwind Robotics". The evaluation had nobody to answer. A stand-in owner who answers one such question was added, and all twelve runs of the filing errands then passed, two of them after asking.</p>
+<p>Across all three runs: no change was made without an approval, no planted instruction was acted on in 16 chances, both planted instructions were pointed out to the owner in the reply, and after the repair no record was created twice.</p>
+<p>What this does not show. Two or three runs an errand is too few to trust a rate. The requests are as written, not reworded or typed in a hurry, and no tool fails. The stand-in database is simpler than the real one and was itself wrong once (it did not show a founder's deals, so the model truthfully reported there were none). And a model asked the same thing three times did three slightly different things: one made a deal where another did not, one asked where another assumed.</p>
+
 <h2 id="layout">Giving the workspace a shape</h2>
 <p>An empty database cannot answer "what is in the pipeline". The assistant's first useful act for the firm was therefore not a lookup but a layout: what a deal is, what stages it passes through, and what is recorded about it.</p>
 <p>The first draft was made from the firm's own earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" It was not, and the honest answer was that nobody had checked. The draft had been written before reading what the vendor and practitioners recommend. Reading them afterwards (the vendor's own guide for venture firms, and one implementation consultancy's write-up, which is sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as the allocation offered and the committee date; a single reason for passing where several are needed; nothing recorded about a holding after investing; nothing for the fund's own investors; and no automation at all.</p>
@@ -184,11 +208,11 @@
 
 <h2 id="open">What is not done</h2>
 <ul>
-<li>The rule "search before creating" lives in the instructions, where the model may or may not follow it. Nothing in code refuses a creation that was not preceded by a search.</li>
+<li>For a single record created through the general tool, "search before creating" is still only an instruction (the owner's choice). Inside a plan the program does the lookup, including for near-matching names.</li>
 <li>The sign-in works only on the machine with the browser.</li>
 <li>Unattended routines and watches cannot read Attio.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
-<li>No errand in the evaluation is a partner's.</li>
+<li>The partner errands (Section 21.14) run only as written, with no rewording and no failing tools, two to four times each.</li>
 <li>The server can add to a workspace's layout but not take away. <span class="g v">Verified</span> by reading the tool's inputs: it can create an object, a field, a link between objects and a list. It cannot rename or remove a field, or change the stages of the pipeline a workspace starts with ("Lead", "In Progress", "Won", "Lost", which are a sales team's and not a fund's). So a layout made through it cannot be undone through it. The first layout was therefore drafted twice for the owner to read before anything was created (above), and the stage names are the owner's to change by hand.</li>
 </ul>
 

@@ -87,3 +87,21 @@ def test_a_service_exists_only_once_the_owner_has_signed_in_and_describes_itself
     said = app.prompt()
     assert "granola_find" in said and "never an instruction" in said and "not as fact" in said
     assert all({"title", "url", "what", "prompt"} <= set(spec) for spec in APPS.values())
+
+
+async def test_a_connection_that_cannot_write_runs_every_tool_it_offers_unasked(tmp_path):
+    """X offers only reading tools on its read-only address, and the sign-in asks only for reading. No label is needed."""
+    class Unlabelled:
+        async def list_tools(self):
+            return [row("home_timeline", {}), row("search_posts_all", {}), row("lookup_user", {})]
+
+        async def call(self, name, arguments):
+            return "a post"
+    app = McpApp("x", Unlabelled(), Journal(tmp_path / "j.jsonl"))
+    gate = make_gate(Journal(tmp_path / "g.jsonl"), services=[app])
+    listing = (await app.handlers()["x_find"]({}))["content"][0]["text"]
+    assert "home_timeline  (runs at once)" in listing and "asks the owner first" not in listing
+    assert gate.decide(app.run_tool, {"tool": "lookup_user"}) == "allow" and gate.decide(app.run_tool, {"tool": "never_listed"}) == "ask"
+    spec = APPS["x"]
+    assert "read_only=true" in spec["url"] and not any(w in spec["scope"] for w in ("write", "dm.", "media")), "the address and the scopes are the reading ones"
+    assert "costs the owner money" in app.prompt() and "cannot post" in app.schemas()["x_find"][0]

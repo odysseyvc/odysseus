@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 310 automated tests. The parts
+**Status: early.** It was built in three days and has 318 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -67,7 +67,8 @@ been read from live once and never written to; it does not yet work on a remote 
 
 For meeting notes and transcripts. Run `python scripts/connect_mcp.py granola`, open the link, sign in and approve, then
 restart the bot. Reading runs at once; any change asks you first. Other services that run their own server can be added
-as an entry in `odysseus/mcpapp.py`. Read from live once; nothing has been changed through it.
+as an entry in `odysseus/mcpapp.py`. Read from live once; nothing has been changed through it. X (read-only) is prepared the same way: `python scripts/connect_mcp.py x`
+says what it needs first, which is an app of your own at X's developer site.
 
 ## Put it on a server
 

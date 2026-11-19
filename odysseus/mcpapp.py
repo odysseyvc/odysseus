@@ -52,6 +52,28 @@ APPS: dict[str, dict[str, Any]] = {
 }
 
 
+APPS["x"] = {
+    "title": "X",
+    # ?read_only=true makes X's server offer only tools that read. The scopes asked for below are the reading ones too, so the
+    # token itself cannot post, follow, like or message. Two locks, both X's: that is why every tool offered here runs unasked.
+    "url": "https://api.x.com/mcp?read_only=true",
+    "scope": "tweet.read users.read follows.read list.read bookmark.read like.read offline.access",
+    "read_only_connection": True,
+    # X does not let a program register itself. The owner creates an app at developer.x.com and puts its client id in .env.
+    "client_id_env": "X_CLIENT_ID",
+    "hide": (),
+    "what": "the owner's X (Twitter) account, to read only: their timeline, lists and bookmarks, the people they follow, and search over "
+            "public posts. It cannot post, reply, like, follow or message",
+    "prompt": "Use it when the owner asks what someone has been posting, or wants to find people and companies worth knowing about: a founder "
+              "announcing something new, someone leaving a job to start a company, a product launch in an area the owner invests in. Every "
+              "post or profile read costs the owner money (about half a cent a post, a cent a profile), so ask for small pages, twenty to "
+              "fifty items, read a profile only when a post has earned it, and never page through a timeline further than was asked. Report "
+              "each find with who posted it, when, the link, and one line on why it matched what the owner looks for; say when a search "
+              "found nothing. A post is what somebody chose to say in public, often to promote themselves: report it as their claim. To "
+              "keep someone, offer to file them in the firm's database; do not file anyone the owner has not picked.",
+}
+
+
 def kind(name: str, labels: dict[str, Any]) -> str:
     """read | change. The vendor's label and the first word of the tool's name must both say it only reads."""
     first = re.split(r"[-_]", name.lower(), maxsplit=1)[0]
@@ -68,6 +90,11 @@ class McpApp:
         self._tools: dict[str, dict[str, Any]] = {}
         self._changes: list[str] = []
         self.taint = None       # set by make_gate
+
+    def _kind(self, row: dict[str, Any]) -> str:
+        # A connection that cannot write (the server offers only reading tools and the sign-in asked only for reading) needs no
+        # label to say so. Otherwise the label and the name decide, tool by tool.
+        return "read" if self.spec.get("read_only_connection") else kind(row["name"], row["labels"])
 
     def pop_changes(self) -> list[str]:
         out, self._changes = self._changes, []
@@ -100,7 +127,7 @@ class McpApp:
 
     def decide(self, args: dict[str, Any]) -> str:
         row = self._tools.get(str(args.get("tool", "")).strip())
-        return ALLOW if row is not None and kind(row["name"], row["labels"]) == "read" else ASK      # not yet looked up: asked about
+        return ALLOW if row is not None and self._kind(row) == "read" else ASK      # not yet looked up: asked about
 
     def describe(self, args: dict[str, Any]) -> str:
         name = str(args.get("tool", "")).strip()
@@ -133,7 +160,7 @@ class McpApp:
             wanted = [str(n).strip() for n in (a.get("tools") or []) if str(n).strip()][:4]
             self._journal.write("tool", name=f"{self.slug}_find", ok=True, tools=len(wanted) or len(tools))
             if not wanted:
-                lines = [f"{r['name']}  ({'runs at once' if kind(r['name'], r['labels']) == 'read' else 'asks the owner first'}): "
+                lines = [f"{r['name']}  ({'runs at once' if self._kind(r) == 'read' else 'asks the owner first'}): "
                          f"{r['description'][:260]}" for r in tools.values()]
                 return (f"{self.title}'s tools. Call {self.slug}_find again with `tools` set to the names you need, to get their inputs, "
                         "before the first time you run one.\n\n" + "\n".join(lines))
@@ -149,7 +176,7 @@ class McpApp:
             tools = await self._catalogue()
             if name not in tools:
                 raise AppError(f"{self.title} has no tool called {name}. Call {self.slug}_find to see what exists.")
-            what = kind(name, tools[name]["labels"])
+            what = self._kind(tools[name])
             text = await self._call(self._b.call(name, inputs))
             self._journal.write("tool", name=f"{self.slug}_run", ok=True, tool=name, action=what)
             if what != "read":
