@@ -288,6 +288,17 @@ def test_the_routine_question_is_built_from_the_inputs():
     assert text.startswith("Set up this routine?\n\nEvery weekday, starting Wed 18 Nov 2026 at 08:00.")
     assert text.endswith("Instructions it will follow:\nSend the top AI headline.")
     assert describe_routine({"text": "x", "when": "2026-11-18T08:00"}, lambda: NOW).splitlines()[2] == "Once, on Wed 18 Nov 2026 at 08:00."
+    said = describe_routine({"text": "x", "when": "2026-11-18T08:00"}, lambda: NOW, True, ["X", "Attio"])
+    assert "can only read (your mail and calendar, the web and my notes, X, Attio)" in said, "the owner is told everything a run can read"
+
+
+def test_a_routine_the_schedule_would_refuse_is_never_put_to_the_owner():
+    from odysseus.schedule import MAX_TEXT, ScheduleError
+    import pytest as _pytest
+    for text in ("word " * 200, "   "):
+        with _pytest.raises(ScheduleError):
+            describe_routine({"kind": "routine", "text": text, "when": "2026-11-18T08:00"}, lambda: NOW)
+    assert describe_routine({"kind": "routine", "text": "a" * MAX_TEXT, "when": "2026-11-18T08:00"}, lambda: NOW)
 
 
 async def test_a_reminder_needs_no_question_and_a_routine_does(tmp_path):

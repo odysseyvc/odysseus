@@ -69,9 +69,19 @@ def describe_memory(args: dict[str, Any], taint: Taint, what: str = "Save this t
             "which other people wrote. What I remember is shown to me in every later conversation.")
 
 
-def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False) -> str:
-    """The question shown to the owner. Built from the tool's real inputs; the model does not write it."""
+def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False, reads: Any = ()) -> str:
+    """The question shown to the owner. Built from the tool's real inputs; the model does not write it.
+
+    Whatever would make the schedule refuse the request is checked here, before the owner is asked: an approval that
+    is then refused wastes the owner's attention and teaches them that approving does nothing.
+    """
     from datetime import datetime
+    from .schedule import MAX_TEXT
+    length = len(" ".join(str(args.get("text", "")).split()))
+    if not length:
+        raise ScheduleError("There is nothing to schedule.")
+    if length > MAX_TEXT:
+        raise ScheduleError(f"Too long: {length} characters, and the limit is {MAX_TEXT}. Shorten the instructions and ask once.")
     when = parse_when(args.get("when", ""), (now or datetime.now)())
     repeat = (args.get("repeat") or "once").strip().lower()
     if repeat not in REPEATS:
@@ -82,6 +92,7 @@ def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False) ->
     return (f"Set up this routine?\n\n{rhythm}, {'on' if repeat == 'once' else 'starting'} {first}.\n"
             "Each run uses the small model, can only read ("
             + ("your mail and calendar, the web and my notes" if with_apps else "the web and my notes")
+            + ("".join(f", {r}" for r in reads))
             + "), and sends you the result.\n\n"
             f"Instructions it will follow:\n{text}")
 
@@ -154,7 +165,7 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
         return ASK if str(a.get("kind", "")).strip().lower() == "routine" else ALLOW
 
     def schedule_question(a: dict[str, Any]) -> str:
-        return describe_routine(a, now, with_apps)
+        return describe_routine(a, now, with_apps, [s.title for s in services] + (["Attio"] if attio is not None else []))
     gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
@@ -322,8 +333,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                 "schedule",
                 "Schedule something for later. kind=reminder sends the owner a fixed message at that time, exactly as "
                 "written in `text`; use it for 'remind me to ...'. kind=routine runs you at that time with nobody "
-                "watching, able only to read (the web, your memory, and the owner's mail and calendar if those are connected), and sends the owner what you produce; `text` is "
-                "then the instructions for that run, written so they make sense with no other context. If a routine "
+                "watching, able only to read (the web, your memory, and whichever of the owner's mail, calendar, Attio and other services are connected), and sends the owner what you produce; `text` is "
+                "then the instructions for that run, written so they make sense with no other context, in at most 600 characters. If a routine "
                 "should speak only when something is true, say so in its instructions. Work out `when` from the time "
                 "stamped on the owner's message.",
                 {"type": "object",
