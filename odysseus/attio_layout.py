@@ -107,11 +107,9 @@ def _fields(attrs: list[dict[str, Any]]) -> list[str]:
     return out
 
 
-async def describe(call: Callable[[str, dict[str, Any]], Awaitable[str]], limit: int = 12000) -> str:
-    """Read the workspace's layout through `call(tool, inputs)` and write it out. Raises whatever `call` raises."""
-    me = parse(await call("whoami", {}))
-    lines = [f"The workspace is \"{me.get('workspace_name')}\". The owner is signed in as {me.get('name')}, workspace member "
-             f"{me.get('workspace_member_id')}; use that id wherever an owner or member is wanted and the owner means themselves."]
+async def read(call: Callable[[str, dict[str, Any]], Awaitable[str]]) -> dict[str, Any]:
+    """Read the workspace's layout through `call(tool, inputs)`. Raises whatever `call` raises."""
+    shape: dict[str, Any] = {"me": parse(await call("whoami", {})), "objects": {}, "lists": {}}
     for obj in parse(await call("list-objects", {})).get("objects") or []:
         slug, attrs, offset = obj.get("api_slug"), [], 0
         while slug and offset < 300:
@@ -120,14 +118,33 @@ async def describe(call: Callable[[str, dict[str, Any]], Awaitable[str]], limit:
             offset += 30
             if page.get("has_more") is not True:
                 break
-        lines.append(f"\nObject `{slug}` ({obj.get('plural_noun')}). Fields you can set:")
-        lines += _fields(attrs)
+        if slug:
+            shape["objects"][slug] = {"plural": obj.get("plural_noun"), "attrs": [a for a in attrs if isinstance(a, dict)]}
     for lst in parse(await call("list-lists", {})).get("lists") or []:
         slug = lst.get("api_slug")
-        parents = lst.get("parent_objects") or lst.get("parent_object") or "?"
+        parents = lst.get("parent_objects") or lst.get("parent_object") or []
         page = parse(await call("list-list-attribute-definitions", {"list": slug}))
-        lines.append(f"\nList `{slug}` (\"{lst.get('name')}\"), a list of {parents if isinstance(parents, str) else ', '.join(map(str, parents))}. "
+        if slug:
+            shape["lists"][slug] = {"name": lst.get("name"), "parents": [parents] if isinstance(parents, str) else list(parents),
+                                    "attrs": [a for a in page.get("attribute_definitions") or [] if isinstance(a, dict)]}
+    return shape
+
+
+def render(shape: dict[str, Any], limit: int = 12000) -> str:
+    """The layout as a page of plain lines for the model."""
+    me = shape.get("me") or {}
+    lines = [f"The workspace is \"{me.get('workspace_name')}\". The owner is signed in as {me.get('name')}, workspace member "
+             f"{me.get('workspace_member_id')}; use that id wherever an owner or member is wanted and the owner means themselves."]
+    for slug, obj in (shape.get("objects") or {}).items():
+        lines.append(f"\nObject `{slug}` ({obj.get('plural')}). Fields you can set:")
+        lines += _fields(obj.get("attrs") or [])
+    for slug, lst in (shape.get("lists") or {}).items():
+        lines.append(f"\nList `{slug}` (\"{lst.get('name')}\"), a list of {', '.join(map(str, lst.get('parents') or ['?']))}. "
                      "Fields that belong to an entry in this list, not to the record:")
-        lines += _fields(page.get("attribute_definitions") or [])
+        lines += _fields(lst.get("attrs") or [])
     text = "\n".join(lines)
     return text if len(text) <= limit else text[:limit] + "\n[Cut. List the attributes of an object yourself if a field you need is not shown.]"
+
+
+async def describe(call: Callable[[str, dict[str, Any]], Awaitable[str]], limit: int = 12000) -> str:
+    return render(await read(call), limit)

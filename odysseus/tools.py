@@ -365,7 +365,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     if attio is not None:
         h = attio.handlers()
         if gate is not None:
-            h["attio_run"] = gate.guarded(attio_mod.ATTIO_RUN, h["attio_run"])   # lock 2
+            for short, full in attio_mod.GUARDED.items():
+                h[short] = gate.guarded(full, h[short])   # lock 2
         tools += [tool(n, attio_mod.SCHEMAS[n][0], attio_mod.SCHEMAS[n][1])(h[n]) for n in attio_mod.SCHEMAS]
     if browser is not None:
         handler = gate.guarded(browser_mod.BROWSE_TOOL, browser.browse) if gate is not None else browser.browse   # lock 2
