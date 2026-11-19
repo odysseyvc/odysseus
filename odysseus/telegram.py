@@ -40,6 +40,10 @@ class TelegramChat:
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
 
+    async def choose(self, text: str, approval_id: str, options: list[str]) -> None:
+        """A question with one button for each answer. The buttons carry the question's id and the answer's position."""
+        await self._bot.send_message(self._chat_id, text, parse_mode=None, reply_markup=_choices(approval_id, options))
+
     async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The buttons carry only the approval's id. What will run is held by the gate, not by the message.
         rows = [[InlineKeyboardButton(text="Approve", callback_data=f"ap:{approval_id}:y"),
@@ -53,6 +57,10 @@ class TelegramChat:
         for part in parts[:-1]:
             await self._bot.send_message(self._chat_id, part, parse_mode=None)
         await self._bot.send_message(self._chat_id, parts[-1], parse_mode=None, reply_markup=buttons)
+
+
+def _choices(approval_id: str, options: list[str]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=o[:40], callback_data=f"ap:{approval_id}:c{i}")] for i, o in enumerate(options[:8])])
 
 
 def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
@@ -131,7 +139,9 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     @dp.callback_query(F.data.startswith("ap:"))
     async def on_tap(callback: CallbackQuery) -> None:
         _, approval_id, answer = (callback.data or "::").split(":", 2)
-        if answer == "t":
+        if answer[:1] == "c" and answer[1:].isdigit():
+            line = await conversation.handle_choice(callback.from_user.id, approval_id, int(answer[1:]))
+        elif answer == "t":
             line = await conversation.handle_decision(callback.from_user.id, approval_id, True, thread=True)
         else:
             line = await conversation.handle_decision(callback.from_user.id, approval_id, answer == "y")

@@ -151,7 +151,7 @@ What stands out: the two or three strongest things the deck shows, each with its
 Claimed and not shown: numbers given with no basis, a chart with no scale, and what a deck at this stage normally has that this one lacks.
 Checked outside the deck: what you could confirm, what was contradicted, and what could not be found.
 Worth asking: up to three questions for a first call.
-End with one line saying whether you would take a first call and why, marked as your view. Whether to invest is the owner's decision; do not give one.
+End with one line that begins exactly "My view: take a first call" or "My view: pass for now", followed by why in a few words. It is your view, and that line is read by code. Whether to invest is the owner's decision; do not give one.
 
 A deck attached to an email. When the owner asks about a deck somebody emailed them ("the deck Tara sent", "what did that founder send"), find the message, read the attachment with mail_attachment, and deal with it as you would a deck sent as a file, giving the email (who sent it and when) as the source. Do not go through the mailbox reading attachments nobody asked about.
 

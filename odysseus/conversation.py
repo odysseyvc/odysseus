@@ -70,9 +70,12 @@ class Conversation:
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
-                 services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None):
+                 services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None,
+                 decisions: Any = None):
         self._s = settings
         self._viewing = False
+        self._reading: asyncio.Task | None = None      # a DocSend document being read in the background
+        self._view_next: deque = deque(maxlen=3)       # links that arrived while one was being read
         self._connector = None       # set by the program once it can restart itself: connect.py
         self._deckview = deckview    # reads a DocSend document in a browser, giving the owner's address: deckview.py
         self._links = links          # fetches a PDF from a link in the owner's own message: links.py
@@ -98,6 +101,7 @@ class Conversation:
         self._carry = ""
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
+        self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._offers: dict[str, Any] = {}       # what the program has put to the owner, by the id on its buttons: a fact to save, or work to run
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
@@ -126,7 +130,7 @@ class Conversation:
         return self._task is not None and not self._task.done()
 
     async def handle(self, user_id: int, text: str, chat: Chat, images: list[tuple[str, bytes]] | None = None,
-                     material: str | None = None) -> None:
+                     material: str | None = None, link_tried: bool = False) -> None:
         """`material` names what the message carries that the owner did not write themselves: a file, a picture."""
         # 1. Who may speak. Anyone but the owner gets no reply at all.
         if user_id != self._s.owner_id:
@@ -156,26 +160,21 @@ class Conversation:
                     await self.handle_file(user_id, data, name, "application/pdf", len(data), text if rest else "", chat)
                     return
         # A DocSend link has no file to fetch. It is read in a browser by fixed steps, giving the owner's address if asked.
-        if self._deckview is not None and material is None and not images and not command.startswith("/") and not self.busy \
-                and not self._viewing and not (self._gate is not None and self._gate.pending()) and self._ledger.spent_today() < self._s.daily_usd:
+        if self._deckview is not None and material is None and not images and not command.startswith("/") and not link_tried \
+                and (self._viewing or not self.busy) and not (self._gate is not None and self._gate.pending()) and self._ledger.spent_today() < self._s.daily_usd:
             where = deckview_mod.docsend_link(text)
+            if where and self._viewing:
+                # One document is read at a time. A second link waits its turn and is not handed to the model as words.
+                self._view_next.append((user_id, text, chat))
+                await chat.send("I'm still reading the earlier document. I'll open this one as soon as that is done.")
+                return
             if where:
+                # The reading takes minutes and is all waiting. It runs in the background, so the owner can go on talking
+                # to the assistant meanwhile; the take arrives as a task of its own when the pages are in.
                 self._viewing = True
-                try:
-                    await chat.send("Opening that in a browser and reading it page by page. This takes a few minutes.")
-                    view = await self._deckview.view(where)
-                finally:
-                    self._viewing = False
-                if view.ok:
-                    rest = " ".join(text.replace(where, " ").split()).strip(" .,:;-")
-                    how = (" The site asked for an email address and yours was given" + (", and verified from your mailbox" if view.verified else "")
-                           + "; the sender is told who looked." )
-                    said = (text if rest else NO_MESSAGE) + (f"\n\n[The program read this document in a browser.{how} Tell the owner, in one short line and "
-                                                             "in plain words, that their email address was given to open it and that the sender can see they viewed it.]")
-                    await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser")
-                    return
-                text += (f"\n\n[The program tried to read the document at that link in a browser and could not: {view.text}. Nothing of it "
-                         "has been read. Tell the owner exactly that, and ask for the file itself or what the site needs.]")
+                await chat.send("Opening that in a browser and reading it page by page. This takes a few minutes; you can keep messaging me meanwhile.")
+                self._reading = asyncio.create_task(self._read_link(user_id, text, where, chat))
+                return
 
         # Signing in to sites is done by the owner, by hand, in a live view of the browser. No model is involved,
         # and no password passes through Odysseus.
@@ -256,6 +255,9 @@ class Conversation:
             entry_id = command[len("/forget"):].strip()
             old = self._memory.forget(entry_id, by="owner") if entry_id else None
             await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
+            return
+        if command == "/decisions":
+            await chat.send(self._decisions.table() if self._decisions is not None else "Decisions are not being kept here.")
             return
         if command == "/ask":
             n = self._gate.clear_standing() if self._gate is not None and hasattr(self._gate, "clear_standing") else 0
@@ -398,6 +400,8 @@ class Conversation:
         if user_id != self._s.owner_id:
             self._journal.write("dropped", user_id=user_id, what="approval tap")
             return ""
+        if isinstance(self._offers.get(approval_id), dict):
+            return ""           # a question with its own buttons (handle_choice); Approve and Decline do not answer it
         if approval_id in self._offers and isinstance(self._offers[approval_id], tuple):
             # A piece of work the program proposed (capture.py). It runs only on this tap, as an ordinary task, with what
             # the program found handed over as material that other people wrote.
@@ -428,13 +432,58 @@ class Conversation:
             return THREAD_APPROVED
         return "Approved." if approved else "Declined."
 
+    async def _read_link(self, user_id: int, text: str, where: str, chat: Chat) -> None:
+        """Read a DocSend document in the background, then hand what was read to the conversation as a message of its own."""
+        try:
+            view = await self._deckview.view(where)
+        except asyncio.CancelledError:
+            self._viewing = False
+            raise
+        except Exception as e:
+            self._journal.write("error", where="conversation.read_link", error=type(e).__name__)
+            view = deckview_mod.View(False, f"the browser could not be run ({type(e).__name__})")
+        self._viewing = False
+        if view.ok:
+            rest = " ".join(text.replace(where, " ").split()).strip(" .,:;-")
+            how = (" The site asked for an email address and yours was given" + (", and verified from your mailbox" if view.verified else "")
+                   + "; the sender is told who looked.")
+            said = (text if rest else NO_MESSAGE) + (f"\n\n[The program read this document in a browser.{how} Tell the owner, in one short line and "
+                                                     "in plain words, that their email address was given to open it and that the sender can see they viewed it.]")
+            await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser")
+        else:
+            failed = (f"{text}\n\n[The program tried to read the document at that link in a browser and could not: {view.text}. Nothing of it "
+                      "has been read. Tell the owner exactly that, and ask for the file itself or what the site needs.]")
+            await self.handle(user_id, failed, chat, link_tried=True)
+        if self._view_next:         # a link that arrived while this one was being read
+            who, waiting, where_to = self._view_next.popleft()
+            # Started here and not through handle(): by now the take on the first document is running, and a message that
+            # arrives during a task is queued as words, which is how a link would reach the model unread.
+            self._viewing = True
+            self._reading = asyncio.create_task(self._read_link(who, waiting, deckview_mod.docsend_link(waiting), where_to))
+
     async def wait(self) -> None:
-        """Wait for the current task, if any. Used by tests and at shutdown."""
-        if self._task is not None:
-            await asyncio.gather(self._task, return_exceptions=True)
+        """Wait for a document being read in the background and for the current task, if any. Used by tests and at shutdown."""
+        for _ in range(4):          # a finished reading starts a task, and may start the next reading
+            reading = self._reading
+            if reading is not None and not reading.done():
+                await asyncio.gather(reading, return_exceptions=True)
+            if self._task is not None:
+                await asyncio.gather(self._task, return_exceptions=True)
+            if self._reading is reading or self._reading is None or self._reading.done():
+                break
 
     async def _stop(self, chat: Chat) -> None:
         task = self._task
+        reading = self._reading
+        if reading is not None and not reading.done():
+            # A document being read in the background is stopped too, and the links waiting behind it are dropped.
+            reading.cancel()
+            self._view_next.clear()
+            self._viewing = False
+            self._journal.write("stop_requested", reading=True)
+            if task is None or task.done():
+                await chat.send("Stopped reading that document.")
+                return
         if task is None or task.done():
             await chat.send("Nothing is running.")
             return
@@ -520,6 +569,75 @@ class Conversation:
 
     def record_delivery(self, text: str) -> None:
         self._delivered.append(text)
+
+    def _pass_reasons(self) -> list[str]:
+        """The firm's own reasons for passing, read from its database's layout if it keeps a list; a general list otherwise."""
+        from .decisions import REASONS
+        try:
+            for a in self._attio.shape["objects"]["deals"]["attrs"]:
+                titles = [str(o.get("title")) for o in a.get("select_options") or [] if isinstance(o, dict) and o.get("title")]
+                if "pass" in str(a.get("api_slug", "")).lower() and titles and a.get("is_archived") is not True:
+                    self._reason_field = str(a["api_slug"])
+                    return titles[:6]
+        except Exception:
+            pass
+        self._reason_field = ""
+        return list(REASONS)
+
+    async def _ask_verdict(self, reply: str, chat: Chat) -> None:
+        """After a take on a deck that was filed: ask the owner for theirs, one button for each answer."""
+        filed = getattr(getattr(self._attio, "intake", None), "last_filed", None) if self._attio is not None else None
+        if filed is not None:
+            self._attio.intake.last_filed = None        # one task's filing is asked about once, in that task's reply or never
+        from .decisions import options, view_in
+        view = view_in(reply)
+        if self._decisions is None or not filed or not filed.get("company") or not view or not hasattr(chat, "choose"):
+            return
+        reasons = self._pass_reasons()
+        offer = "v" + secrets.token_hex(4)
+        self._offers[offer] = {"filed": filed, "view": view, "reasons": reasons, "field": getattr(self, "_reason_field", "")}
+        try:
+            await chat.choose(f"Your call on {filed['company']}?", offer, options(reasons))
+        except Exception as e:
+            self._offers.pop(offer, None)
+            self._journal.write("error", where="decisions.ask", error=type(e).__name__)
+
+    async def handle_choice(self, user_id: int, offer_id: str, index: int) -> str:
+        """The owner tapped one of several buttons under a question. Returns the line to leave on the message."""
+        if user_id != self._s.owner_id:
+            self._journal.write("dropped", user_id=user_id, what="choice tap")
+            return ""
+        offer = self._offers.get(offer_id)
+        if not isinstance(offer, dict):
+            return "This question is no longer open."
+        del self._offers[offer_id]
+        from .decisions import CALL, LATER, PASS, chosen
+        verdict, reason = chosen(index, offer["reasons"])
+        filed = offer["filed"]
+        self._decisions.add(filed["company"], offer["view"], verdict, reason, filed.get("source", ""), filed.get("domain", ""))
+        self._journal.write("decision", verdict=verdict, agreed=verdict == offer["view"] if verdict != LATER else None)      # no company name in the log
+        if verdict == LATER:
+            return "Left open."
+        said = "take the call" if verdict == CALL else f"pass ({reason.lower()})"
+        noted = ""
+        ids = filed.get("ids") or {}
+        obj = "deals" if ids.get("deals") else "companies" if ids.get("companies") else ""
+        if obj and self._attio is not None:
+            # Written by code, from the owner's own tap. The model is not involved, so nothing a deck said can alter it.
+            mine = "take a first call" if offer["view"] == CALL else "pass for now"
+            content = (f"Decision: {'Take the call' if verdict == CALL else 'Pass'}" + (f". Reason: {reason}" if reason else "") + ".\n"
+                       f"The assistant's view had been: {mine}.\nSource: {filed.get('source') or 'a deck'}.")
+            try:
+                run = self._attio._b.call
+                await self._attio._call(run("create-note", {"parent_object": obj, "parent_record_id": ids[obj],
+                                                           "title": f"Decision, {self._now().strftime('%d %b %Y')}", "content": content}))
+                noted = f" Noted on the {'deal' if obj == 'deals' else 'company'} in Attio."
+                if verdict == PASS and offer.get("field") and ids.get("deals"):
+                    await self._attio._call(run("update-record", {"object": "deals", "record_id": ids["deals"], "values": {offer["field"]: [reason]}}))
+            except Exception as e:
+                self._journal.write("error", where="decisions.note", error=type(e).__name__)
+                noted = noted or " I could not add the note in Attio; it is kept here."
+        return f"Recorded: {said}.{noted}" + (" The deal's stage is unchanged." if verdict == PASS else "")
 
     async def offer_task(self, chat: Chat, question: str, prompt: str, material: str) -> None:
         """Put a piece of work to the owner with two buttons. Approve runs `prompt` as a task; nothing runs otherwise.
@@ -683,5 +801,6 @@ class Conversation:
                 await chat.send(part)
                 sent += 1
             self._journal.write("reply", parts=sent, chars=len(body))
+            await self._ask_verdict(outcome.text, chat)
         except Exception as e:
             self._journal.write("error", where="reply", error=type(e).__name__, message=str(e)[:300], parts_sent=sent, parts=len(parts))

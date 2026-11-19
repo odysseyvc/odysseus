@@ -52,6 +52,7 @@ from .browser import Browser, BrowserUseBackend
 from .capture import MATERIAL as CAPTURE_MATERIAL
 from .capture import Capture
 from .closing import make_closer
+from .decisions import Decisions, PassWatch
 from .config import ConfigError, load, make_clock
 from .conversation import Conversation
 from .history import History
@@ -177,6 +178,7 @@ async def main() -> int:
                      escalate=None if settings.review_model.lower() == "off" else
                      make_escalator(journal, second_call, settings.review_model or settings.background_model))
     history = History(settings.data_dir / "history.jsonl")
+    decisions = Decisions(settings.data_dir / "decisions.jsonl")       # the owner's verdict beside each take on a deck
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
         gate.set_second_reader(make_second_reader(journal, second_call,
@@ -205,7 +207,7 @@ async def main() -> int:
     marks["pages"] = round(time.monotonic() - _BEGAN, 1)
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
-                                pages=pages, links=Fetcher() if ocr is not None else None, history=history,
+                                pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions,
                                 closer=make_closer(journal, second_call, settings.background_model),
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
@@ -285,6 +287,11 @@ async def main() -> int:
     ticking = asyncio.create_task(scheduler.run_forever())
     if briefer is not None:
         briefing = asyncio.create_task(briefer.run_forever())
+    # Once a week: has anything happened to the companies the owner passed on (decisions.py). A read-only run on the small model.
+    watch_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True), memory, now, program_tasks=True)
+    passwatch = PassWatch(decisions, watch_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
+                          state_file=settings.data_dir / "passwatch.json", on_delivered=conversation.record_delivery)
+    watching_passes = asyncio.create_task(passwatch.run_forever())
     # Each morning: who the owner met or heard from that is not in the firm's database (capture.py). Code only, reads only.
     capturing = None
     if apps is not None and attio is not None and re.fullmatch(r"\d\d:\d\d", settings.capture_at):
@@ -312,9 +319,11 @@ async def main() -> int:
         ticking.cancel()
         if briefing is not None:
             briefing.cancel()
+            await brief_runner.runner.close()
         if capturing is not None:
             capturing.cancel()
-            await brief_runner.runner.close()
+        watching_passes.cancel()
+        await watch_runner.runner.close()
         if watching is not None:
             watching.cancel()
         await conversation.wait()

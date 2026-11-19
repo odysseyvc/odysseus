@@ -102,6 +102,7 @@ class Intake:
     def __init__(self, attio: Any, journal: Any):
         self._attio, self._journal = attio, journal
         self._plans: dict[str, dict[str, Any]] = {}
+        self.last_filed: dict[str, Any] | None = None       # the company in the plan most recently filed; taken by the conversation
         self.clock = time.monotonic
 
     # --- checking a plan against the layout ------------------------------------------------
@@ -307,7 +308,7 @@ class Intake:
         plan_id = secrets.token_hex(3)
         summary = "\n".join(lines)
         self._plans = {k: v for k, v in self._plans.items() if self.clock() - v["at"] < PLAN_KEEPS_S}
-        self._plans[plan_id] = {"at": self.clock(), "steps": steps, "summary": summary, "doubt": doubt}
+        self._plans[plan_id] = {"at": self.clock(), "steps": steps, "summary": summary, "doubt": doubt, "source": source}
         self._journal.write("tool", name="attio_plan", ok=True, plan=plan_id, steps=len(steps), new=sum(1 for s in steps if s["do"] == "record" and not s["found"]))
         return (f"Plan {plan_id}. Nothing has been changed. This is the plan as the owner would be shown it, word for word:\n\n{summary}\n\n"
                 f"If this is what the owner wants filed, call attio_file with plan \"{plan_id}\". To change anything, make a new plan.")
@@ -407,6 +408,12 @@ class Intake:
                            f"Not done: that step and the {max(left - 1, 0)} after it. Tell the owner exactly this. Do not file the plan again as it was; "
                            "make a new plan for what is missing.") from None
         self._journal.write("tool", name="attio_file", ok=True, plan=plan_id, steps=len(plan["steps"]))
+        # What was just filed, for the question that follows a take on a deck (decisions.py): which company, and where its records are.
+        company = next((s for s in plan["steps"] if s["do"] == "record" and s["object"] == "companies"), None)
+        if company is not None:
+            domains = company["values"].get("domains") or company["match"].get("domains") or []
+            self.last_filed = {"company": company["label"].split(" ", 1)[-1], "domain": str((domains if isinstance(domains, list) else [domains])[0]) if domains else "",
+                               "source": plan.get("source", ""), "ids": {obj: rid for obj, rid in ids.values()}}
         if unasked:
             # Nobody saw this plan before it ran, so the owner is told each thing that was done, not a count of them.
             self._attio._changes.append("filed in Attio without asking, because it only adds: " + "; ".join(done))
