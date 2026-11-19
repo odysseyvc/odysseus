@@ -175,6 +175,8 @@ class Conversation:
 
         # Connecting a service that has a server of its own, by name or by address. No model is involved: connect.py.
         if command.split()[0] in ("/connect", "/disconnect", "/services"):
+            # Written down without its argument: which command was sent, not which address.
+            self._journal.write("command", name=command.split()[0], with_argument=len(command.split()) > 1)
             if self._connector is None:
                 await chat.send("Connecting services from the chat is not set up here.")
             elif self.busy:
