@@ -218,6 +218,9 @@ class Browser:
             result = await asyncio.to_thread(self._b.run, task, signed_in, self._task_usd)
         except Exception as e:
             self._journal.write("tool", name="browse", ok=False, signed_in=signed_in, error=f"{type(e).__name__}: {str(e)[:200]}")
+            if "402" in str(e) or "balance" in str(e).lower():
+                return {"content": [{"type": "text", "text": "The browser service has no credit left, so no browser run can start until the owner "
+                                     "adds credit to it. Tell the owner exactly that; do not retry."}], "is_error": True}
             return {"content": [{"type": "text", "text": f"The browser run could not be started: {type(e).__name__}"}], "is_error": True}
         self._cost += result.cost_usd
         self._journal.write("tool", name="browse", ok=result.status == "done", signed_in=signed_in, status=result.status,

@@ -103,6 +103,28 @@ def _strings(v: Any) -> list[str]:
     return out
 
 
+def _unwrapped(url: str) -> str | None:
+    """The DocSend address a link leads to, or None if it leads anywhere else.
+
+    The first real message showed that DocSend's own emails do not link to docsend.com directly. Each link goes through
+    its mail provider's click counter, with the real address written, encoded, inside the counter's address. That inner
+    address is taken out here and used directly, so the browser is still only ever given an address on docsend.com,
+    and the counter is not visited at all.
+    """
+    from urllib.parse import unquote
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if host == HOST or host.endswith("." + HOST):
+        return url
+    for piece in parts.path.split("/"):
+        inner = unquote(piece)
+        inner = inner if inner.startswith("https://") else "https://" + inner
+        inside = (urlsplit(inner).hostname or "").lower()
+        if "%" in piece and (inside == HOST or inside.endswith("." + HOST)):
+            return inner
+    return None
+
+
 def verification_link(message: dict[str, Any]) -> str | None:
     """The link in a message from DocSend that verifies an address. None unless the sender and the link are both DocSend's."""
     sender = str(message.get("sender") or message.get("from") or "").lower()
@@ -112,11 +134,12 @@ def verification_link(message: dict[str, Any]) -> str | None:
         return None
     found = []
     for s in _strings(message):
-        for u in _URL.findall(s.replace("&amp;", "&")):
-            host = (urlsplit(u).hostname or "").lower()
-            if (host == HOST or host.endswith("." + HOST)) and not any(x in u.lower() for x in _NOT_IT) and u not in found:
-                found.append(u)
-    found.sort(key=lambda u: 0 if re.search(r"verif|confirm|auth|token", u, re.I) else 1)
+        for raw in _URL.findall(s.replace("&amp;", "&")):
+            u = _unwrapped(raw.rstrip(".,"))
+            host = (urlsplit(u).hostname or "").lower() if u else ""
+            if u and host in (HOST, "www." + HOST) and len(urlsplit(u).path) > 1 and not any(x in u.lower() for x in _NOT_IT) and u not in found:
+                found.append(u)         # a page on docsend.com itself: not its picture server, not its front page
+    found.sort(key=lambda u: 0 if re.search(r"verif|confirm|auth|token|redirect", u, re.I) else 1)
     return found[0] if found else None
 
 
@@ -192,7 +215,9 @@ class DeckViewer:
                 mark, body = self._mark(result.text)
         except Exception as e:
             self._journal.write("error", where="deckview.run", error=type(e).__name__, message=str(e)[:200])
-            return done(View(False, f"the browser could not be run ({type(e).__name__})"), "error")
+            broke = "402" in str(e) or "balance" in str(e).lower() or "credit" in str(e).lower()
+            return done(View(False, "the browser service has no credit left, so nothing can be opened until credit is added to it" if broke
+                             else f"the browser could not be run ({type(e).__name__})"), "no credit" if broke else "error")
         finally:
             if session is not None:
                 try:

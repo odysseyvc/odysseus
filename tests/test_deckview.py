@@ -161,3 +161,25 @@ async def test_a_docsend_link_that_cannot_be_read_is_explained_and_a_strangers_i
     await x.conv.wait()
     prompt = x.clients[0].prompts[0]
     assert "FILE:" not in prompt and "could not: the site asks for a passcode" in prompt and f"thoughts? {LINK}" in prompt
+
+
+def test_the_link_is_found_inside_the_mail_providers_click_counter_as_docsend_really_sends_it():
+    # The shape of the first real message: no link to docsend.com at all, only to a click counter with the address inside.
+    inner = "docsend.com%2Fvisitor_verification%2Fabc123%3Fredirect_url%3Dhttps%253A%252F%252Fdocsend.com%252Fview%252Fs%252Fqq11%253Fverified%253Dtrue"
+    real = mail(messageText=("Follow the link below to access the Space.\n\n"
+                             f"https://track.pstmrk.it/3ts/{inner}/071H/ZSLJAQ/AQ/aaaa/2/IQlUk1r5xy\n\n"
+                             "Learn more at https://track.pstmrk.it/3ts/docsend.com%2F/071H/ZSLJAQ/AQ/aaaa/3/DdgPEnBewf\n"
+                             "https://assets.docsend.com/public/x/ds-logos/logo@2x.png https://ea.pstmrk.it/open?m=1"))
+    found = verification_link(real)
+    assert found == "https://docsend.com/visitor_verification/abc123?redirect_url=https%3A%2F%2Fdocsend.com%2Fview%2Fs%2Fqq11%3Fverified%3Dtrue"
+    assert "pstmrk" not in found, "the browser is given DocSend's own address, never the counter's"
+    elsewhere = mail(messageText="https://track.pstmrk.it/3ts/evil.example%2Fverify%3Ftoken%3D1/071H/x/2/y https://track.pstmrk.it/3ts/docsend.com%2F/0/x/3/y")
+    assert verification_link(elsewhere) is None, "a counter that leads elsewhere, and DocSend's own front page, are not the link"
+    lookalike = mail(messageText="https://track.pstmrk.it/3ts/docsend.com.evil.example%2Fverify%3Ftoken%3D1/071H/x/2/y")
+    assert verification_link(lookalike) is None
+
+
+async def test_a_browser_service_with_no_credit_left_is_said_in_those_words(tmp_path):
+    v, journal, _ = viewer(tmp_path, FakeBrowser(RuntimeError("402: Insufficient balance: your credits are used up.")))
+    view = await v.view(LINK)
+    assert not view.ok and "no credit left" in view.text and [r for r in journal.read() if r["kind"] == "tool"][0]["outcome"] == "no credit"
