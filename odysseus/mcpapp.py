@@ -61,7 +61,7 @@ APPS["x"] = {
     "read_only_connection": True,
     # X does not let a program register itself. The owner creates an app at developer.x.com and puts its client id in .env.
     "client_id_env": "X_CLIENT_ID",
-    "hide": (),
+    "hide": ("chat_media_download",),       # files from private chats; the sign-in did not ask to read those, and nothing here needs them
     "what": "the owner's X (Twitter) account, to read only: their timeline, lists and bookmarks, the people they follow, and search over "
             "public posts. It cannot post, reply, like, follow or message",
     "prompt": "Use it when the owner asks what someone has been posting, or wants to find people and companies worth knowing about: a founder "

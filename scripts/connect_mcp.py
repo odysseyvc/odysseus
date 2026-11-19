@@ -54,7 +54,9 @@ async def main() -> int:
                                                                 scope=SERVERS[name]["scope"], client_name="Odysseus"))
 
     async def show(link: str) -> None:
-        print(f"OPEN THIS LINK AND APPROVE:\n{link}\n", flush=True)
+        from urllib.parse import parse_qs, urlsplit
+        asked = (parse_qs(urlsplit(link).query).get("scope") or ["(whatever the service chooses)"])[0]
+        print(f"THIS SIGN-IN ASKS FOR: {asked}\nOPEN THIS LINK AND APPROVE:\n{link}\n", flush=True)
 
     async with session(tokens, show, SERVERS[name]["url"], SERVERS[name]["scope"]) as s:
         tools = (await s.list_tools()).tools

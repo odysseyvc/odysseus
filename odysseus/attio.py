@@ -20,7 +20,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 ATTIO_URL = "https://mcp.attio.com/mcp"
 CALLBACK_PORT = 8765
@@ -98,6 +98,20 @@ async def wait_for_callback(timeout_s: float = 600) -> tuple[str, str | None, st
         server.close()
 
 
+def pin_scope(link: str, scope: str | None) -> str:
+    """The sign-in link, asking for exactly the permissions this program was told to ask for and no others.
+
+    The sign-in library follows the protocol's rule and asks for every permission the server says it supports. For X
+    that list includes posting, sending direct messages and changing billing. A program that means to read must ask
+    only to read, so the link is rewritten before the owner ever sees it; the service grants what was asked for.
+    """
+    if not scope:
+        return link
+    parts = urlsplit(link)
+    query = [(k, v) for k, v in ((k, v[0]) for k, v in parse_qs(parts.query, keep_blank_values=True).items()) if k != "scope"]
+    return urlunsplit(parts._replace(query=urlencode(query + [("scope", scope)])))
+
+
 def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None, url: str = ATTIO_URL, scope: str | None = SCOPE):
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import AuthorizationCodeResult, OAuthClientMetadata
@@ -108,7 +122,10 @@ def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | 
 
     meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[CALLBACK], scope=scope, token_endpoint_auth_method="none",
                                grant_types=["authorization_code", "refresh_token"], response_types=["code"])
-    return OAuthClientProvider(url, meta, tokens, redirect_handler=show_link or _refuse, callback_handler=came_back)
+    async def shown(link: str) -> None:
+        await (show_link or _refuse)(pin_scope(link, scope))
+
+    return OAuthClientProvider(url, meta, tokens, redirect_handler=shown, callback_handler=came_back)
 
 
 @asynccontextmanager

@@ -158,3 +158,14 @@ async def test_a_session_that_cannot_open_reports_why_to_the_caller():
     attio = Attio(b, Journal(Path(tempfile.mkdtemp()) / "j.jsonl"))
     out = await attio.handlers()["attio_run"]({"tool": "whoami", "arguments": {}})
     assert out.get("is_error") and out["content"][0]["text"] == LAPSED
+
+
+def test_a_sign_in_link_asks_only_for_the_permissions_the_program_was_told_to_ask_for():
+    from urllib.parse import parse_qs, urlsplit
+    from odysseus.attio import pin_scope
+    wide = ("https://x.example/authorize?response_type=code&client_id=abc&state=s1&code_challenge=c1&code_challenge_method=S256"
+            "&scope=tweet.read+tweet.write+dm.write+developer.billing.write+offline.access&redirect_uri=http%3A%2F%2F127.0.0.1%3A8765%2Fcallback")
+    narrow = parse_qs(urlsplit(pin_scope(wide, "tweet.read users.read offline.access")).query)
+    assert narrow["scope"] == ["tweet.read users.read offline.access"], "the wider list the library chose is replaced, not added to"
+    assert narrow["state"] == ["s1"] and narrow["code_challenge"] == ["c1"] and narrow["redirect_uri"] == ["http://127.0.0.1:8765/callback"]
+    assert pin_scope(wide, None) == wide, "with no list of its own, the program leaves the service's choice alone"
