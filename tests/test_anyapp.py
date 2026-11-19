@@ -234,3 +234,50 @@ def test_the_instructions_tell_the_model_not_to_refuse():
     text = conversation_prompt(True, with_anyapp=True)
     assert "do not say you cannot" in text and "Call app_find" in text and "Never write a connection link yourself" in text
     assert "app_find" not in conversation_prompt(True)
+
+
+# --- the connector's own labels, used with the name ---------------------------------------------------------
+
+PIPELINE = "ATTIO_POST_V2_LISTS_LIST_ENTRIES_QUERY"
+
+
+def test_a_label_can_excuse_only_the_word_post_and_only_in_a_name_that_reads():
+    assert classify(PIPELINE) == "reach", "by name alone, POST asks"
+    assert classify(PIPELINE, {"readOnlyHint"}) == "read", "name reads but for POST, and the connector says read-only"
+    assert classify("SLACK_POST_MESSAGE", {"readOnlyHint"}) == "reach", "MESSAGE is still a hard word, whatever the label says"
+    assert classify("ATTIO_POST_V2_NOTES", {"readOnlyHint"}) == "change", "nothing in the name reads, so the label alone is not enough"
+    assert classify("ATTIO_DELETE_NOTE", {"readOnlyHint"}) == "reach", "a wrong label does not make a deletion a read"
+
+
+def test_a_label_can_make_a_reading_name_into_a_change_but_never_the_reverse():
+    assert classify("ATTIO_GET_COMPANY") == "read"
+    assert classify("ATTIO_GET_COMPANY", {"updateHint"}) == "change"
+    assert classify("ATTIO_LIST_NOTES", {"destructiveHint"}) == "reach"
+    assert classify("ATTIO_CREATE_NOTE", {"readOnlyHint"}) == "change"
+    assert classify("ATTIO_GET_COMPANY", {"readOnlyHint", "createHint"}) == "change", "contradictory labels ask"
+
+
+async def test_labels_are_learned_when_tools_are_found_and_a_failure_to_learn_changes_nothing(tmp_path):
+    from types import SimpleNamespace
+    from odysseus.journal import Journal
+    found = {"results": [{"primary_tool_slugs": [PIPELINE, "ATTIO_GET_COMPANY"]}],
+             "tool_schemas": {PIPELINE: {"input_schema": {"x": 1}}, "ATTIO_GET_COMPANY": {"input_schema": {"x": 1}}}}
+    calls = []
+
+    def labels(slugs):
+        calls.append(list(slugs))
+        return {PIPELINE: ["readOnlyHint", "lists"], "ATTIO_GET_COMPANY": ["updateHint"]}
+    app = AnyApp(SimpleNamespace(find=lambda task: found, labels=labels), Journal(tmp_path / "j.jsonl"))
+    run = {"tool": PIPELINE, "arguments": {"list": "dealflow"}}
+    assert app.decide(run) == "ask", "not yet looked up: the name alone decides"
+    out = await app.handlers()["app_find"]({"task": "list my pipeline"})
+    assert f"{PIPELINE}  (app: attio; read)" in out["content"][0]["text"]
+    assert app.decide(run) == "allow" and app.decide({"tool": "ATTIO_GET_COMPANY", "arguments": {}}) == "ask"
+    await app.handlers()["app_find"]({"task": "list my pipeline"})
+    assert calls == [[PIPELINE, "ATTIO_GET_COMPANY"]], "asked once per action"
+
+    def broken(slugs):
+        raise RuntimeError("down")
+    plain = AnyApp(SimpleNamespace(find=lambda task: found, labels=broken), Journal(tmp_path / "k.jsonl"))
+    await plain.handlers()["app_find"]({"task": "list my pipeline"})
+    assert plain.decide(run) == "ask" and plain.decide({"tool": "ATTIO_GET_COMPANY", "arguments": {}}) == "allow"

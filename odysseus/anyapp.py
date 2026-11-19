@@ -14,6 +14,9 @@ in its name instead:
 
   reading   (GET, LIST, SEARCH, ...)       allowed, unless its inputs carry details that
                                            came from the owner's mail or calendar (taint.py)
+            The connector's own label for the action is consulted too, when it has been
+            learned: it can make a "read" by name into a change, and it can excuse the one
+            word POST in a name that otherwise reads (see classify).
   anything else                            the owner is asked, every time, and shown the
                                            action and its inputs
 
@@ -62,12 +65,29 @@ def toolkit_of(slug: str) -> str:
     return slug.split("_", 1)[0].lower()
 
 
-def classify(slug: str) -> str:
-    """read | change | reach, from the words in a catalogue tool's name."""
+# The connector labels each action itself. A label is the vendor's claim, as a name is the vendor's choice of words,
+# and either can be wrong. So the two are used together, and only ever towards asking, with one exception below.
+READ_LABEL, CHANGE_LABELS, DESTROY_LABEL = "readOnlyHint", {"createHint", "updateHint", "destructiveHint"}, "destructiveHint"
+HTTP_VERBS = {"POST"}      # some actions are named after the web request behind them: ATTIO_POST_V2_LISTS_LIST_ENTRIES_QUERY
+
+
+def classify(slug: str, labels: frozenset[str] | set[str] = frozenset()) -> str:
+    """read | change | reach, from the words in a catalogue tool's name and, when known, the connector's own labels.
+
+    Without labels the name decides, as it always did. With them:
+      - a name that reads, labelled as creating, updating or destroying, is not a read (stricter than the name);
+      - a name that reads but for the word POST, labelled read-only, is a read. Many services search by POST, and
+        this is the one case where a label makes the program ask less. Name and label must both say "reads".
+    """
     ordered = slug.upper().split("_")[1:]
     words = set(ordered)
     hard = words & (ALWAYS_ASK - {"BATCH", "BULK"})     # "many at once" does not by itself make something risky
     reads = bool(words & READS) or (bool(ordered) and ordered[0] in READS_IF_FIRST)
+    labels = set(labels)
+    if labels & CHANGE_LABELS:
+        return "reach" if hard or DESTROY_LABEL in labels else "change"
+    if READ_LABEL in labels:
+        hard -= HTTP_VERBS
     if reads and not hard and not words & CHANGES:
         return "read"       # includes BATCH_GET: fetching many things at once is still only fetching
     return "reach" if hard else "change"
@@ -93,6 +113,24 @@ class AnyApp:
         self._changes: list[str] = []
         self._links: list[tuple[str, str]] = []
         self.taint = None                       # set by make_gate; remembers what was read from the apps
+        self._labels: dict[str, frozenset[str]] = {}    # tool slug -> the connector's labels, learned in app_find
+
+    def kind(self, slug: str) -> str:
+        return classify(slug, self._labels.get(slug.upper(), frozenset()))
+
+    async def _learn_labels(self, slugs: list[str]) -> None:
+        """Ask the connector how it labels these actions. Failing to learn changes nothing: the name alone decides."""
+        ask = getattr(self._b, "labels", None)
+        new = [s.upper() for s in slugs if s.upper() not in self._labels]
+        if ask is None or not new:
+            return
+        try:
+            got = await asyncio.wait_for(asyncio.to_thread(ask, new), CALL_TIMEOUT_S)
+        except Exception as e:
+            self._journal.write("tool", name="app_labels", ok=False, error=type(e).__name__)
+            return
+        for slug, labels in (got or {}).items():
+            self._labels[str(slug).upper()] = frozenset(str(x) for x in labels or [])
 
     # --- what the owner is shown ---------------------------------------------------
 
@@ -121,7 +159,7 @@ class AnyApp:
         slug = str(args.get("tool", "")).strip().upper()
         # Reading runs unasked. But the catalogue includes search engines and scrapers, and "reading" through one of
         # those sends its inputs to another company, so a read whose inputs carry the owner's private details is asked about.
-        return ALLOW if classify(slug) == "read" and not self._leak(args) else ASK
+        return ALLOW if self.kind(slug) == "read" and not self._leak(args) else ASK
 
     def describe(self, args: dict[str, Any]) -> str:
         slug = str(args.get("tool", "")).strip().upper()
@@ -133,7 +171,7 @@ class AnyApp:
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
         app = self.name(toolkit_of(slug))
-        if classify(slug) == "read":
+        if self.kind(slug) == "read":
             return (f"Send these details to {app}? They came from your mail, calendar or apps.\n\nDetails recognised: "
                     f"{', '.join(self._leak(args))}\n\nAction: {slug}\nWith:\n{_pretty(inputs)}")
         return f"Do this in {app}?\n\nAction: {slug}\nWith:\n{_pretty(inputs)}"
@@ -180,6 +218,7 @@ class AnyApp:
                 self._journal.write("tool", name="app_find", ok=True, tools=0)
                 return "No tool in the catalogue matches that. Try describing the job differently, or name the app."
             statuses = {str(s.get("toolkit", "")).lower(): s for s in found.get("toolkit_connection_statuses") or [] if isinstance(s, dict)}
+            await self._learn_labels(wanted)
             lines = []
             for slug in wanted:
                 info = schemas.get(slug) or {}
@@ -187,7 +226,7 @@ class AnyApp:
                 state = statuses.get(kit, {})
                 connected = state.get("has_active_connection", state.get("is_connected"))
                 tag = "" if connected is None else (" [connected]" if connected else " [NOT connected: call app_connect first]")
-                lines.append(f"{slug}  (app: {kit}{tag}; {classify(slug)})\n  {' '.join(str(info.get('description', '')).split())[:240]}\n"
+                lines.append(f"{slug}  (app: {kit}{tag}; {self.kind(slug)})\n  {' '.join(str(info.get('description', '')).split())[:240]}\n"
                              f"  inputs: {json.dumps(info.get('input_schema') or {}, ensure_ascii=False)[:1600]}")
             self._journal.write("tool", name="app_find", ok=True, tools=len(wanted))
             return "Tools from the connector's catalogue for this job. Run one with app_run.\n\n" + "\n\n".join(lines)
@@ -221,7 +260,7 @@ class AnyApp:
             self.describe(a)     # the same checks the question went through
             slug = str(a["tool"]).strip().upper()
             inputs = a.get("arguments") or {}
-            kind = classify(slug)
+            kind = self.kind(slug)
             data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
             self._journal.write("tool", name="app_run", ok=True, tool=slug, action=kind)
             if kind != "read":

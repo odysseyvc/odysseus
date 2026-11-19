@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 275
+    "tests": 278
   },
   "parts": [
     {
@@ -11,7 +11,7 @@
           "n": 1,
           "slug": "what-we-are-building",
           "title": "What we are building",
-          "revised": "17 November 2026",
+          "revised": "19 November 2026",
           "summary": "The goal in one sentence, the vocabulary the rest of the book depends on, and the test that will decide whether Odysseus works."
         },
         {
@@ -84,7 +84,7 @@
           "n": 10,
           "slug": "hands-mail-and-calendar",
           "title": "Hands: mail and calendar",
-          "revised": "18 November 2026",
+          "revised": "19 November 2026",
           "summary": "Reading and acting in the owner's mail and calendar through a connector service: ten narrow tools, each with its own rule. Read live; sending, changing and deleting have run only in a test world."
         },
         {

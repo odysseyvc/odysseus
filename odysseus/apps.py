@@ -97,6 +97,21 @@ class ComposioBackend:
         data = result.data if isinstance(result.data, dict) else {}
         return dict(data.get("tool_schemas") or {})
 
+    def labels(self, slugs: list[str]) -> dict[str, list[str]]:
+        """The connector's own labels for each action (readOnlyHint, createHint, updateHint, destructiveHint among them)."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        from composio import Composio
+        tools = Composio(api_key=self._api_key).tools
+
+        def one(slug: str) -> list[str] | None:
+            try:
+                return list(getattr(tools.get_raw_composio_tool_by_slug(slug), "tags", None) or [])
+            except Exception:
+                return None         # unknown is unknown: the name alone will decide
+        with ThreadPoolExecutor(max_workers=6) as pool:     # one request each, about a second; together, not in turn
+            return {slug: tags for slug, tags in zip(slugs, pool.map(one, slugs)) if tags is not None}
+
     def lookup(self, name: str) -> list[tuple[str, str, bool]]:
         items = self._s().toolkits(search=name, limit=5).items
         return [(i.slug, i.name, bool(i.connection and i.connection.is_active)) for i in items]
