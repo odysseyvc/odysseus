@@ -6,12 +6,14 @@ what the person is told when one ends. None of those decisions is the model's.
 from __future__ import annotations
 
 import asyncio
+import secrets
 import time
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Any, Callable, Protocol
 
 from .agent import AgentRunner, Outcome
+from .closing import SUMMARY_NOTE
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
@@ -66,7 +68,7 @@ class Conversation:
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
-                 services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None):
+                 services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None):
         self._s = settings
         self._viewing = False
         self._connector = None       # set by the program once it can restart itself: connect.py
@@ -92,6 +94,10 @@ class Conversation:
         if last:
             self._last_end = self._now() - timedelta(seconds=max(0.0, time.time() - float(last)))
         self._carry = ""
+        # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
+        self._history, self._closer = history, closer
+        self._offers: dict[str, str] = {}       # facts put to the owner for saving, by the id on their buttons
+        self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
         self._browser = browser
@@ -260,6 +266,7 @@ class Conversation:
                 return
             await self._runner.forget_session()
             self._shown_version = -1
+            self._thread_from = time.time()
             self._journal.write("new_conversation")
             await chat.send("Started a new conversation. I still have what I remember about you, your reminders and your connections; "
                             "I no longer have what we said before.")
@@ -383,6 +390,18 @@ class Conversation:
         if user_id != self._s.owner_id:
             self._journal.write("dropped", user_id=user_id, what="approval tap")
             return ""
+        if approval_id in self._offers:
+            # A fact from a closed conversation, offered for saving (closing.py). Saved only by this tap.
+            fact = self._offers.pop(approval_id)
+            self._journal.write("memory_offer", saved=approved)
+            if not approved or self._memory is None:
+                return "Not saved."
+            try:
+                self._memory.remember(fact)
+                self._memory.pop_changes()      # the owner has just seen it; no need to list it under the next reply
+            except Exception as e:
+                return f"Not saved: {e}"
+            return "Saved."
         if self._gate is None or self._gate.resolve(approval_id, approved) is None:
             return "This request is no longer waiting."
         return "Approved." if approved else "Declined."
@@ -534,9 +553,22 @@ class Conversation:
         traced = trace.__enter__() if trace is not None else None
         why = self._fresh_reason()
         if why:
-            self._journal.write("fresh", reason=why, tokens=self._runner.context_tokens, kept=len(self._recent))
-            self._carry = self._recap()
+            # Close the old conversation before leaving it: a summary to carry forward, and facts worth saving put to the owner.
+            summary, facts = "", []
+            if self._history is not None and self._closer is not None and self._ledger.spent_today() < self._s.daily_usd:
+                known = [e.text for e in self._memory.profile()] if self._memory is not None else []
+                summary, facts = await self._closer(self._history.since(self._thread_from), known)
+            self._thread_from = time.time()
+            self._journal.write("fresh", reason=why, tokens=self._runner.context_tokens, kept=len(self._recent), summary=bool(summary), proposed=len(facts))
+            self._carry = (f"{SUMMARY_NOTE}\n{summary}\nEND\n\n" if summary else "") + self._recap()
             await self._runner.forget_session()
+            for fact in facts:
+                offer = "m" + secrets.token_hex(4)
+                self._offers[offer] = fact
+                try:
+                    await chat.ask(f'From our earlier conversation. Save this to memory?\n\n"{fact}"', offer)
+                except Exception:
+                    self._offers.pop(offer, None)
         try:
             if images:
                 outcome: Outcome = await self._runner.run(prompt + stamp, on_text, self._preamble, images=images)
@@ -571,6 +603,8 @@ class Conversation:
         }
         body = outcome.text.strip()
         self._recent.append((self._words(prompt), " ".join(body.split())[:RECAP_REPLY] or f"(no reply: {outcome.status})"))
+        if self._history is not None:
+            self._history.add(*self._recent[-1])
         self._last_end = self._now()
         note = notes.get(outcome.status)
         if note:

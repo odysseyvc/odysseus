@@ -85,7 +85,7 @@ def anthropic_call(api_key: str) -> Call:
             await asyncio.to_thread(client)
         # These models think before they answer, and the thinking is counted against max_tokens: a limit sized for the
         # dozen tokens of the answer leaves none for it, and the reply comes back empty. Low effort keeps the thinking short.
-        msg = await client().messages.create(model=model, max_tokens=1024, output_config={"effort": "low"}, system=system,
+        msg = await client().messages.create(model=model, max_tokens=2000, output_config={"effort": "low"}, system=system,
                                            messages=[{"role": "user", "content": user}])
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         u = msg.usage

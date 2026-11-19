@@ -26,6 +26,7 @@ from .anyapp import AnyApp
 from . import browser as browser_mod
 from .browser import Browser
 from .gate import ALLOW, ASK, Gate
+from . import history as history_mod
 from .journal import Journal
 from .memory import MEMORY_NOTE, MemoryError_, MemoryStore
 from .schedule import REPEATS, ScheduleError, ScheduleStore, parse_when
@@ -200,7 +201,7 @@ def _err(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "is_error": True}
 
 
-def make_memory_handlers(memory: MemoryStore, journal: Journal) -> dict[str, Any]:
+def make_memory_handlers(memory: MemoryStore, journal: Journal, history: Any = None, taint: Any = None) -> dict[str, Any]:
     async def remember(args: dict[str, Any]) -> dict[str, Any]:
         try:
             entry = memory.remember(args.get("text", ""), args.get("replaces") or None)
@@ -226,10 +227,18 @@ def make_memory_handlers(memory: MemoryStore, journal: Journal) -> dict[str, Any
 
     async def recall(args: dict[str, Any]) -> dict[str, Any]:
         hits = memory.search(str(args.get("query", "")))
-        journal.write("tool", name="recall", ok=True, results=len(hits))
-        if not hits:
-            return _ok("Nothing in memory matches.")
-        return _ok(MEMORY_NOTE + "\n\n" + "\n".join(f"({source}) {body}" for source, body in hits))
+        # Earlier conversations are searched too, by plain word matching (history.py). What comes back from there is not
+        # memory: replies may quote what other people wrote, so it is marked as such and recorded as outside material.
+        said = history.search(str(args.get("query", ""))) if history is not None else []
+        journal.write("tool", name="recall", ok=True, results=len(hits), **({"earlier": len(said)} if history is not None else {}))
+        if not hits and not said:
+            return _ok("Nothing in memory or in earlier conversations matches.")
+        parts = [MEMORY_NOTE + "\n\n" + "\n".join(f"({source}) {body}" for source, body in hits)] if hits else []
+        if said:
+            if taint is not None:
+                taint.saw("earlier conversations")
+            parts.append(history_mod.NOTE + "\n\n" + history_mod.show(said))
+        return _ok("\n\n".join(parts))
 
     return {"remember": remember, "forget": forget, "note": note, "recall": recall}
 
@@ -259,9 +268,10 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
-                     on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False):
+                     on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
-    m = make_memory_handlers(memory, journal)
+    # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
+    m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
     search_handler = make_search_handler(spec, journal)
     if gate is not None:
         taint = getattr(gate, "taint", None)
@@ -296,7 +306,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                             "to approve sending them.")
             return await plain(args)
     search = tool("web_search", spec.description, spec.input_schema)(search_handler)
-    recall = tool("recall", "Search your saved notes and entries by keyword, for when the owner refers to something that is not in view.",
+    recall = tool("recall", "Search your saved notes and entries, and what was said in earlier conversations, by keyword, for when the owner "
+                  "refers to something that is not in view.",
                   {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]})(m["recall"])
     app_tools = {}
     if apps is not None:

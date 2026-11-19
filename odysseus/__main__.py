@@ -48,8 +48,10 @@ from .mcpapp import connected as connected_services
 from .mcpapp import load_custom as load_custom_services
 from .apps import Apps, ComposioBackend
 from .browser import Browser, BrowserUseBackend
+from .closing import make_closer
 from .config import ConfigError, load, make_clock
 from .conversation import Conversation
+from .history import History
 from .journal import Journal, Ledger
 from .memory import MemoryStore
 from .deckview import DeckViewer
@@ -168,14 +170,15 @@ async def main() -> int:
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
                      taint_file=settings.data_dir / "taint.bin", attio=attio, services=services,
                      auto_small=not settings.ask_every_change)
+    second_call = anthropic_call(settings.anthropic_api_key)      # one plain call to the small model: the second reader, and closing a conversation
+    history = History(settings.data_dir / "history.jsonl")
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
-        second_call = anthropic_call(settings.anthropic_api_key)
         gate.set_second_reader(make_second_reader(journal, second_call,
                                                   settings.review_model or settings.background_model, gate.taint), OUTGOING)
     marks["gate"] = round(time.monotonic() - _BEGAN, 1)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
-                                                            anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services),
+                                                            anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services, history=history),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
                                                            with_files=ocr is not None, with_anyapp=anyapp is not None,
                                                            with_watches=watches is not None, with_attio=attio is not None)
@@ -197,7 +200,8 @@ async def main() -> int:
     marks["pages"] = round(time.monotonic() - _BEGAN, 1)
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
-                                pages=pages, links=Fetcher() if ocr is not None else None,
+                                pages=pages, links=Fetcher() if ocr is not None else None, history=history,
+                                closer=make_closer(journal, second_call, settings.background_model),
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
     marks["conversation"] = round(time.monotonic() - _BEGAN, 1)
@@ -268,8 +272,7 @@ async def main() -> int:
             await notify.send(LOST_CONVERSATION)
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
-    if apps is not None and settings.review_model.lower() != "off":
-        asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
+    asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
                   files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, boot=marks)
     if whatsapp is not None:
