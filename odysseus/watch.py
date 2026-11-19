@@ -215,6 +215,7 @@ class Watcher:
         self._stop: Callable[[], None] | None = None
         self._tasks: set[asyncio.Task] = set()
         self._limited_told: datetime | None = None     # when the owner was last told that events are going unchecked
+        self._failed_told: datetime | None = None      # when the owner was last told that a check itself failed
         self._unsent: list[str] = []        # messages that could not be sent, kept to try again
         self.retry_wait_s = 2.0
         self._failures, self._told_down = 0, False     # how many times running the listener has failed, and whether the owner knows
@@ -356,6 +357,12 @@ class Watcher:
                         self._unsent.append(message)      # kept, and tried again every minute (keep_listening)
                         unsent += 1
         outcome = ("unsent" if unsent == len(told) else "told") if told else ("quiet" if status == "done" else "failed")
+        if outcome == "failed" and (self._failed_told is None or now - self._failed_told >= timedelta(hours=1)):
+            # A check that failed is a watch that may have missed its moment. Silence must never mean that, so it is said,
+            # at most once an hour, without anything from the event itself (a stranger wrote that).
+            self._failed_told = now
+            await self._say(f"I could not check some new {about} against what you asked me to watch for ({status}). "
+                            "If you are waiting for something, look yourself this once.")
         self._journal.write("event", trigger=slug, outcome=outcome, watches=len(watches), told=told, cost_usd=cost)      # the ledger counts this line
         return outcome
 

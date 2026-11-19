@@ -374,7 +374,7 @@ class Attio:
             raise AppError("`arguments` must be an object.")
         title = (self._tools.get(name) or {}).get("title") or name
         shown = json.dumps(inputs, ensure_ascii=False, indent=1, default=str)
-        return f"Do this in Attio?\n\nAction: {title} ({name})\nWith:\n{shown[:3000]}"
+        return f"Do this in Attio?\n\nAction: {title} ({name})\nWith:\n{shown}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(ATTIO_FIND, ALLOW)

@@ -229,6 +229,7 @@ class AgentRunner:
         self._session_cost = 0.0
         self._blank = True   # True while the model has not yet been shown the memory in this context
         self._resumed = self.session_id is not None
+        self.lost_session = False    # a saved conversation existed and could not be picked up
         self._calls: dict[str, float] = {}     # estimated cost of each model call in the task now running
 
     @property
@@ -302,6 +303,7 @@ class AgentRunner:
                 # The saved conversation could not be picked up (its transcript is gone or unreadable).
                 # Start a new one rather than fail every message from now on.
                 self._journal.write("error", where="agent.resume", error=type(e).__name__, message=str(e)[:200])
+                self.lost_session = True
                 self.session_id, self._resumed, self._blank = None, False, True
                 self._save_session()
                 client = self._factory(options=self.options())

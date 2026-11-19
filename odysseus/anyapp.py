@@ -279,7 +279,17 @@ class AnyApp:
             slug = str(a["tool"]).strip().upper()
             inputs = a.get("arguments") or {}
             kind = self.kind(slug)
-            data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
+            try:
+                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
+            except (AppError, asyncio.TimeoutError, OSError) as e:
+                if kind == "read":
+                    # Reading is safe to repeat, so it is tried once more before the model hears of it.
+                    data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
+                else:
+                    # A change is never repeated by code: the app may have done it and lost the answer.
+                    why = "did not answer in time" if isinstance(e, asyncio.TimeoutError) else str(e)[:300]
+                    raise AppError(f"{slug} failed: {why}. It may still have happened. Read the app to check before trying again, "
+                                   "so that nothing is done twice, and tell the owner what you found.") from None
             self._journal.write("tool", name="app_run", ok=True, tool=slug, action=kind)
             if kind != "read":
                 brief = json.dumps(inputs, ensure_ascii=False, default=str)

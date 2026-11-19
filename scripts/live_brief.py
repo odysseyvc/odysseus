@@ -54,7 +54,7 @@ async def main():
     memory = MemoryStore(Path(real.data_dir) / "memory", now=now)       # the owner's real notes, read only
     search = Exa(api_key=settings.exa_api_key).tools.web_search()
     run = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio, services=services),
-                              memory, now, with_apps=True, services=services, attio=attio, model=settings.model)
+                              memory, now, with_apps=True, services=services, attio=attio, model=settings.model, program_tasks=True)
     lead = timedelta(days=days)
     if person:      # a made-up meeting with a named guest, for when the calendar holds none: "Name <address>" "Title"
         name, _, address = person.rpartition("<")

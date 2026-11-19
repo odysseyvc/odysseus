@@ -139,10 +139,11 @@ async def test_a_flood_of_mail_does_not_become_a_flood_of_model_calls(tmp_path):
     assert await x.watcher.on_event(mail_event(999)) == "quiet", "an hour later it checks again"
 
 
-async def test_a_failing_check_is_recorded_and_says_nothing(tmp_path):
+async def test_a_failing_check_is_recorded_and_the_watch_is_kept(tmp_path):
     x = rig(tmp_path, status="error", reply="")
     x.store.add("Priya replies", "mail")
-    assert await x.watcher.on_event(mail_event()) == "failed" and x.chat.sent == [] and len(x.store.watches()) == 1
+    assert await x.watcher.on_event(mail_event()) == "failed" and len(x.store.watches()) == 1
+    assert len(x.chat.sent) == 1, "and the owner is told: see test_found_by_reading"
 
 
 # --- turning the listening on, and the gate ------------------------------------------------------------

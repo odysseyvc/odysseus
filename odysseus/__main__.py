@@ -69,6 +69,10 @@ def unfinished(journal: Journal) -> dict | None:
     return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values())}
 
 
+LOST_CONVERSATION = ("I was restarted and could not pick up our earlier conversation, so this is a new one. "
+                     "I still have what I remember about you; I do not have what we said before.")
+
+
 def restart_notice(task: dict, resumed: bool) -> str:
     waiting = task.get("waiting") or []
     if task.get("preview") is None:
@@ -182,7 +186,8 @@ async def main() -> int:
         from .search import make_search_handler
         brief_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
                                                                                 services=services),
-                                           memory, now, with_apps=True, services=services, attio=attio, model=settings.model)
+                                           memory, now, with_apps=True, services=services, attio=attio, model=settings.model,
+                                           program_tasks=True)
         briefer = Briefer(apps.events_between, brief_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
                           state_file=settings.data_dir / "briefed.json", search=make_search_handler(search, journal), taint=gate.taint,
                           on_delivered=conversation.record_delivery)
@@ -204,6 +209,12 @@ async def main() -> int:
         # A task was running when the program last stopped. Say so: before this, it vanished without a word.
         try:
             await notify.send(restart_notice(interrupted, runner.resumed))
+        except Exception as e:
+            journal.write("error", where="restart.notice", error=type(e).__name__)
+    elif runner.lost_session:
+        # Nothing was interrupted, but the saved conversation could not be picked up. That was silent before.
+        try:
+            await notify.send(LOST_CONVERSATION)
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,

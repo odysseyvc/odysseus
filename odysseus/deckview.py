@@ -44,6 +44,7 @@ HOST = "docsend.com"
 KEEP_ALIVE_S = 600          # the browser stays open this long between the two runs, waiting for the email
 MAIL_WAIT_S = 150
 MAIL_EVERY_S = 6
+CLOCK_SLACK_S = 10          # the mail service's clock and this machine's are not the same clock
 MAX_REPORT = 30_000
 READ, VERIFY, PASSCODE, AGREEMENT, GONE = "DECK_READ", "VERIFY_EMAIL_SENT", "PASSCODE_NEEDED", "AGREEMENT_NEEDED", "NOT_AVAILABLE"
 MARKS = (READ, VERIFY, PASSCODE, AGREEMENT, GONE)
@@ -176,8 +177,8 @@ class DeckViewer:
                 messages = []
             for m in messages:
                 when = _when(m.get("messageTimestamp"))
-                if when is not None and when < since - 90:
-                    continue                # an older verification message, for another document or another day
+                if when is None or when < since - CLOCK_SLACK_S:
+                    continue                # undated, or older than this run: a link for another document or another day
                 link = verification_link(m)
                 if link:
                     return link
