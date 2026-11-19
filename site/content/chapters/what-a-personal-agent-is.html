@@ -56,10 +56,10 @@
 <dt>Routine</dt><dd>A task the agent runs by itself on a schedule, with nobody watching, such as a morning summary. A <em>reminder</em> is simpler: a fixed message sent at a set time.</dd>
 <dt>Shell</dt><dd>The ordinary, predictable program wrapped around the model. It receives messages, runs the loop, holds the gate and keeps the log. (This has nothing to do with a command-line shell.)</dd>
 </dl></div>
-<p>The definition of a tool call holds the most useful fact in the book. Because the model only <em>asks</em> and code acts, there is always a moment between the asking and the doing where a rule can be enforced. Every safety measure in later chapters lives there.</p>
+<p>The definition of a tool call holds the most useful fact in the book. Because the model only <em>asks</em> and code acts, there is always a moment between the asking and the doing where a rule can be enforced. Most of the safety measures in later chapters live there.</p>
 
 <h2 id="design">The design space</h2>
-<p>The clearest way to see what a personal agent must contain is to look at products that already exist. This book measures itself against three commercial products, Instinct, Muse and Grok Bot, as they stood in November 2026, from documentation, press and the makers' own writing, not from testing them side by side. Each claim carries a grade saying how it is known (explained under "What counts as working", below).</p>
+<p>The clearest way to see what a personal agent must contain is to look at products that already exist. This book measures itself against three commercial products, Instinct, Muse and Grok Bot, as they stood at the time of writing, from documentation, press and the makers' own writing, not from testing them side by side. Each claim carries a grade saying how it is known (explained under "What counts as working", below).</p>
 <h3>Three products, one design</h3>
 <p>Instinct is a personal agent you text or phone. <span class="g s">Secondary</span> Its channels are iMessage, WhatsApp, phone calls and an email address of its own for each user (<a href="https://techcrunch.com/2026/09/09/viral-ai-assistant-instinct-now-has-its-own-email-address/">TechCrunch</a>). Its internals are known only from its founders and investors, with no engineering write-up to check them against.</p>
 <p>Muse is Meta's personal agent. <span class="g s">Secondary</span> It sends email, books travel, fills in forms and shops with approval for each purchase (<a href="https://techcrunch.com/2026/09/08/meta-debuts-its-muse-ai-agent-will-consumers-trust-it/">TechCrunch</a>). <span class="g c">Maker's claim</span> In its maker's unaudited account of its security design, a separate program outside the agent is the only thing that can permit an action (<a href="https://muse.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse">Meta's post</a>).</p>
@@ -116,14 +116,14 @@
 <text x="280" y="108">calendar_list</text><text x="460" y="108">allow: reading</text>
 <text x="440" y="144">busy times returned</text>
 <text x="280" y="190">calendar_create, guest Sam</text>
-<text x="100" y="230" fill="var(--accent)">ask: "Create 'Lunch' Wed 12:30, invite sam@...?"</text>
+<text x="100" y="230" fill="var(--accent)">ask: "Create this event and email an invitation…"</text>
 <text x="100" y="274">owner taps Approve</text>
 <text x="460" y="314">the approved inputs, unchanged</text>
 <text x="440" y="344">event created</text>
 <text x="100" y="384">"Done: Wednesday 12:30."</text>
 </g>
 </svg>
-<figcaption>The lunch errand. Notice that reading the calendar passes the gate without a question, while creating an event with a guest is held, and the question the owner sees is written by the gate from the call's inputs. The model never touches the calendar directly.</figcaption>
+<figcaption>The lunch errand. Notice that reading the calendar passes the gate without a question, while creating an event with a guest is held, and the question the owner sees is written by the gate from the call's inputs (it goes on to list the guests, the title and the time; it is shortened here). The model never touches the calendar directly.</figcaption>
 </figure>
 
 <p>The book's system talks to its owner in Telegram first, with WhatsApp added later ({{ch:channels}}). <span class="g v">Verified</span> Telegram lets a bot stream a reply as it is written and attach buttons to a message, which is how an approval is answered. The cost is reach: a Telegram bot cannot message someone who has not started a chat with it, and cannot place a phone call.</p>
@@ -148,7 +148,7 @@ The model can request anything. It cannot grant anything.</code></pre>
 <p>The third is from <code>odysseus/tools.py</code>, and concerns speaking first:</p>
 <pre><code>ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})</code></pre>
-<p>A conversation may search, use its memory and schedule things. A routine, with nobody watching, may search the web and its saved notes (and, once connected, read mail and calendar) and write nothing. Work nobody can approve is restricted to work that needs no approval.</p>
+<p>A conversation may search, use its memory and schedule things. A routine, with nobody watching, may search the web and its saved notes (and, once accounts are connected, read mail, calendar and other services, with each call checked to be a read) and write nothing. Work nobody can approve is restricted to work that needs no approval.</p>
 <p>The fourth is a sentence from the model's standing instructions in <code>odysseus/agent.py</code>:</p>
 <pre><code>If asked for one of those, say plainly that it is not built yet. Do not
 pretend, and do not describe steps as done that you have not done.</code></pre>
@@ -179,7 +179,7 @@ pretend, and do not describe steps as done that you have not done.</code></pre>
 <caption>The four evidence grades used throughout the book.</caption>
 <thead><tr><th>Grade</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><th><span class="g v">Verified</span></th><td>Read in the vendor's own documentation, pricing page or source on the date given, or measured by us with the method stated.</td></tr>
+<tr><th><span class="g v">Verified</span></th><td>Read in the vendor's own documentation, pricing page or source, or measured by us with the method stated.</td></tr>
 <tr><th><span class="g s">Secondary</span></th><td>Reported by the press, a comparison site, or a vendor writing about a rival.</td></tr>
 <tr><th><span class="g c">Maker's claim</span></th><td>Stated by a company about its own product with no independent check, including benchmarks it ran on itself.</td></tr>
 <tr><th><span class="g u">Not tested</span></th><td>Planned, designed or written, but never run by us.</td></tr>
@@ -202,8 +202,7 @@ pretend, and do not describe steps as done that you have not done.</code></pre>
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>Believing the agent's report.</strong> Counting a task as done because the agent said so. Every check must look at the world (the calendar, the sent mail, the gate's log), never at the reply.</p>
 <p><strong>Believing a test the builder wrote.</strong> A check written by the same person who wrote the code shares that person's assumptions. The evaluation in {{ch:testing-and-evaluation}} found that an agent that does nothing at all and replies with nothing scored 8 out of 40 on the first version of its checks. <span class="g v">Verified</span> After the checks were tightened (a reply is required; a declined send must first have reached the approval question) the do-nothing agent scores 0, and that run is repeated whenever errands are added. A scoring method that gives credit for doing nothing is measuring something other than the agent.</p>
-<div class="box example"><div class="label">Case note</div>
-<p>The code that counts what each task costs had a full set of passing tests, which used a stand-in (test code imitating the model library). The first live run showed that the library reports cost as a running total for the whole conversation, not per task. Three trivial questions reported $0.0013, $0.0026 and $0.0029; adding them gave $0.0068 for work that had cost $0.0029. <span class="g v">Verified</span> The tests had passed because the stand-in was written to report costs the way the builders wrongly believed the library did. Tests check that code agrees with its author's assumptions. Only contact with the real thing checks the assumptions.</p></div>
+<p>The same holds for tests with a stand-in. {{ch:the-agent-loop}} tells how a full set of passing tests hid a wrong belief about how the model library reports cost: tests check that code agrees with its author's assumptions, and only contact with the real thing checks the assumptions.</p>
 <p><strong>Forgetting the cost.</strong> A system for one person escapes the problem of scale but should still count its own spending from the first day, and stop when a limit is reached ({{ch:cost}}).</p>
 
 <h2 id="testing">How to test it</h2>
@@ -215,18 +214,18 @@ pretend, and do not describe steps as done that you have not done.</code></pre>
 <li>An agent that does nothing scores zero.</li>
 <li>The outcome of each errand is read from the state of the world afterwards, not from the reply.</li>
 </ul>
-<p>The repository's tests cover the first two. <code>tests/test_slice.py</code> (28 tests, all passing when this chapter was written) checks that a stranger's message gets no reply and no model call, and that the tool policy refuses a shell command, a file write, a mail send and a web fetch. These tests use a stand-in for the model, so they show the code does what its authors intended, no more.</p>
-<p>The last three need an evaluation against tasks. An errand suite has been run ({{ch:testing-and-evaluation}}): <span class="g v">Verified</span> 194 of 201 runs passed, against a stand-in mail and calendar, with errands and checks written by the builders. That is weak evidence of competence and is not comparable with the micro1 figures, which come from real accounts.</p>
+<p>The repository's tests cover the first three. <code>tests/test_slice.py</code> (28 tests, all passing) checks that a stranger's message gets no reply and no model call, and that the tool policy refuses a shell command, a file write, a mail send and a web fetch. <code>tests/test_gate.py</code> and <code>tests/test_apps.py</code> check that a send is held until the owner taps Approve, that it does not happen when declined, and that a planted instruction cannot cause a send without a tap. These tests use stand-ins for the model and the mail service, so they show the code does what its authors intended, no more.</p>
+<p>The last two need an evaluation against tasks. An errand suite has been run ({{ch:testing-and-evaluation}}, {{ch:a-second-reading}}): <span class="g v">Verified</span> in its latest run, one run of the suite, 563 of 581 runs passed, against a stand-in mail and calendar, with errands and checks written by the builders. That is weak evidence of competence and is not comparable with the micro1 figures, which come from real accounts.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
-<p><span class="g v">Verified</span> The owner check, the refusal of unlisted tools and the routine's read-only tool set exist in the code and are covered by passing tests. An errand suite in a stand-in world passed 194 of 201 runs, and an agent that does nothing scores zero on it.</p>
+<p><span class="g v">Verified</span> The owner check, the refusal of unlisted tools and the routine's read-only tool set exist in the code and are covered by passing tests. The holding of a send until the owner approves is covered by passing tests with stand-ins. An errand suite in a stand-in world passed 563 of 581 runs in its latest run, and an agent that does nothing scores zero on it.</p>
 <p><span class="g s">Secondary</span> What is said here about the three commercial products' behaviour and failures comes from press and documentation, not from our own use of them.</p>
 <p><span class="g u">Not tested</span> No trusted-completion score exists for the book's system on its owner's real accounts and real errands. Until one does, no sentence in this book says the system is as good as, or better than, any product it is compared with.</p></div>
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A personal agent differs from a chatbot in four ways: it acts, it remembers, it speaks first and it holds its owner's accounts. Each adds a capability and a risk.</li>
-<li>The model only requests actions; code performs them. That gap is where every safety measure lives.</li>
+<li>The model only requests actions; code performs them. That gap is where most safety measures live.</li>
 <li>Commercial personal agents share six elements: one conversation, a coordinating agent, a persistent signed-in computer, connectors before screens, background work, and approval.</li>
 <li>Their reported failures are of boundaries and cost, not model ability: hence "the model proposes, code grants".</li>
 <li>A result counts only when something other than the agent checked it. Trusted completion counts tasks that were done and done within the owner's rules.</li>

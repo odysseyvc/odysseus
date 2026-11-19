@@ -20,13 +20,12 @@
 <dt>Session</dt><dd>One conversation as the agent library sees it: the sequence of messages and tool results the model is shown.</dd>
 <dt>Transcript</dt><dd>The agent library's own file of a session, from which the session can be picked up again.</dd>
 <dt>Resume</dt><dd>Starting the agent with the identifier of an earlier session, so that it continues that conversation instead of beginning a new one.</dd>
-<dt>Journal</dt><dd>Odysseus's append-only log: one line of JSON per step, such as a task starting, a tool being asked for, a reply being sent.</dd>
 </dl></div>
 <div class="tablewrap"><table>
 <caption>What survives a restart, and why.</caption>
 <thead><tr><th>Thing</th><th>Where it lives</th><th>After a restart</th></tr></thead>
 <tbody>
-<tr><th>Memory, the schedule, the journal</th><td>Files in the data folder</td><td>Kept</td></tr>
+<tr><th>Memory, the schedule, the journal ({{ch:the-conversation}})</th><td>Files in the data folder</td><td>Kept</td></tr>
 <tr><th>The conversation</th><td>A small file holding the session's identifier, and the library's transcript, both in the data folder</td><td>Resumed</td></tr>
 <tr><th>The record of private details read from the owner's accounts</th><td>A file of short hashes in the data folder</td><td>Kept, so the check on what leaves through a search still works</td></tr>
 <tr><th>Sign-in tokens for connected services</th><td>Files in the data folder</td><td>Kept</td></tr>
@@ -34,7 +33,7 @@
 <tr><th>Messages waiting behind that task</th><td>The process, with a copy of their first words in the journal</td><td>Lost; named in the announcement</td></tr>
 <tr><th>An approval question on the owner's screen</th><td>The process</td><td>Dead, by design; the announcement says so</td></tr>
 </tbody></table></div>
-<p>Two rows deserve a comment. The record of private details was once held only in the process. After the conversation began to survive restarts, the model still had the owner's mail in front of it while the check that stops mail leaving through a search had forgotten everything. The general lesson: once one piece of state outlives the process, every check that depends on it must outlive the process too. The second is the approval question. {{ch:the-gate}} explains that an approval covers exact inputs for one use and is held by the running program. Writing it to disk so that it could be honoured after a restart would let a tap made hours later approve something the owner can no longer see in context. It is allowed to die.</p>
+<p>Two rows deserve a comment. The record of private details is kept on disk because the conversation is. Were it held only in the process, a resumed conversation would still have the owner's mail in front of the model while the check that stops mail leaving through a search had forgotten everything. The general lesson: once one piece of state outlives the process, every check that depends on it must outlive the process too. The second is the approval question. {{ch:the-gate}} explains that an approval covers exact inputs for one use and is held by the running program. Writing it to disk so that it could be honoured after a restart would let a tap made hours later approve something the owner can no longer see in context. It is allowed to die.</p>
 
 <h2 id="design">The design</h2>
 <figure><svg viewBox="0 0 720 320" width="100%" role="img" aria-label="Supervisor, process, data folder and outside services">
@@ -90,12 +89,13 @@ except Exception as e:
     # The saved conversation could not be picked up (its transcript is gone or unreadable).
     # Start a new one rather than fail every message from now on.
     self._journal.write("error", where="agent.resume", error=type(e).__name__, message=str(e)[:200])
+    self.lost_session = True
     self.session_id, self._resumed, self._blank = None, False, True
     self._save_session()
     client = self._factory(options=self.options())
     await client.connect()</code></pre>
-<p>Setting <code>_blank</code> matters: it tells the conversation that the model has no context, so the owner's memory is shown again with the next message ({{ch:memory}}). The <code>_resumed</code> flag is used by the restart notice to say whether the earlier conversation was kept.</p>
-<p>A conversation that never ends also grows without limit. The library condenses long conversations by itself, and the owner can send <code>/new</code> to start again on purpose. Memory, reminders and connections are untouched by <code>/new</code>; only the back-and-forth is dropped. {{ch:the-conversation}} covers the size and cost of a long thread.</p>
+<p>Setting <code>_blank</code> matters: it tells the conversation that the model has no context, so the owner's memory is shown again with the next message ({{ch:memory}}). The <code>_resumed</code> flag is used by the restart notice to say whether the earlier conversation was kept. <code>lost_session</code> is read by <code>main</code> after the client connects: when nothing was interrupted but the conversation could not be picked up, the owner is sent one line saying so (<code>LOST_CONVERSATION</code> in <code>odysseus/__main__.py</code>).</p>
+<p>A conversation that never ends also grows without limit. The library condenses long conversations by itself, and the owner can send <code>/new</code> to start again on purpose. Memory, reminders and connections are untouched by <code>/new</code>; only the back-and-forth is dropped. {{ch:the-agent-loop}} explains condensing, and {{ch:cost}} what a long thread costs.</p>
 
 <h2 id="notice">Mechanism: announce, do not resume</h2>
 <p>When the program starts, before it writes anything, it reads its own journal to find out what the last run left unfinished. The function is <code>unfinished</code> in <code>odysseus/__main__.py</code>:</p>
@@ -104,7 +104,7 @@ except Exception as e:
         open_task, waiting = None, {}       # an earlier restart: whatever was lost then has been reported already
     elif r["kind"] == "task_start":
         open_task = {"preview": r.get("preview", ""), "asked": False}
-    elif r["kind"] == "task_end" and "routine" not in r:
+    elif r["kind"] == "task_end" and "routine" not in r and "brief" not in r:
         open_task = None
     elif r["kind"] == "queued" and "q" in r:
         waiting[r["q"]] = r.get("preview", "")
@@ -116,24 +116,26 @@ except Exception as e:
         open_task["asked"] = True
     elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
         open_task["asked"] = False</code></pre>
-<p>This works because the conversation writes the right lines at the right moments. Each task begins with a <code>task_start</code> line carrying the first eighty characters of the request. Each message that has to wait behind a running task is written as <code>queued</code> with its own number and first words, and as <code>dequeued</code> when its turn comes. A <code>start</code> line marks each run of the program, so what was lost before an earlier restart is reported once, not at every later start. And a routine's end is ignored, so a routine finishing in the background cannot hide an interrupted conversation task.</p>
+<p>This works because the conversation writes the right lines at the right moments. Each task begins with a <code>task_start</code> line carrying the first eighty characters of the request. Each message that has to wait behind a running task is written as <code>queued</code> with its own number and first words, and as <code>dequeued</code> when its turn comes. A <code>start</code> line marks each run of the program, so what was lost before an earlier restart is reported once, not at every later start. And the end of a routine or of a meeting brief is ignored (their <code>task_end</code> lines carry a <code>routine</code> or <code>brief</code> field), so work finishing in the background cannot hide an interrupted conversation task. Only the conversation writes <code>task_start</code>, so only its own <code>task_end</code> may close one.</p>
 <p>Without the journal lines written <em>before</em> the work, there is nothing to find. A log that records only completions cannot tell a task that never started from one that died halfway.</p>
 <p>Why not carry on? Because the program cannot know how far the task got. A tool call can succeed even though its reply never arrived: {{ch:a-changing-world}} calls this the lost acknowledgement. A restart is the same uncertainty at a larger scale. The email may have left in the last instant before the process stopped. Telling the owner costs one message; a duplicate email cannot be recalled.</p>
 <p>The notice is sent to the owner after the agent client has connected, so that the program knows whether the conversation was resumed, and before the <code>start</code> line is written.</p>
 
 <h2 id="example">Worked example: a restart with work in flight</h2>
 <div class="box example"><div class="label">Worked example</div>
-<p><strong>Input.</strong> The owner asks "Summarise my inbox". While that task runs, they send three more messages. The journal ends like this when the process is stopped (fields trimmed):</p>
+<p><strong>Input.</strong> The owner asks "Summarise my inbox". While that task runs, they send three more messages. The summary is sent, the first waiting message is taken up, and the process is stopped while it runs. The journal ends like this (fields trimmed):</p>
 <pre><code>{"kind": "task_start", "preview": "Summarise my inbox"}
 {"kind": "queued", "q": 1, "preview": "Remind me to call the plumber at 5"}
 {"kind": "queued", "q": 2, "preview": "What is on tomorrow?"}
 {"kind": "queued", "q": 3, "preview": "Book the dentist"}
-{"kind": "dequeued", "q": 1}</code></pre>
-<p><strong>What each part does.</strong> At start, <code>unfinished</code> walks the journal. The <code>task_start</code> opens a task. The three <code>queued</code> lines add three waiting messages, and the <code>dequeued</code> line removes the first, which had been reached before the stop. No <code>task_end</code> follows, so the task is still open. No <code>gate</code> line says a question was asked. The result is the summary <code>{"preview": "Summarise my inbox", "asked": False, "waiting": ["What is on tomorrow?", "Book the dentist"]}</code>.</p>
+{"kind": "task_end", "status": "done"}
+{"kind": "dequeued", "q": 1}
+{"kind": "task_start", "preview": "Remind me to call the plumber at 5"}</code></pre>
+<p><strong>What each part does.</strong> At start, <code>unfinished</code> walks the journal. The first <code>task_start</code> opens a task. The three <code>queued</code> lines add three waiting messages. The <code>task_end</code> closes the first task. The <code>dequeued</code> line removes the first waiting message, and the second <code>task_start</code> opens the task that was cut off. No <code>task_end</code> follows it, so it is still open. No <code>gate</code> line says a question was asked. The result is the summary <code>{"preview": "Remind me to call the plumber at 5", "asked": False, "waiting": ["What is on tomorrow?", "Book the dentist"]}</code>.</p>
 <p>The runner connects and finds <code>session.json</code>, so it resumes. <code>restart_notice</code> then builds the text.</p>
 <p><strong>Output.</strong> The owner receives:</p>
-<p><em>I was restarted while I was working on something: "Summarise my inbox". It was not finished, and I have not carried on with it by myself. 2 messages you sent were waiting behind it and were lost: "What is on tomorrow?"; "Book the dentist". Ask me again if you still want these done.</em></p>
-<p>Had a question been on the owner's screen, the notice would add that the question "no longer counts, so tapping it will do nothing", because a button that silently does nothing looks like a fault. Had the conversation not been resumed, it would end with "I also no longer have our earlier conversation, only what I remember about you." A test in <code>tests/test_durability.py</code> uses this journal as its input.</p></div>
+<p><em>I was restarted while I was working on something: "Remind me to call the plumber at 5". It was not finished, and I have not carried on with it by myself. 2 messages you sent were waiting behind it and were lost: "What is on tomorrow?"; "Book the dentist". Ask me again if you still want these done.</em></p>
+<p>Had a question been on the owner's screen, the notice would add that the question "no longer counts, so tapping it will do nothing", because a button that silently does nothing looks like a fault. Had the conversation not been resumed, it would end with "I also no longer have our earlier conversation, only what I remember about you." A test in <code>tests/test_durability.py</code> checks the same counting on a shortened journal.</p></div>
 
 <h2 id="down">Messages that arrive while the program is down</h2>
 <p>Telegram holds messages for a bot that is not running and hands them over when it returns, for about a day; WhatsApp holds them for about a day and a half. That is convenient and dangerous. "Send the contract to the agent", written at nine and delivered at three, may have been done by hand in between, or may no longer be wanted.</p>
@@ -154,10 +156,12 @@ return True</code></pre>
 
 <h2 id="restart">Restarting itself after a configuration change</h2>
 <p>Some changes need a restart. When the owner connects a new service from the chat ({{ch:services-with-their-own-server}}), the service brings new tools, and the set of tools is fixed when the agent client connects. The program has to start again to use them.</p>
-<p>The first version restarted inside the running process: stop polling, tear everything down, build it all again, all in one Python process. It worked six times in a row. Every trace after the first restart was nonetheless silently dropped. The tracing client exists once per process, the first run's clean-up had shut it, and nothing reopened it. No test found this; running the errand for real did.</p>
+<p>The obvious way is to restart inside the running process: stop polling, tear everything down, build it all again. That leaves behind anything that exists once per process and was shut by the first clean-up. A restart must begin from a new process.</p>
+<div class="box example"><div class="label">Case note: a restart that dropped every trace</div>
+<p>Restarting in place worked every time it was tried, in testing and in the owner's real chat. Every trace after the first restart was nonetheless silently dropped. The tracing client exists once per process, the first run's clean-up had shut it, and nothing reopened it. The live check of tracing runs one task in a fresh process, so it could not see this. No test found it; running the errand for real, connect after connect, did.</p></div>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Supervisor</dt><dd>A small parent process whose only job is to start the real program as a child and decide, when the child exits, whether to start another.</dd></dl></div>
-<p>A new process has none of the old one's history. So <code>python -m odysseus</code> now starts a supervisor, which runs the program as a child marked by an environment variable:</p>
+<p>A new process has none of the old one's history. So <code>python -m odysseus</code> starts a supervisor, which runs the program as a child marked by an environment variable:</p>
 <pre><code>def supervise() -> int:
     import os
     import subprocess
@@ -172,7 +176,7 @@ return True</code></pre>
         if code != RESTART:
             return code</code></pre>
 <p>The child asks for a restart by exiting with the code <code>RESTART</code>, which is 75. Inside <code>main</code>, the function handed to the connector records the request and stops the Telegram poller one and a half seconds later; the clean-up in <code>main</code>'s <code>finally</code> block closes every client, and <code>main</code> returns 75. Any other exit code, including a crash, ends the supervisor with that code, and whatever runs the supervisor (a terminal, or a host's restart policy) decides what happens next. The restart re-uses the mechanism above: the new child resumes the session, and because <code>/connect</code> is refused while a task is running, there is no interrupted task to announce.</p>
-<p><span class="g v">Verified</span>, live, in the owner's real chat with real servers: nine connects and disconnects in a row each ended with the assistant back in about twenty seconds, and after the last it used the new service.</p>
+<p><span class="g v">Verified</span>, live, in the owner's real chat with real servers, with the in-process restart that came before the supervisor: nine connects and disconnects in a row each ended with the assistant back in about twenty seconds, and after the last it used the new service. It was this run that showed traces were being dropped. The supervisor itself is verified by a unit test in <code>tests/test_startup.py</code>; no live restart through it is recorded.</p>
 <div class="box example"><div class="label">Case note: a restart that failed on start-up code</div>
 <p>One restart failed because of a wrong argument in the code that assembles the program at start-up. No test had caught it, because every other test builds its pieces by hand and never runs <code>main</code>. <code>tests/test_startup.py</code> was added for that reason: it runs <code>main</code> with stand-ins for Telegram and the agent client, once with every optional service configured and once with none. The lesson is general. The code that runs only at start is the code a restart depends on, and it needs a test of its own.</p></div>
 
@@ -210,7 +214,7 @@ return True</code></pre>
 <p>The second is subtler: a sign-in that returns to the program. Services with their own server are connected by a sign-in exchange in which the owner approves in a browser and the service then sends that browser back to an address on the machine the program runs on, such as <code>127.0.0.1</code>, carrying a one-time code. The program listens on that port and waits up to ten minutes for the code. On a laptop where the owner is also reading the chat, this works. On a server it does not: the owner's phone cannot reach <code>127.0.0.1</code> on a machine in a data centre. A sign-in completes only on the machine the program runs on, and connecting from a phone cannot complete by design. Running it on a server would need a public return address, which is not built. {{ch:secrets-and-sign-ins}} covers the exchange itself and the ports a program opens for it.</p>
 <h3>Secrets and data on a host</h3>
 <p>Keys go into the host's secret store, imported from the local <code>.env</code> file, which is ignored by version control, never copied into the image and never shown to the model. The image runs the program as an ordinary user rather than the administrator, which limits what a fault could damage.</p>
-<p>The data folder is the sensitive part. Once the conversation is saved, mail text the model has read is on disk in the clear, in the transcripts. On the owner's laptop the data folder sat inside a folder that a file-syncing service copies to its own servers: another company holding the owner's mail, chosen by nobody. It was moved out (copies already taken are not recalled), the program now warns at start-up if its data folder is inside a synced one, and every agent, including the unattended ones, writes its transcript inside the data folder and nowhere else. Nothing backs up the volume beyond whatever the host does by default.</p>
+<p>The data folder is the sensitive part. Once the conversation is saved, mail text the model has read is on disk in the clear, in the transcripts. A data folder inside a folder that a file-syncing service copies to its own servers means another company holding the owner's mail, chosen by nobody; this happened on the owner's laptop, and moving the folder out did not recall the copies already taken. So the program warns at start-up if its data folder is inside a synced one, and every agent, including the unattended ones, writes its transcript inside the data folder and nowhere else. Nothing backs up the volume beyond whatever the host does by default.</p>
 
 <h2 id="two">Two things that are easy to get wrong</h2>
 <h3>The clock</h3>
@@ -223,7 +227,7 @@ return True</code></pre>
     from zoneinfo import ZoneInfo
     zone = ZoneInfo(tz)
     return lambda: datetime.now(zone).replace(tzinfo=None)</code></pre>
-<p><code>main</code> builds this once and passes it to everything that needs the time. The daily budget uses the same zone, so "today" ends at the owner's midnight; it once ended at the machine's. The hosting configuration sets <code>ODYSSEUS_TZ</code>, and the deploy guide tells anyone copying it not to skip that line.</p>
+<p><code>main</code> builds this once and passes it to everything that needs the time. The daily budget uses the same zone, so "today" ends at the owner's midnight. The hosting configuration sets <code>ODYSSEUS_TZ</code>, and the deploy guide tells anyone copying it not to skip that line.</p>
 <h3>Who owns the disk</h3>
 <p>A freshly attached volume arrives owned by the administrator, and the program runs as an ordinary user who cannot write to it. A program that cannot write its memory fails at its first save. So the image's start command runs one step as administrator, hands the data folder to the program's user, and then starts the program as that user:</p>
 <pre><code>CMD ["sh", "-c", "chown -R app:app /data &amp;&amp; exec runuser -u app -- python -W ignore -m odysseus"]</code></pre>
@@ -233,25 +237,25 @@ return True</code></pre>
 <p>Two failures have been described already: restarting in place, which left process-wide state shut and failed silently, and start-up code that no test ran. Three more follow.</p>
 <h3>A dead assistant is silent</h3>
 <div class="box example"><div class="label">Case note: five minutes on a server</div>
-<p>On 17 November 2026 the program was deployed to a hosting service and started there. It wrote its start record to the mounted disk, showing mail, the browser and file reading connected, and handled one message. The machine was checked thirty seconds after launch and found running. At five minutes the hosting service stopped it, under a limit on new accounts with no payment card. Nothing in the deploy output said so; the only trace was a line in the machine's log. The copy on the owner's laptop had been stopped beforehand, correctly, so that two copies would not compete for messages. For some minutes no copy was running anywhere, and nothing said so. The owner found out by sending a message and getting no answer.</p>
+<p>The program was deployed to a hosting service and started there. It wrote its start record to the mounted disk, showing mail, the browser and file reading connected, and handled one message. The machine was checked thirty seconds after launch and found running. At five minutes the hosting service stopped it, under a limit on new accounts with no payment card. Nothing in the deploy output said so; the only trace was a line in the machine's log. The copy on the owner's laptop had been stopped beforehand, correctly, so that two copies would not compete for messages. For some minutes no copy was running anywhere, and nothing said so. The owner found out by sending a message and getting no answer.</p>
 <p>Three lessons, in order of generality. A check made at thirty seconds is evidence about thirty seconds. Stopping the old copy before the new one has proved itself removes the fallback at the moment it is most likely to be needed. And a system that announces its own failures still needs something outside itself to announce its death.</p></div>
-<p>The incident exposed a second gap. The journal recorded that the server's one task had finished and not whether its reply was sent, so whether that reply arrived is still unknown. Every reply is now recorded as sent, with the number of parts, or as failed, with how many parts got out. The watcher from outside is not built.</p>
-<h3>A lost conversation is not always announced</h3>
-<p>Reading the code showed one gap, since closed. When a saved session cannot be resumed, the runner writes an error to the journal and starts afresh. The owner used to hear that the earlier conversation was gone only if the restart had also interrupted a task, because only then was a notice sent. After a quiet restart with a damaged transcript, the owner's next "Looks good, send it" met a model with no idea what "it" was. The program now sends one line in that case too: it was restarted, could not pick up the earlier conversation, and still has what it remembers. The memory block is shown again, so lasting facts survive; the thread does not.</p>
-<h3>Waiting messages vanished</h3>
-<p>Messages queued behind a task were once held only in the process. A restart lost them after the owner had been told "Noted. I'll do this as soon as the current task is finished." That is why each one is now written to the journal and named in the notice.</p>
+<p>The incident exposed a second gap. The journal recorded that the server's one task had finished and not whether its reply was sent, so whether that reply arrived is unknown. A record of finishing is not a record of delivery: every reply is recorded as sent, with the number of parts, or as failed, with how many parts got out. The watcher from outside is not built.</p>
+<h3>A lost conversation must be said</h3>
+<p>When a saved session cannot be resumed, the runner writes an error to the journal and starts afresh. If the owner heard of this only when a restart had also interrupted a task, a quiet restart with a damaged transcript would leave the owner's next "Looks good, send it" facing a model with no idea what "it" was. So the program sends one line in that case too: it was restarted, could not pick up the earlier conversation, and still has what it remembers. The memory block is shown again, so lasting facts survive; the thread does not.</p>
+<h3>Waiting messages must be written down</h3>
+<p>The owner of a message queued behind a task has been told "Noted. I'll do this as soon as the current task is finished." Held only in the process, that promise would vanish in a restart without a word. So each waiting message is journalled as <code>queued</code>, so that a restart can name it in the notice.</p>
 <h2 id="testing">How to test it</h2>
 <p>A test of this part must check that state survives a new process reading the same files, that what cannot survive is announced, and that the program can assemble itself at all. The tests use a trick worth copying: a "restart" is simulated by building a second runner or conversation on the same folder, which is exactly what a new process does, without starting one.</p>
 <ul>
 <li><code>tests/test_durability.py</code> (eleven tests) covers the waiting queue and <code>stop</code>, <code>/new</code>, the session identifier being saved, picked up and passed as <code>resume</code> with transcripts inside the data folder, a damaged session file, and every case of the restart notice described above.</li>
 <li><code>tests/test_startup.py</code> checks that the program assembles with everything and with nothing optional, and that the supervisor starts a fresh child each time one exits with 75 and stops on any other code.</li>
 </ul>
-<p>What the tests do not show: that the library actually resumes a real session, that the notice reaches a phone after a real restart, or that anything works on a real server. Those need live runs. One exists for resuming: an evaluation scenario in which the owner says "Looks good, send it" after a restart sent the email shown before the restart, in two runs with the real model ({{ch:a-changing-world}}). Before the session was kept, the agent could only ask what "it" was.</p>
+<p>What the tests do not show: that the library actually resumes a real session, that the notice reaches a phone after a real restart, or that anything works on a real server. Those need live runs. One exists for resuming: an evaluation scenario in which the owner says "Looks good, send it" after a restart sent the email shown before the restart, in two runs with the real model ({{ch:a-changing-world}}). Without the kept session, the agent could only ask what "it" was.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
-<p><span class="g v">Verified</span> The sixteen tests in <code>tests/test_durability.py</code> and <code>tests/test_startup.py</code> pass. Resuming a conversation after a restart worked in an evaluation scenario with the real model, two runs. Restarting through the supervisor worked live nine times in a row. The image built, and on 17 November 2026 the program started on a hosting service, connected to the agent library, wrote to its volume as the right user, and handled one message.</p>
-<p><strong>The program has not run on a server for more than five minutes.</strong> That deployment was stopped by the host because the account had no payment card, and the program runs on the owner's laptop. Whether the reply to the server's one message was delivered is not known. No scheduled job has yet fired at its real time on either machine.</p>
-<p><span class="g u">Not tested</span> The restart notice reaching the owner's phone after a real restart mid-task. Memory and the schedule surviving a restart of the server's machine. A reminder firing at the right local time on a server. Whether one gigabyte of memory is enough. A conversation kept for weeks. Cost counted correctly across a resume: the library reports a running total per session, and whether it continues after a resume has not been measured ({{ch:cost}}). The stale-message rule for Telegram: it is written and has no test, because the stand-in for Telegram does not carry dates (the WhatsApp version has a unit test). Not built: a public return address for sign-ins, a backup of the volume, and anything outside the program that notices when it has died.</p></div>
+<p><span class="g v">Verified</span> The sixteen tests in <code>tests/test_durability.py</code> and <code>tests/test_startup.py</code> pass. Resuming a conversation after a restart worked in an evaluation scenario with the real model, two runs. Restarting in place worked live nine times in a row; the supervisor that replaced it is tested by a unit test only. The image built, and the program started on a hosting service, connected to the agent library, wrote to its volume as the right user, and handled one message.</p>
+<p><strong>The program has not run on a server for more than five minutes.</strong> That deployment was stopped by the host because the account had no payment card, and the program runs on the owner's laptop. Whether the reply to the server's one message was delivered is not known. No scheduled job is recorded firing at its real time on either machine.</p>
+<p><span class="g u">Not tested</span> A restart through the supervisor in the real chat. The restart notice reaching the owner's phone after a real restart mid-task. Memory and the schedule surviving a restart of the server's machine. A reminder firing at the right local time on a server. Whether one gigabyte of memory is enough. A conversation kept for weeks. Cost counted correctly across a resume: the library reports a running total per session, and whether it continues after a resume has not been measured ({{ch:cost}}). The stale-message rule for Telegram: it is written and has no test, because the stand-in for Telegram does not carry dates (the WhatsApp version has a unit test). Not built: a public return address for sign-ins, a backup of the volume, and anything outside the program that notices when it has died.</p></div>
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>

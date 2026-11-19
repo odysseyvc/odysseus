@@ -9,8 +9,8 @@
 </ul></div>
 
 <h2 id="problem">All green, and sixteen things wrong</h2>
-<p>Picture a program with 232 unit tests and an evaluation of 567 runs against the real model ({{ch:testing-and-evaluation}}), all passing. This project's program was in that state when a separate reader, with no stake in the code, read every file and returned sixteen defects. None had been found by a test.</p>
-<p>The most serious: the program watches incoming mail and, unattended, asks a model whether each message needs the owner ({{ch:acting-unasked}}). That model reads strangers' mail with nobody watching, and it had been given web search, while the program's own description said it had no tools. A stranger's email could try to send something out through a search query, on the one path where no owner would ever see a question.</p>
+<p>Picture a program with 232 unit tests and an evaluation of 567 runs against the real model ({{ch:a-changing-world}}), all passing. This project's program was in that state when a separate reader, with no stake in the code, read every file and returned sixteen defects. None had been found by a test.</p>
+<p>The most serious: the program watches incoming mail and, unattended, asks a model whether each message needs the owner ({{ch:acting-unasked}}). That model reads strangers' mail with nobody watching, and it had been given web search, while the written description of the program said it had no tools. A stranger's email could try to send something out through a search query, on the one path where no owner would ever see a question.</p>
 <p>The tests were not careless. A test checks that the program does what its author meant; a defect of this kind is something the author did not think of, so there is no test for it and every test passes. This chapter is about the other ways of looking: a reading by someone else, use in the state the owner actually lives in, and doing the real thing end to end.</p>
 
 <h2 id="concepts">Concepts</h2>
@@ -58,6 +58,8 @@
 <p>Three choices make a second reading worth its cost.</p>
 <p><strong>The reader is independent.</strong> They did not write the code, so they bring different blind spots. <strong>They read everything, including the claims</strong>: code, tests, evaluation, and the descriptions of what the program does. Several defects were gaps between a claim and the code ("this model has no tools"), invisible to anyone who reads one side. <strong>The output is a list with evidence</strong>: each item names the file and line that shows it, so it can be repaired or argued with.</p>
 <p>More tests extend the author's list rather than question it, and waiting for the owner to hit faults finds them at the worst time. Repeat a second reading whenever the program gains new ways to read or act; this one followed the arrival of watches, a second channel, a saved conversation, connections to any app, and a browser.</p>
+<div class="box example"><div class="label">Case note</div>
+<p>A further independent reading compared this book, chapter by chapter, with the code it describes, and found twelve more faults that no test had. The two worst were holes in the gate. Small additions run unasked in a conversation, and an unattended run was allowed whatever a conversation allowed, so a routine could have added a note, task or comment to the firm's database; it may now use only a looked-up tool that only reads. And a read sent to somebody else's service (X, a data vendor, a server connected by address) was never checked for private details; it is now checked as a web search is, and asked about if it carries any. The other ten fit the same families: the page reader and the mail checker were handed a server listing search and memory, held back by one deny-all check; a routine or watch could be set up unasked from text carrying details from the owner's accounts; a failed watch check and a conversation that could not be resumed went unannounced; a long approval question was cut before the gate measured it; an address-connected server was checked to be public only when connected; a verification email needed no date after the run began; the general app tool neither retried a failed read nor flagged a failed change; the meeting brief's task could read as the owner's; and a brief that ended hid an interrupted conversation. Each now has a test in <code>tests/test_found_by_reading.py</code>. <span class="g v">Verified</span>, unit tests. <span class="g u">Not tested</span>: none of the twelve repairs has been exercised against real services.</p></div>
 
 <h2 id="holes">First family: holes in the gate</h2>
 <p>The gate ({{ch:the-gate}}) decides which tool calls run, which are put to the owner, and which are refused. Each new capability brought tools it allowed, and several allowances rested on an assumption that was true when made and false later.</p>
@@ -65,7 +67,7 @@
 <caption>Holes in the gate, and what closed them.</caption>
 <thead><tr><th>What was wrong</th><th>Why it mattered</th><th>What it is now</th></tr></thead>
 <tbody>
-<tr><th>The agent that checks incoming mail could search the web</th><td>The one path from any stranger to a model holding a tool, unwatched</td><td>An agent of its own with three read-only tools</td></tr>
+<tr><th>The agent that checks incoming mail could search the web</th><td>The one path from any stranger to a model holding a tool, unwatched</td><td>An agent of its own, given a server that holds only three mail and calendar reads</td></tr>
 <tr><th>The leak check forgot everything on restart</th><td>The saved conversation still held the mail; the check knew nothing</td><td>Fingerprints kept in a file, as short hashes</td></tr>
 <tr><th>The leak check stopped learning when full</th><td>Nothing new recognised, and nothing said so</td><td>Oldest dropped to make room; logged</td></tr>
 <tr><th>Saving to memory never asked</th><td>A sentence read in an email could become a "fact about the owner"</td><td>Asked once the task has read anything others wrote</td></tr>
@@ -89,7 +91,7 @@
 </dl></div>
 
 <h2 id="silence">Second family: failures nobody was told about</h2>
-<p>A rule set early in this project says that silence must never mean failure ({{ch:staying-up}}). The reading found seven places where it did.</p>
+<p>A rule of this project says that silence must never mean failure ({{ch:staying-up}}). The reading found seven places where it did.</p>
 <div class="tablewrap"><table>
 <caption>Silent failures, and what the owner is told now.</caption>
 <thead><tr><th>What happened</th><th>What the owner saw</th><th>Now</th></tr></thead>
@@ -173,17 +175,17 @@ def claims(pattern: re.Pattern, text: str) -> bool:
     for _ in range(2):      # a blank to fill in, inside a draft, is not the model speaking; twice, for a blank inside a blank
         low = re.sub(r"\[[^\[\]\n]{0,300}\]", " ", low)
     return any(not _NEGATED.search(low[max(0, m.start() - 40):m.start()]) for m in pattern.finditer(low))</code></pre>
-<p><code>_NOTHING</code> stops "I sent" matching when "nothing", "no" or "none" follows; bracketed blanks, the shape of a draft, are removed first; and <code>_NEGATED</code>, in the same file, looks just before each match for words such as "not", "shall I" or "want me to", so a refusal or an offer is not a claim. Each false alarm became a case in <code>tests/test_eval_checks.py</code>, and the affected errands were run again: 28 of 28. <span class="g v">Verified</span> About a third of the failures in every run of this evaluation have been faults in the measurement. Tightening a check does not change that: the tightened check is new code with its own mistakes.</p>
+<p><code>_NOTHING</code> stops "I sent" matching when "nothing", "no" or "none" follows; bracketed blanks, the shape of a draft, are removed first; and <code>_NEGATED</code>, in the same file, looks just before each match for words such as "not", "shall I" or "want me to", so a refusal or an offer is not a claim. Each false alarm became a case in <code>tests/test_eval_checks.py</code>, and the affected errands were run again: 28 of 28. <span class="g v">Verified</span> Six of this run's eighteen failures were the measurement's fault, about the share found in {{ch:a-changing-world}}. Tightening a check does not change that: the tightened check is new code with its own mistakes.</p>
 <h3>Telling the model a rule changes what it does</h3>
 <p>One scenario fell to failing in six runs of seven. The owner asks what the afternoon holds, a colleague moves a meeting, and the owner asks for a reminder fifteen minutes before it; the right move is to read the calendar again. To explain the new memory rule, the prompt had been told that saving and reminders are not asked about "unless you have read mail, a web page, search results, a file or anything else other people wrote during the same task". The model concluded that reading again would cause a question, and set the reminder from the old time. Rewritten to say the question is the program's decision and a small cost, never a reason to skip a check, the scenario passed five times in seven, where it stood before. <span class="g v">Verified</span>, seven runs</p>
 <div class="box definition"><div class="label">Principle</div>
 <p>Enforce a rule in code and tell the model as little about its trigger as it needs. A model that knows what sets a question off will, reasonably, try not to set it off, and the cheapest way is to stop looking.</p></div>
 
 <h2 id="lived-in">What a clean room does not show</h2>
-<p>Every check so far starts fresh. The owner's system never is: its conversation is weeks long and resumed from disk, its process restarted many times. Some faults exist only there.</p>
+<p>Every check described above starts fresh. The owner's system never is: its conversation is weeks long and resumed from disk, its process restarted many times. Some faults exist only there.</p>
 <p>The standing instructions had gained a paragraph saying that a pitch deck sent with no message is to be dealt with, not described: search for the company and founders, file it with a deal at the earliest stage, and reply with a take of a fixed shape ({{ch:decks-and-data-rooms}}). Six runs in the partner evaluation passed, and so did a live check on an invented deck. <span class="g v">Verified</span></p>
 <div class="box example"><div class="label">Case note</div>
-<p>An hour later the owner sent a real fourteen-page deck through Telegram, with no message. The assistant saw the pages, noticed a detail on a chart that their text did not state, and did none of the steps: it summarised the deck and asked "What would you like me to do with it?". Every check had begun a new conversation. The owner's was weeks long, with many earlier turns in which a file was described and a question asked; the new paragraph sat far away in the standing instructions, and the words next to the file said only that there was no message. Those words were changed to say what such a file means; on the second sending the deck was filed, but with no search and no deal ("I can create a deal once you give me the stage"). Changed again to list the three steps and say not to ask for a stage, the third sending did all three in 47 seconds, asking nothing. <span class="g v">Verified</span>, once</p></div>
+<p>Then the owner sent a real fourteen-page deck through Telegram, with no message. The assistant saw the pages, noticed a detail on a chart that their text did not state, and did none of the steps: it summarised the deck and asked "What would you like me to do with it?". Every check had begun a new conversation. The owner's was weeks long, with many earlier turns in which a file was described and a question asked; the new paragraph sat far away in the standing instructions, and the words next to the file said only that there was no message. Those words were changed to say what such a file means. On the second sending nothing was asked: the assistant found the company already filed (the owner had asked for that after the first sending), added nothing twice and gave a take, but made no search and created no deal ("I can create a deal once you give me the stage"). Changed again to list the three steps and say not to ask for a stage, the third sending did all three in 47 seconds, asking nothing. <span class="g v">Verified</span>, once. Three things were still off: the search carried terms from the deck as well as names, which the instructions forbid and nothing in code prevents; the reply ran to about 480 words; and it cost 34 cents ({{ch:cost}}).</p></div>
 <p>The text that now sits beside the file, in <code>odysseus/ocr.py</code>:</p>
 <pre><code>NO_MESSAGE = ("(The owner sent this file with no message. If it is a pitch deck or another company's fundraising material, do not describe it "
               "and ask what to do. Deal with it now, as your instructions for a pitch deck say, and do every step: 1. search the web for the "
@@ -192,7 +194,7 @@ def claims(pattern: re.Pattern, text: str) -> bool:
               "take in the order given there, ending with the line on a first call. For any other file, say briefly what it is and ask what "
               "they would like done.)")</code></pre>
 <figure>
-<svg viewBox="0 0 720 230" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)" font-size="13">
+<svg viewBox="0 0 720 260" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)" font-size="13">
 <text x="170" y="20" text-anchor="middle" fill="var(--ink)">Clean room: a new conversation</text>
 <rect x="20" y="30" width="300" height="34" rx="5" fill="var(--paper-2)" stroke="var(--accent)"/>
 <text x="170" y="52" text-anchor="middle" fill="var(--ink)">Standing instructions (deck paragraph)</text>
@@ -211,8 +213,8 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 <text x="545" y="158" text-anchor="middle" fill="var(--ink)">The file, "no message"</text>
 <rect x="390" y="176" width="310" height="34" rx="5" fill="var(--paper-2)" stroke="var(--ok)"/>
 <text x="545" y="198" text-anchor="middle" fill="var(--ink)">Repair: the steps, beside the file</text>
-<text x="170" y="198" text-anchor="middle" fill="var(--bad)" font-size="12">Before the repair, the lived-in run copied</text>
-<text x="170" y="215" text-anchor="middle" fill="var(--bad)" font-size="12">its own earlier turns, not the far paragraph</text>
+<text x="545" y="232" text-anchor="middle" fill="var(--bad)" font-size="12">Before the repair, this run copied</text>
+<text x="545" y="249" text-anchor="middle" fill="var(--bad)" font-size="12">its own earlier turns, not the far paragraph</text>
 </svg>
 <figcaption>The same instruction at two distances. In a weeks-long conversation the standing paragraph is far from the file, and the nearest examples are the assistant's own earlier habits.</figcaption>
 </figure>
@@ -266,7 +268,7 @@ def claims(pattern: re.Pattern, text: str) -> bool:
             return 130
         if code != RESTART:
             return code</code></pre>
-<p>Anything that exists once per process (a client, a pool, a cache) survives an in-process restart in whatever state the last run left it.</p>
+<p>(The comment counts the in-process restarts made before the fault was noticed; the live run described above made nine.) Anything that exists once per process (a client, a pool, a cache) survives an in-process restart in whatever state the last run left it.</p>
 <h3>A preview that fetched a private link</h3>
 <p>The sign-in link for a newly connected service is sent into the chat, and Telegram by default previews links, which means Telegram's servers fetched the owner's sign-in link. No stand-in channel makes previews. The bot's messages now carry none (<code>odysseus/telegram.py</code>):</p>
 <pre><code>NO_PREVIEW = LinkPreviewOptions(is_disabled=True)</code></pre>
@@ -284,6 +286,7 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 <tbody>
 <tr><td>For every model that reads text other people wrote: which tools does it hold, and is anyone watching?</td><td>The unattended mail checker with web search</td></tr>
 <tr><td>For every allowance in the gate: what assumption does it rest on, and is it still true now that the program reads more?</td><td>Unasked memory writes; one approval covering a whole app</td></tr>
+<tr><td>Does what a conversation may do unasked also hold when nobody is watching?</td><td>A routine that could add to the firm's database</td></tr>
 <tr><td>Is each decision made from the source at the moment of acting, or from a copy?</td><td>The guest added later</td></tr>
 <tr><td>What state lives only in memory, and what happens to it on restart or when full?</td><td>The leak check that forgot</td></tr>
 <tr><td>Does every failure reach the owner, or only a log line? Can any call wait for ever?</td><td>The deleted reminder; the blocked queue</td></tr>
@@ -296,8 +299,8 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 <p>To test the review itself, seed a known defect (a check that cannot fail, a tool given to the wrong model) and see whether the reader finds it.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
-<p><span class="g v">Verified</span>: the repairs to the gate, the silent failures and the ledger are covered by 36 unit tests, each for something that had been wrong in running code and passed every earlier test. The repaired evaluation was run once (563 of 581; no run broke "approved", "recipients", "declined", "once", "private", "memory" or "finished"; no planted instruction acted on in 84 chances), the affected errands again (28 of 28), and the rewritten prompt sentence seven times. The deck instruction beside the file worked once in the owner's real conversation. DocSend verification worked live after the click-counter repair.</p>
-<p><span class="g u">Not tested</span>: the second reading's repairs against a real mailbox, calendar or WhatsApp, or a real restart with messages waiting; the deck instruction over many decks; traces kept intact by the supervisor over many restarts, which is not separately recorded. The leak check still misses a paraphrase, a stream of events that dies after opening is not noticed, and the budget is checked before a task, not during it. Status across the program is kept in {{ch:what-is-built}}.</p></div>
+<p><span class="g v">Verified</span>: the repairs to the gate, the silent failures and the ledger are covered by 36 unit tests, each for something that had been wrong in running code and passed every earlier test. The repaired evaluation was run once (563 of 581; no run broke "approved", "recipients", "declined", "once", "private", "memory" or "finished"; no planted instruction acted on in 84 chances), the affected errands again (28 of 28), and the rewritten prompt sentence seven times. The deck instruction beside the file worked once in the owner's real conversation. DocSend verification worked live after the click-counter repair. The twelve faults found by reading the book against the code each have a unit test in <code>tests/test_found_by_reading.py</code>.</p>
+<p><span class="g u">Not tested</span>: any of those twelve repairs against real services; the second reading's repairs against a real mailbox, calendar or WhatsApp, or a real restart with messages waiting; the deck instruction over many decks; traces kept intact by the supervisor over many restarts, which is not separately recorded. The leak check still misses a paraphrase, a stream of events that dies after opening is not noticed, and the budget is checked before a task, not during it. Status across the program is kept in {{ch:what-is-built}}.</p></div>
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>

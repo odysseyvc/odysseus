@@ -40,7 +40,7 @@
 <g font-family="var(--sans)" font-size="13" fill="var(--ink)">
 <rect x="20" y="10" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="170" y="37" text-anchor="middle">Message arrives (private chat only)</text>
 <rect x="20" y="80" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="107" text-anchor="middle">Is the sender the owner?</text>
-<rect x="20" y="150" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="177" text-anchor="middle">Is it a command (/status, /memory ...)?</text>
+<rect x="20" y="150" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="177" text-anchor="middle">Is it a command (/schedule, /apps ...)?</text>
 <rect x="20" y="220" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="247" text-anchor="middle">Is it "stop" or "cancel"?</text>
 <rect x="20" y="290" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="317" text-anchor="middle">Is a task already running?</text>
 <rect x="20" y="360" width="300" height="44" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/><text x="170" y="387" text-anchor="middle">Is today's budget used up?</text>
@@ -50,18 +50,18 @@
 <rect x="380" y="220" width="280" height="44" rx="6" fill="var(--paper-2)" stroke="var(--warn)"/><text x="520" y="240" text-anchor="middle">Yes: two-layer stop,</text><text x="520" y="256" text-anchor="middle">queue emptied</text>
 <rect x="380" y="290" width="280" height="44" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="520" y="310" text-anchor="middle">Yes: wait in the queue (up to 5),</text><text x="520" y="326" text-anchor="middle">reply "Noted."</text>
 <rect x="380" y="360" width="280" height="44" rx="6" fill="var(--paper-2)" stroke="var(--bad)"/><text x="520" y="380" text-anchor="middle">Yes: refuse before any model call,</text><text x="520" y="396" text-anchor="middle">and say so</text>
-<g font-size="12" fill="var(--ink-2)"><text x="178" y="72">yes</text><text x="178" y="142">no</text><text x="178" y="212">no</text><text x="178" y="282">no</text><text x="178" y="352">no</text><text x="178" y="420">no</text></g>
+<g font-size="12" fill="var(--ink-2)"><text x="178" y="142">yes</text><text x="178" y="212">no</text><text x="178" y="282">no</text><text x="178" y="352">no</text><text x="178" y="420">no</text></g>
 </g>
 <g stroke="var(--ink-2)" stroke-width="1.5" fill="none">
 <path d="M170 54V78" marker-end="url(#cv-a)"/><path d="M170 124V148" marker-end="url(#cv-a)"/><path d="M170 194V218" marker-end="url(#cv-a)"/><path d="M170 264V288" marker-end="url(#cv-a)"/><path d="M170 334V358" marker-end="url(#cv-a)"/><path d="M170 404V423" marker-end="url(#cv-a)"/>
 <path d="M320 102H378" marker-end="url(#cv-a)"/><path d="M320 172H378" marker-end="url(#cv-a)"/><path d="M320 242H378" marker-end="url(#cv-a)"/><path d="M320 312H378" marker-end="url(#cv-a)"/><path d="M320 382H378" marker-end="url(#cv-a)"/>
 </g>
-</svg><figcaption>The checks every message passes, in order. Notice that commands and "stop" are tested before "is a task running?", so they are never made to wait; and that a stranger and an exhausted budget both leave before any model is called, so neither costs anything.</figcaption></figure>
+</svg><figcaption>The checks every message passes, in order. Notice that commands and "stop" are tested before "is a task running?", so they are never made to wait; and that a stranger and an exhausted budget both leave before any model is called, so neither costs anything. In the code some commands are matched just before stop and some (<code>/status</code>, <code>/memory</code>, <code>/new</code>, <code>/help</code>) just after; all come before the busy check.</figcaption></figure>
 <p>Three properties follow from the order.</p>
 <ul>
 <li><strong>The owner check is first.</strong> Nothing a stranger sends reaches any later code: not the command parser, not the file reader, not the model. Every later check can therefore assume it is talking to the owner.</li>
 <li><strong>Commands and "stop" come before the busy check.</strong> A queue that could hold "stop" behind a long task would make the most important command the slowest one.</li>
-<li><strong>The budget check is last, just before the model.</strong> Everything above it is free, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone.</li>
+<li><strong>The budget check is last, just before the model.</strong> Everything above it is answered by code, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone. (Two steps not drawn run before the commands, and only when nothing is running: fetching a PDF the owner linked to, and reading a DocSend link in a browser, which is paid for and checks the budget itself; see {{ch:decks-and-data-rooms}}.)</li>
 </ul>
 
 <h3>Why these choices and not the obvious ones</h3>
@@ -254,11 +254,25 @@
 <p>Each tool that changes something records a line as it makes the change. Every such list is emptied at the start of a task, so only this task's changes are reported, and at the end they are appended under fixed headings: "Memory:", "Done on your accounts:", "Browser:", "Schedule:", "Watching:".</p>
 <p>The model's summary of what it did is a claim, and can be wrong: "I've sent it" after a declined send, or silence about a change that happened. A model misled by a planted instruction might be steered to hide what it did. The program's lines come from the tools themselves, and where they disagree with the model's words, they are the ones to believe. The connection link is handled the same way for a related reason: opening it grants access to one of the owner's accounts, so it is passed through exactly as the connector produced it, and the model never holds a copy it could alter ({{ch:secrets-and-sign-ins}}).</p>
 
+<h3>Beginning again after a pause</h3>
+<p>One conversation kept for ever is the simplest design and the dearest. Every message is charged for everything said before it, and the cache that makes that tolerable lapses after a few idle minutes ({{ch:cost}}). So before a task runs, code asks whether to carry on or begin again:</p>
+<pre><code>        if self._last_end is None or self._runner.session_id is None or self._s.fresh_after_min &lt;= 0:
+            return ""
+        idle_s = (self._now() - self._last_end).total_seconds()
+        if idle_s &gt;= self._s.fresh_after_min * 60:
+            return "pause"
+        if idle_s &gt;= CACHE_COLD_S and self._runner.context_tokens &gt; self._s.fresh_above_tokens:
+            return "size"
+        return ""</code></pre>
+<p class="src"><code>odysseus/conversation.py</code>, <code>_fresh_reason</code></p>
+<p>Two rules, both arithmetic. After a long pause (two hours by default) the thread has usually moved on. Once the conversation is large (the last call sent the model more than 40,000 tokens), any pause long enough for the cache to have lapsed is reason enough, because the next message would pay for all of it either way. When either holds, the program writes a <code>fresh</code> line to the journal, forgets the saved conversation, and puts two things ahead of the owner's message: the last three exchanges, written out by code and cut where long, under a heading that tells the model older things are gone unless saved; and the memory block, as at any start. The model is told to say so and ask if the owner refers to something it cannot see.</p>
+<p>What this gives up is real. Anything older than three exchanges that was not saved to memory is no longer in front of the model, and the text of a file sent earlier is replaced by its name. The owner is not told that a new conversation began. Whether that trade is right in daily use has not been measured; the tests show only that the rule fires when it should.</p>
+
 <h2 id="example">Worked example: one busy minute</h2>
 <p>Take the scenario from the opening, with the stranger included. The journal lines below are illustrative (the times and numbers are invented), but every <code>kind</code> and field name is the one the code writes.</p>
 <ol>
 <li><strong>The owner sends</strong> "What is the last train to the coast tonight?". Owner check passes; it is not a command; nothing is running; the day's ledger stands at $0.21 of $3.00. A task starts.
-<pre><code>{"ts": 1795000000.0, "kind": "task_start", "chars": 43, "preview": "What is the last train to the coast tonight?"}</code></pre></li>
+<pre><code>{"ts": 1795000000.0, "kind": "task_start", "chars": 44, "preview": "What is the last train to the coast tonight?"}</code></pre></li>
 <li><strong>The model asks for a search.</strong> The loop records the request, and the search tool records its result and the price the search service reported.
 <pre><code>{"ts": 1795000002.1, "kind": "tool_request", "name": "mcp__odysseus__web_search", "input": {"query": "...", "objective": "..."}}
 {"ts": 1795000004.0, "kind": "tool", "name": "web_search", "query": "...", "objective": "...", "ok": true, "results": 6, "cost_usd": 0.007}</code></pre>
@@ -283,16 +297,16 @@ The owner's phone shows a draft that grows every 0.8 seconds or so.</li>
 <p>The lesson is broader than cost. A stand-in encodes a belief about the real component. When the belief is wrong, stand-in and code agree and the tests pass. Only a run against the real thing catches it ({{ch:cost}} returns to this case).</p>
 
 <h3>Windows between two states</h3>
-<p>The "still stopping" and "typing does not answer it" branches of the queue both repair faults found by a later reading of the code ({{ch:a-second-reading}}): a message queued behind a task being cancelled ran later out of turn, and a typed "yes" was queued and run as a task. The lesson: when a component has more states than idle and busy, consider every kind of message in every state.</p>
+<p>The "still stopping" and "typing does not answer it" branches of the queue both repair faults found by reading the code ({{ch:a-second-reading}}): a message queued behind a task being cancelled ran later out of turn, and a typed "yes" was queued and run as a task. The lesson: when a component has more states than idle and busy, consider every kind of message in every state.</p>
 
 <h3>Silence that looked like success</h3>
 <p>Three failures were silent in the same way. Queued messages vanished at a restart after the owner had been told "Noted". A task could be logged as done while its reply never arrived. A task ended by force was recorded as costing nothing. Each repair is a journal line (<code>queued</code>, <code>reply</code> or an <code>error</code> with <code>parts_sent</code>, a forced <code>task_end</code> with an estimate). A line in a file does not tell the owner anything by itself; it is what lets the program tell them.</p>
 
 <h3>Limits that are not quite limits</h3>
-<p>The daily budget is checked before a task starts, not during it, so a task begun a cent under the limit can still spend its own $0.50. The daily figure is a threshold for starting, not a ceiling, and the library's own hard cap is not set. And in the first live run, a task stopped through layer one was recorded as costing nothing, because the library's running total had not yet moved; the amount appeared against the next task. The day's total was right and the attribution off by one task. Whether that still happens has not been re-checked.</p>
+<p>The daily budget is checked before a task starts, not during it, so a task begun a cent under the limit can still spend its own $0.50. The daily figure is a threshold for starting, not a ceiling, and the library's own hard cap is not set. And in one live run, a task stopped through layer one was recorded as costing nothing, because the library's running total had not yet moved; the amount appeared against the next task. The day's total was right and the attribution off by one task. Whether that still happens has not been re-checked.</p>
 
 <h3>A check that cannot fail</h3>
-<p>Because "Done on your accounts" is written by code, an evaluation check called "honest" that compared that line with the world could hardly fail, and measured nothing about the model. The model's own words now have to be checked separately ({{ch:testing-and-evaluation}}). The program's lines make the report trustworthy, not the model's prose.</p>
+<p>Because "Done on your accounts" is written by code, an evaluation check called "honest" that compared that line with the world could hardly fail, and measured nothing about the model. The model's own words have to be checked separately ({{ch:testing-and-evaluation}}). The program's lines make the report trustworthy, not the model's prose.</p>
 
 <h2 id="testing">How to test it</h2>
 <p>The control layer is the part of an agent that tests cover well, because its behaviour is fixed by code. A test of it must check that a stranger gets no reply, preview or model call; that "stop" never reaches the model, ends the task within a bounded time even when the interrupt is ignored, and empties the queue; that queued messages run in order and a sixth is refused; that commands are answered during a task; that each limit ends or refuses a task and says so; and that a reply that cannot be sent is recorded as lost without leaving the program stuck.</p>
@@ -317,7 +331,7 @@ The owner's phone shows a draft that grows every 0.8 seconds or so.</li>
 <div class="box exercises"><div class="label">Exercises</div>
 <ol>
 <li>Why is the owner check placed before the command parser, rather than only before the model call? Give one concrete thing a stranger could do if it were placed later.</li>
-<li>The layer-two stop records the forced task's cost as an estimate from token counts. Why can it not use the library's own figure? What would be lost if it simply recorded zero, as an earlier version did?</li>
+<li>The layer-two stop records the forced task's cost as an estimate from token counts. Why can it not use the library's own figure? What would be lost if it simply recorded zero?</li>
 <li>Extend the code: add a command <code>/queue</code> that lists the messages waiting behind the current task by their preview, without calling a model. Which existing fields make this possible, and what should it say when nothing is waiting?</li>
 <li>Extend the code: <code>unfinished</code> walks the whole journal at every start-up, and the journal grows without limit. Design a change that keeps start-up fast without giving up the rule that everything is derived from the journal. What must stay true for the ledger to remain correct?</li>
 <li>The model's prose and the program's "Done on your accounts" line can disagree. Write down three different ways they could disagree, say which one the owner should believe in each case, and propose a check (in code or in evaluation) that would catch the disagreement.</li>

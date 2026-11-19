@@ -14,11 +14,10 @@
 <p>The model cannot search by itself. It produces text and nothing else. So something has to sit around the model: a program that lets it ask for a search, runs the search, gives it the results, lets it ask again, and knows when to stop. That program must also refuse anything the model asks for that it should not have. The library this book's system is built on arrives with tools for running shell commands and editing files, because it was made for programming assistants. A personal agent on a server must have none of them.</p>
 
 <h2 id="call">What a model does in one call</h2>
+<p>{{ch:what-a-personal-agent-is}} defined the model as the part that takes text in and produces text out, and a step as one call to it. Modern models are trained to continue a conversation: given messages, they write the next one.</p>
 <div class="box definition"><div class="label">Definitions</div>
 <dl class="terms">
-<dt>Language model</dt><dd>A program that, given a sequence of text, produces more text that plausibly continues it. Modern models are trained to continue a conversation: given messages, they write the next one.</dd>
 <dt>Token</dt><dd>The unit a model reads and writes, roughly a short word or part of a word. Models are priced per token, separately for tokens read and tokens written.</dd>
-<dt>Model call (step)</dt><dd>One request to the model and its one response. In this book a call is also called a step.</dd>
 <dt>System prompt</dt><dd>Fixed instructions sent at the start of every call, telling the model who it is, what it can do and how to behave.</dd>
 </dl></div>
 <p>A model call is a function from text to text. What goes in is the system prompt, the conversation so far and, if the model may use tools, a list of their descriptions. What comes out is the model's next message. (This is our general explanation of how such services work, not a finding of this project.)</p>
@@ -29,13 +28,12 @@ PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
     ...
 }</code></pre>
-<p>For this model, writing a token costs five times as much as reading one, and reading a token the service has cached from a recent call costs a twentieth of reading it fresh. The comment beside the table in <code>odysseus/agent.py</code> records that the input and output prices were read from the maker's price list in November 2026, and that the cache-write figures are an estimate. Because a long conversation resends its history on every call, the cheaper cached rate is what makes long conversations affordable at all ({{ch:cost}}).</p>
+<p>For this model, writing a token costs five times as much as reading one, and reading a token the service has cached from a recent call costs a twentieth of reading it fresh. The comment beside the table in <code>odysseus/agent.py</code> records that the input and output prices were read from the maker's price list (they may since have changed), and that the cache-write figures are an estimate. Because a long conversation resends its history on every call, the cheaper cached rate is what makes long conversations affordable at all ({{ch:cost}}).</p>
 
 <h2 id="tools">What a tool call is</h2>
+<p>As defined in {{ch:what-a-personal-agent-is}}, a tool is one action the model may choose, and a tool call is the model's request to use it. Here is what they look like on the wire. A tool is described to the model by a name, a sentence saying what it does, and a <em>schema</em>: a precise statement of what inputs it takes. A tool call is a structured message from the model naming a tool and giving inputs that fit its schema, in place of (or alongside) text for the person.</p>
 <div class="box definition"><div class="label">Definitions</div>
 <dl class="terms">
-<dt>Tool</dt><dd>An action the model may request, described to it by a name, a sentence saying what it does, and a schema: a precise statement of what inputs it takes.</dd>
-<dt>Tool call</dt><dd>A structured message from the model naming a tool and giving inputs that fit its schema, in place of (or alongside) text for the person.</dd>
 <dt>Tool result</dt><dd>What the code that ran the tool hands back to the model, as the next message in the conversation.</dd>
 <dt>MCP</dt><dd>The Model Context Protocol, a standard format for describing tools to a model and calling them. In this system the tools are served by an MCP server that runs inside the same program.</dd>
 </dl></div>
@@ -49,9 +47,9 @@ PRICES = {
 <div class="box definition"><div class="label">Definitions</div>
 <dl class="terms">
 <dt>Agent loop</dt><dd>The repetition at the heart of an agent: call the model; if it requests a tool, decide, run it, append the result and call again; if it replies with text only, stop.</dd>
-<dt>Turn</dt><dd>Everything between one message from the owner and the agent's reply: one pass of the agent loop from start to finish, made of one or more steps.</dd>
 <dt>Task</dt><dd>The unit the system budgets, logs and can stop. In a conversation, one task is one turn.</dd>
 </dl></div>
+<p>A turn, everything between one message from the owner and the agent's reply, is therefore one pass of the agent loop from start to finish.</p>
 <figure>
 <svg viewBox="0 0 720 380" width="100%" role="img" aria-label="Flow of the agent loop: the owner's message goes to a model call; a tool request goes to the policy, which allows or refuses; an allowed tool runs and its result returns to the next model call; a text-only reply ends the turn. Limits, stop and errors can end the loop at any step.">
 <defs><marker id="al-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>
@@ -68,7 +66,7 @@ PRICES = {
 <path d="M160 65H218"/><path d="M380 65H438"/><path d="M520 90V168"/><path d="M440 195H382"/><path d="M300 170V92"/><path d="M600 65H660V288"/>
 </g>
 <g font-family="var(--sans)" font-size="12" fill="var(--ink-2)">
-<text x="528" y="134">tool</text><text x="668" y="180">text only</text><text x="390" y="186">allowed</text><text x="306" y="134">next step</text>
+<text x="528" y="134">tool</text><text x="610" y="180">text only</text><text x="390" y="186">allowed</text><text x="306" y="134">next step</text>
 </g>
 </svg>
 <figcaption>The agent loop. Notice that the model appears in one box only. Every arrow out of the model goes through code before anything happens, and the conditions that end a turn early are checked by code without asking the model.</figcaption>
@@ -99,14 +97,14 @@ PRICES = {
     self._blank = True
     self._journal.write("compact")
     return {}</code></pre>
-<p><span class="g u">Not tested</span> Compaction has not yet happened in a live conversation; this path has been exercised only by a test that sends the signal by hand.</p>
+<p><span class="g u">Not tested</span> Compaction has not happened in a live conversation; this path has been exercised only by a test that sends the signal by hand.</p>
 <p>Third, context costs money in proportion to its size, on every step. A document the owner sends (as opposed to a photo, which the model is shown directly) is therefore turned into text by a separate service, and the file itself is not put into the conversation, where it would be carried forward with every later message ({{ch:files-pictures-and-voice}}).</p>
 <p>The conversation must also survive a restart of the program: its id is saved to disk and the library resumes it ({{ch:staying-up}}).</p>
 
 <h2 id="principle">The model proposes, code grants</h2>
 <div class="box definition"><div class="label">Principle</div>
 <p><strong>The model proposes, code grants.</strong> The model may request any action. Whether the action happens is decided by code that the model cannot alter, on rules that do not depend on what the model was told or what it read.</p></div>
-<p>The principle is needed because of a property of language models that has not been engineered away. <span class="g v">Verified</span> One model maker's own documentation says its model "sometimes follows instructions found in page content even when they conflict with yours" (<a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/browser-use-tool">Anthropic</a>). <span class="g s">Secondary</span> A 2026 study of six leading models driving browsers reported that planted instructions succeeded about a quarter of the time on average (<a href="https://arxiv.org/pdf/2606.05233">paper</a>). A design that is safe only while the model behaves will fail.</p>
+<p>The principle is needed because of a property of language models that has not been engineered away. <span class="g v">Verified</span> One model maker's own documentation says its model "sometimes follows instructions found in page content even when they conflict with yours" (<a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/browser-use-tool">Anthropic</a>). <span class="g s">Secondary</span> A study of six leading models driving browsers reported that planted instructions succeeded about a quarter of the time on average (<a href="https://arxiv.org/pdf/2606.05233">paper</a>). A design that is safe only while the model behaves will fail.</p>
 <p>The tool call is what makes the principle possible. Because every action passes through code as a request, code can inspect it. The table shows where the boundary is held.</p>
 <div class="tablewrap"><table>
 <caption>Where code, not the model, holds the boundary.</caption>
@@ -142,7 +140,7 @@ PRICES = {
 <g stroke="var(--ink-2)" fill="none" marker-end="url(#al-arrow2)">
 <path d="M100 175H123"/><path d="M225 165L268 90"/><path d="M385 111V133"/><path d="M385 191V213"/>
 <path d="M500 243H530V60H558"/><path d="M530 115H558"/><path d="M530 170H558"/><path d="M530 225H558"/><path d="M530 243V280H558"/>
-<path d="M560 350H500" stroke-dasharray="5 4"/>
+<path d="M560 350H535V163H502" stroke-dasharray="5 4"/>
 </g>
 <text x="530" y="392" font-family="var(--sans)" font-size="12" text-anchor="middle" fill="var(--ink-2)">the scheduler can start a task with no message</text>
 </svg>
@@ -150,7 +148,7 @@ PRICES = {
 </figure>
 <div class="tablewrap"><table>
 <caption>The core files of the system and their responsibilities.</caption>
-<thead><tr><th>File</th><th>Responsibility</th><th>Hands anything to the model?</th></tr></thead>
+<thead><tr><th>File</th><th>Responsibility</th><th>Calls the model library?</th></tr></thead>
 <tbody>
 <tr><th><code>telegram.py</code>, <code>whatsapp.py</code></th><td>Carry messages and button taps between the chat service and the conversation rules</td><td>No</td></tr>
 <tr><th><code>conversation.py</code></th><td>Who may speak, what "stop" does, the daily budget, one task at a time, what the owner is told at the end</td><td>No</td></tr>
@@ -160,7 +158,7 @@ PRICES = {
 <tr><th><code>journal.py</code></th><td>The log, one line per step, and the ledger of money spent per day derived from it</td><td>No</td></tr>
 </tbody>
 </table></div>
-<p>The right-hand column is the point of the arrangement. Only one file hands anything to the model, and the rules live in files that do not. The model is a guest inside the shell.</p>
+<p>The right-hand column is the point of the arrangement. Only one file calls the model library, and the rules live in files that do not. (Others prepare what the model is sent: <code>conversation.py</code> adds the time stamp and the memory to the owner's message.) The model is a guest inside the shell.</p>
 
 <h2 id="mechanism">The mechanism in code</h2>
 <h3>Restricting the library</h3>
@@ -200,7 +198,7 @@ MEMORY_TOOLS = tuple(_name(n) for n in ("remember", "forget", "note", "recall"))
 SCHEDULE_TOOLS = tuple(_name(n) for n in ("schedule", "list_schedule", "cancel_schedule"))
 ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})</code></pre>
-<p>Everything on the list either reads public information or writes only to the system's own files. A routine, run with nobody watching, gets the smaller <code>ROUTINE_TOOLS</code> set: it can read and write nothing.</p>
+<p>Everything on the list either reads public information or writes only to the system's own files. A routine, run with nobody watching, starts from the smaller <code>ROUTINE_TOOLS</code> set (search and recall), to which <code>routine_tools</code> adds only the reading tools of connected accounts: it can read, and it can write nothing.</p>
 <p>When the full gate is in use, the runner replaces this simple policy:</p>
 <pre><code>if gate is not None:
     # With a gate, only tools it always allows skip the question; everything else goes through it.
@@ -223,6 +221,7 @@ async for msg in client.receive_response():
         # One model call can arrive as several messages sharing an id; count it once.
         key = msg.message_id or f"n{len(calls)}"
         calls[key] = estimate_usd(self._model, msg.usage or {})
+        ...    # (three lines omitted here: the size of what the model was sent is recorded)
         if self._limit is None and not self._stopped:
             if len(calls) > self._s.max_turns:
                 self._limit = "turn_limit"
@@ -254,15 +253,18 @@ else:
         # The library is synchronous; keep it off the event loop so "stop" stays responsive.
         response = await asyncio.wait_for(asyncio.to_thread(spec.execute, args), SEARCH_TIMEOUT_S)
         text = spec.format(response)
-    except (Exception, asyncio.TimeoutError) as e:
+    except (Exception, asyncio.TimeoutError) as e:  # bad arguments, network, quota, no answer: all go back to the model as a failed call
         journal.write("tool", name="web_search", query=query, ok=False, error=type(e).__name__)
         return {"content": [{"type": "text", "text": f"Search failed: {type(e).__name__}"}], "is_error": True}
     count = len(getattr(response, "results", None) or [])
+    # The search service states what each call cost. It is recorded, and the ledger counts it (journal.py).
     price = getattr(getattr(response, "cost_dollars", None), "total", None)
     journal.write("tool", name="web_search", query=query, objective=str(args.get("objective", ""))[:300],
                   ok=True, results=count, cost_usd=float(price) if isinstance(price, (int, float)) else 0.0)
+    if len(text) > MAX_RESULT_CHARS:
+        text = text[:MAX_RESULT_CHARS] + f"\n[Cut: {len(text)} characters came back. Search again, more narrowly, for the rest.]"
     return {"content": [{"type": "text", "text": f"{UNTRUSTED_NOTE}\n\n{text}"}]}</code></pre>
-<p>Four habits are visible. The search runs on a separate thread with a 40-second timeout, so a slow search cannot freeze the program and "stop" still works. Any failure, from bad arguments to a lost network, goes back to the model as a failed tool call it can reason about, not as a crash that ends the task. Every call is logged with its cost, which the daily ledger counts. And the results are prefixed with a fixed line saying they are material to read, not instructions from the owner. That line lowers the chance of the model being misled by a page; it guarantees nothing ({{ch:untrusted-content}}).</p>
+<p>Five habits are visible. The results are cut at 12,000 characters, with a note telling the model to search more narrowly, because whatever a search adds to the conversation is paid for again with every later message. The search runs on a separate thread with a 40-second timeout, so a slow search cannot freeze the program and "stop" still works. Any failure, from bad arguments to a lost network, goes back to the model as a failed tool call it can reason about, not as a crash that ends the task. Every call is logged with its cost, which the daily ledger counts. And the results are prefixed with a fixed line saying they are material to read, not instructions from the owner. That line lowers the chance of the model being misled by a page; it guarantees nothing ({{ch:untrusted-content}}).</p>
 <p>The model supplies a <em>query</em> describing the page it hopes to find and an <em>objective</em> saying what the search is for; both reach the search service unchanged, as the service's own guidance recommends. The system prompt carries the service's recommended sentence about when to search, so the model looks things up rather than answer from stale knowledge.</p>
 
 <h2 id="worked">Worked example: one message, end to end</h2>
@@ -270,7 +272,7 @@ else:
 <ol>
 <li><strong>Channel.</strong> <code>telegram.py</code> receives the message in a private chat and passes the sender's id and text on.</li>
 <li><strong>Conversation rules.</strong> The sender is the owner; the text is not a command such as <code>stop</code>; no task is running; today's spending is under the limit. A task starts and the journal records <code>task_start</code>.</li>
-<li><strong>Prompt assembly.</strong> The time is appended, for example <code>[Friday 20 November 2026, 10:15]</code>, so that "Monday" can be worked out. At the start of a conversation the owner's saved memory is put in front.</li>
+<li><strong>Prompt assembly.</strong> The time is appended in square brackets, as the weekday, the date and the hour (a stamp that begins <code>[Friday</code>, say), so that "Monday" can be worked out. At the start of a conversation the owner's saved memory is put in front.</li>
 <li><strong>Step 1.</strong> The model replies with a tool call: <code>mcp__odysseus__web_search</code>, query <em>Harbour Street museum opening hours and admission prices</em>, objective <em>the museum's own page first; Monday hours and adult price</em>. The runner logs <code>tool_request</code> and counts one step.</li>
 <li><strong>Policy.</strong> The gate's rule for search finds nothing from the owner's mail or calendar in the query, so it allows it.</li>
 <li><strong>Tool.</strong> The search runs and is logged as <code>tool</code> with <code>ok: true</code> and its cost. The model receives the results under the line saying they are material to read.</li>
@@ -293,16 +295,18 @@ else:
 <p>Just as important is what it must not have: any tool that sends, pays, deletes or shares. With only a search, the worst outcome of a successful prompt injection is a wrong or strange reply. That stops being true the moment a consequential tool is added, which is why the gate must be built before the tools that need it.</p>
 
 <h2 id="wrong">What goes wrong</h2>
-<p><strong>Inheriting tools.</strong> An agent library built for one purpose carries tools for that purpose. Removing them is a matter of configuration, and configuration can silently not take effect. The system therefore removes the built-in tools and, separately, refuses any unlisted tool, so that if one measure fails the other holds. <span class="g v">Verified</span> Whether <code>tools=[]</code> removed every built-in tool was first known only from reading the library's documentation, which did not state it outright. The first live run settled it: the library's own start-up report listed exactly one tool, the search.</p>
+<p><strong>Inheriting tools.</strong> An agent library built for one purpose carries tools for that purpose. Removing them is a matter of configuration, and configuration can silently not take effect. The system therefore removes the built-in tools and, separately, refuses any unlisted tool, so that if one measure fails the other holds. <span class="g v">Verified</span> The library's documentation did not state outright whether <code>tools=[]</code> removes every built-in tool. A live run settled it: the library's own start-up report listed exactly one tool, the search.</p>
 <p><strong>Using the library's limits.</strong> The library has its own step and money limits. They are fixed when a connection is made and count everything on that connection, so on a connection kept open between messages they cannot mean "per task". The system counts for itself, and its tests assert that the library's limits are left unset.</p>
 <p><strong>Counting a step twice.</strong> One model call can arrive as several messages sharing an id. Counting messages instead of ids would end tasks early. The loop keys its count on the message id, and a test checks that a call delivered in three pieces counts once.</p>
-<p><strong>Misreading cost.</strong> The library reports cost as a running total for the conversation, so the cost of a task is the new total minus the old one ({{ch:what-a-personal-agent-is}} tells how this was found).</p>
+<p><strong>Misreading cost.</strong> The library reports cost as a running total for the conversation, so the cost of a task is the new total minus the old one.</p>
+<div class="box example"><div class="label">Case note</div>
+<p>The code that counts what each task costs had a full set of passing tests, which used a stand-in (test code imitating the model library). The first live run showed that the library reports cost as a running total for the whole conversation, not per task. Three trivial questions reported $0.0013, $0.0026 and $0.0029; adding them gave $0.0068 for work that had cost $0.0029. <span class="g v">Verified</span> The tests had passed because the stand-in was written to report costs the way the builders wrongly believed the library did. Tests check that code agrees with its author's assumptions. Only contact with the real thing checks the assumptions.</p></div>
 <div class="box example"><div class="label">Case note</div>
 <p>The first version connected to the library afresh for every message. <span class="g v">Verified</span> In the first live runs a one-word reply took 8 to 17 seconds, nearly all of it start-up. Keeping one connection open between messages brought it to about 2 seconds, and stop then ended a real task in 0.13 seconds instead of 1.1. Nobody had listed start-up time as a risk before the run. A list of what is not known cannot contain what nobody thought of; only running the real thing finds those.</p></div>
 
 <h2 id="testing">How to test it</h2>
 <p>A test of the agent loop must check the boundaries, because those are what the model cannot be relied on for: that only listed tools are offered and allowed; that each limit ends a task and the owner is told; that stop ends a task even when the model ignores it; that a failed tool returns an error, not a crash; that cost is attributed to the right task.</p>
-<p><code>tests/test_slice.py</code> does this with a <em>stand-in</em> for the model library: test code that replays a fixed script of messages. Its 28 tests passed when this chapter was written. They cover the policy (search allowed; <code>Bash</code>, <code>Write</code>, a mail send and a web fetch refused), the options (no built-in tools, no machine settings, library limits unset), both per-task limits, a call delivered in pieces, cost as a difference of totals, the search's pass-through and labelling, a failed search, and a crash in the agent.</p>
+<p><code>tests/test_slice.py</code> does this with a <em>stand-in</em> for the model library: test code that replays a fixed script of messages. Its 28 tests pass. They cover the policy (search allowed; <code>Bash</code>, <code>Write</code>, a mail send and a web fetch refused), the options (no built-in tools, no machine settings, library limits unset), both per-task limits, a call delivered in pieces, cost as a difference of totals, the search's pass-through and labelling, a failed search, and a crash in the agent.</p>
 <p>A stand-in is fast, free and can produce rare cases on demand, such as a model that never stops. But it behaves as its authors believed the real library behaves, so passing tests show only that the code agrees with those beliefs. Live runs test the beliefs.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>

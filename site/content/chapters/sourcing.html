@@ -65,17 +65,17 @@
 <text x="360" y="335" text-anchor="middle" fill="var(--ink-2)">from one run to the next is the dashed arrow: the text of the last three messages actually sent.</text>
 </svg><figcaption>A daily digest. Notice that every check on the X box is a refusal decided by code, because there is nobody to ask, and that the history loop is the one path by which one run's material reaches the next.</figcaption></figure>
 <p>Four choices define it, each against an obvious alternative.</p>
-<p><strong>Reading only, twice over.</strong> The partner asked whether the assistant could control their X account. Finding opportunities needs the timeline, lists, bookmarks, who the partner follows, and search. It needs no permission to post, reply, follow or message, and an assistant that reads what strangers write should not hold any. The firm's database is read the same way: the filing tools of {{ch:a-firms-database}} are not offered to a routine at all. X's own means enforce reading twice: its server has a read-only address that offers only reading tools, and the sign-in asks only for reading permissions. Driving X's website in the partner's signed-in browser was rejected: X's rules forbid it and it puts an account built over years at risk.</p>
+<p><strong>Reading only, twice over.</strong> The partner asked whether the assistant could control their X account. Finding opportunities needs the timeline, lists, bookmarks, who the partner follows, and search. It needs no permission to post, reply, follow or message, and an assistant that reads what strangers write should not hold any. The firm's database is read the same way: the filing tools of {{ch:a-firms-database}} are not offered to a routine at all, and the general tool for the database runs only tools that read. X's own means enforce reading twice: its server has a read-only address that offers only reading tools, and the sign-in asks only for reading permissions. Driving X's website in the partner's signed-in browser was rejected: X's rules forbid it and it puts an account built over years at risk.</p>
 <p><strong>A fixed number of reads.</strong> A budget in money would let one run spend the day's limit on a single unlucky search. A count is simpler to reason about: eight reads of X, twelve of the firm's database, six of a data vendor, per run.</p>
 <p><strong>Web search as the fallback, not a browser.</strong> The partner asked for a second route when X fails, or whichever route is cheaper. The comparison:</p>
-<div class="tablewrap"><table><caption>Three ways to find what was posted, with prices as published or measured in November 2026.</caption>
+<div class="tablewrap"><table><caption>Three ways to find what was posted, with prices as published (at the time of writing) or measured.</caption>
 <thead><tr><th>Route</th><th>Cost of one morning's digest</th><th>Reaches</th><th>Can it run unattended?</th></tr></thead>
 <tbody>
-<tr><th>X's interface for programs</th><td>About 15 cents: half a cent a post for thirty posts, a cent a profile</td><td>Search, and the partner's own timeline, lists and bookmarks</td><td>Yes; it is the route X sanctions</td></tr>
+<tr><th>X's interface for programs</th><td>About 15 cents for thirty posts at half a cent each, plus a cent for each profile read</td><td>Search, and the partner's own timeline, lists and bookmarks</td><td>Yes; it is the route X sanctions</td></tr>
 <tr><th>Web search</th><td>Under one cent a search (0.7 cents measured)</td><td>Public launch pages, news and some posts; not the partner's timeline; hours later than X</td><td>Yes; a routine already has it</td></tr>
 <tr><th>A hosted browser signed in as the partner</th><td>4 to 8 cents a run, as measured in {{ch:the-browser}}</td><td>Whatever the partner sees</td><td>No: X's rules forbid it, and a signed-in browser run asks first, which nobody is there to answer</td></tr>
 </tbody></table></div>
-<p>The browser is neither cheaper nor able to run alone, so web search is the fallback. When X refuses, the routine says so in one line, does not retry, searches the web for the same thing, and marks every find that did not come from X.</p>
+<p>The browser is neither cheaper nor able to run alone, so web search is the fallback. When X refuses, the routine is instructed to say so in one line, not to retry, to search the web for the same thing, and to mark every find that did not come from X; it did so in the one run made with that instruction.</p>
 <p><strong>Showing the routine what it sent.</strong> A routine that remembers nothing sends the same finds every morning. A memory of everything it read would carry strangers' text forward indefinitely. The middle course is to keep only the last three messages actually sent, and show them to the next run with an instruction not to repeat an item unless something changed.</p>
 
 <h2 id="mechanism">The mechanism</h2>
@@ -118,64 +118,46 @@
 
 <h3>Three refusals for a run with nobody watching</h3>
 <p><code>unattended</code> in the same file wraps a service's run tool for a routine:</p>
-<pre><code>if app.decide(args) != ALLOW:
-    return no(f"Not done. Either that {title} tool changes something, and nobody is here to "
-              "approve it, or it has not been looked up yet with the find tool.")
+<pre><code># Not app.decide: that answers "would this run unasked in a conversation?", and a small addition would.
+if not app.reads(args):
+    return no(f"Not done. Either that {title} tool changes something, and an unattended run may only read, or it has not been "
+              "looked up yet with the find tool.")
 taint = getattr(app, "taint", None)
 seen = getattr(app, "unattended_seen", None)
 ...
 if not own_store and taint is not None and taint.leaked(_foreign(args.get("arguments") or {}, seen)):
-    return no(f"Not sent to {title}: the request contains details from the owner's mail, "
-              "calendar or database, and nobody is here to approve sending them.")
+    return no(f"Not sent to {title}: the request contains details from the owner's mail, calendar or database, and nobody is here to "
+              "approve sending them.")
 left = getattr(app, "unattended_left", None)
 if left is not None:
     if left &lt;= 0:
-        return no(f"No more reads of {title} in this run: the limit for an unattended run has "
-                  "been reached. Work with what you have.")
+        return no(f"No more reads of {title} in this run: the limit for an unattended run has been reached. Work with what you have.")
     app.unattended_left = left - 1
 out = await run(args)
 if not out.get("is_error"):
     seen.append(out["content"][0]["text"])</code></pre>
+<p>The first check asks <code>reads()</code> (in <code>mcpapp.py</code>, and in <code>attio.py</code> for the firm's database), which is true only for a tool the program has looked up and knows only reads. It deliberately does not ask the gate's <code>decide</code>. That answers a different question, "would this run unasked in a conversation?", and in a conversation a small addition to the firm's database (a note, a task, a comment) does run unasked. A routine that asked <code>decide</code> could therefore add to the database with nobody watching. The two questions sound alike and differ exactly where it matters: a conversation has an owner to read the report, a routine does not.</p>
 <p>The second check has an exception that matters. Everything a service returns is remembered as private, X included, because a timeline says something about its owner. A digest's second step is usually to look up the author of a post the first step returned, by the identifier X gave. Without the exception that lookup would be refused, since the identifier was "read from the owner's accounts". <code>_foreign</code> removes from the check any value the same service returned earlier in the same run: giving a service back its own identifier tells it nothing. A detail from the owner's mail in a search of X is still refused. The firm's database and the owner's meeting notes are exempt from the check altogether (<code>own_store</code>), because looking up there is the point.</p>
+<p>A conversation makes the same check, with a question in place of a refusal. A read sent to a service that is somebody else's (X, a data vendor, a server the owner connected by its address) is checked for private details exactly as a web search is (<code>McpApp._leak</code>, called from <code>McpApp.decide</code>); if it carries any, the owner is asked, and shown the details recognised, before it goes. The same two exemptions apply: what the service itself returned earlier may be given back to it, and a store of the owner's own records is not checked.</p>
 
 <h3>Not repeating itself</h3>
 <p>In <code>odysseus/schedule.py</code>, after a message is sent, its text is kept:</p>
 <pre><code>data[job_id] = (data.get(job_id, []) + [text[:3000]])[-3:]
 self._history_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")</code></pre>
 <p>Only a delivered message is kept; a run that answered <code>NO_REPLY</code> or failed adds nothing. In <code>odysseus/routines.py</code> the next run is shown them:</p>
-<pre><code>before = ("\n\nWHAT THIS ROUTINE SENT THE LAST TIMES IT RAN, oldest first. Do not send an item "
-          "again unless something about it has changed, and say what changed. If there is nothing "
-          "new, say so in one line.\n" + "\n---\n".join(p[:1500] for p in previous[-3:])) if previous else ""</code></pre>
-<p>This is the first thing a routine carries from one run to the next, and it is a risk worth naming: the carried text was written from what strangers posted, so a planted sentence could reach a second run through it. The run it reaches still has reading tools only.</p>
+<pre><code>before = ("\n\nWHAT THIS ROUTINE SENT THE LAST TIMES IT RAN, oldest first. Do not send an item again unless something about it has "
+          "changed, and say what changed. If there is nothing new, say so in one line.\n" + "\n---\n".join(p[:1500] for p in previous[-3:])) if previous else ""</code></pre>
+<p>This is the one thing a routine carries from one run to the next, and it is a risk worth naming: the carried text was written from what strangers posted, so a planted sentence could reach a second run through it. The run it reaches still has reading tools only.</p>
 
 <h2 id="public">What public search can and cannot find</h2>
 <p>Web search finds companies that have announced themselves: a launch page, a news item, a post that a search engine has indexed. It finds them hours after X would, and it does not see the partner's own timeline or lists. That makes it a reasonable fallback for the digest, and a poor source for the signal that matters most to an early-stage investor: the person who left a job last week and has not yet said what they are doing. That person has no launch page. The signal exists only in records of who works where, which is what data vendors collect and sell. The vendor prompt in <code>mcpapp.py</code> says as much from the other side: if a vendor has no record of a company that has not raised, "that is common and means little".</p>
-<p>A review of what leading assistants and venture firms connect to found few gaps in this system: it runs on a laptop where its rivals run in the cloud, it has no paid source of data about companies and people, it has no email address of its own, and it serves one owner where the firm wants one per partner. Only one of those costs real money, which is why a data vendor is the one significant purchase. The decision belongs to {{ch:build-or-buy}}: a database of companies and people is not something to build.</p>
-<p>The evidence for which vendor to pay is thin exactly where this firm needs it. Most comparisons are written by one of the vendors compared, and the one independent benchmark found is European and says nothing of India. So the choice is made by measurement.</p>
+<p>A review of what leading assistants and venture firms connect to found few gaps in this system: it runs on a laptop where its rivals run in the cloud, it has no paid source of data about companies and people, it has no email address of its own, and only one copy runs, for one owner, where the firm wants one per partner. Only one of those costs real money, which is why a data vendor is the one significant purchase. The decision belongs to {{ch:build-or-buy}}: a database of companies and people is not something to build.</p>
+<p>The evidence for which vendor to pay is thin exactly where this firm needs it. Little independent evidence exists: the one independent benchmark found covers a different region from the one this firm invests in. So the choice is made by measurement.</p>
 
 <h2 id="vendors">Choosing a data vendor by measurement</h2>
-<p>Seven vendors run servers of the kind {{ch:services-with-their-own-server}} connects, and each is an entry in <code>APPS</code> so the owner can connect it by name: Harmonic, Tracxn, Specter, Crunchbase, Crustdata, Evertrace and Dealroom. Their descriptions in the code differ in emphasis: Tracxn's is "built in India and deepest there"; Specter, Crustdata and Evertrace are described with signals such as job changes.</p>
-<p>The method, in <code>scripts/bakeoff.py</code>, is to look up companies the firm already knows in each vendor and count what comes back. The firm's own records are the answer key. The test set is written from the firm's database, read only, and kept out of the repository because it is the firm's pipeline. Each answer is judged by code:</p>
-<pre><code>def judge(answer: str, company: dict[str, str]) -&gt; dict[str, object]:
-    low, flat = answer.lower(), norm(answer)
-    site, name = company.get("domain", "").lower(), norm(company.get("name", ""))
-    found = bool((site and site in low) or
-                 (name and len(name) &gt;= 4 and re.search(rf"\b{re.escape(name)}\b", flat)))
-    people = [p for p in (x.strip() for x in company.get("people", "").split(";")) if p]
-    return {"found": found,
-            "people": bool(found and any(norm(p) in flat for p in people)) if people else "",
-            "funding": bool(found and _MONEY.search(answer)),
-            "chars": len(answer) if found else 0}</code></pre>
-<div class="tablewrap"><table><caption>What each column of the comparison means.</caption>
-<thead><tr><th>Column</th><th>Counted when</th><th>What it does not show</th></tr></thead>
-<tbody>
-<tr><th>found</th><td>The answer names the company's own website, or its exact name (four characters or more, as a whole word)</td><td>That the record is correct or current</td></tr>
-<tr><th>people</th><td>Found, and the answer names a founder or team member the firm has on record for that company; blank where the firm has nobody on record</td><td>Whether the vendor knows people the firm does not</td></tr>
-<tr><th>funding</th><td>Found, and the answer mentions a round, an amount, an investor or a valuation</td><td>Whether the amount is right</td></tr>
-<tr><th>chars</th><td>Length of the answer when found</td><td>Anything but a crude measure of depth</td></tr>
-</tbody></table></div>
-<p><strong>Website before name.</strong> A lookup is made by website when the firm has one on record, by name otherwise. A name finds the wrong company: many startups share a word. <code>choose</code> picks each vendor's lookup tool from the names of its tools and inputs, scoring an input that takes a website above one that takes text. A vendor whose lookup takes only a website is not asked about a company the firm has no website for; that row is skipped rather than guessed.</p>
-<p><strong>Designed around a daily limit.</strong> Several vendors' free tiers allow about a hundred reads a day. A run stops at a limit (90 by default, <code>--limit</code> to change it), every result is appended to a file as it arrives, and a later run skips rows already done. So a comparison of seven vendors on a few dozen companies is a run a day for a few days, with no paid plan needed to decide which plan to pay for.</p>
+<p>Seven vendors run servers of the kind {{ch:services-with-their-own-server}} connects, and each is an entry in <code>APPS</code> so the owner can connect it by name: Harmonic, Tracxn, Specter, Crunchbase, Crustdata, Evertrace and Dealroom. Their descriptions in the code differ in emphasis: some are strongest in one region, and Specter, Crustdata and Evertrace are described with signals such as job changes.</p>
+<p>The method, in <code>scripts/bakeoff.py</code> and worked through in {{ch:build-or-buy}}, looks up companies the firm already knows in each vendor and counts what comes back, scored by code (found, people, funding, length of answer), looking up by website before name, since a name finds the wrong company. The firm's own records are the answer key. The test set is written from the firm's database, read only, and kept out of the repository because it is the firm's pipeline.</p>
+<p><strong>Designed around a daily limit.</strong> Several vendors' free tiers are understood to allow about a hundred reads a day (not checked; no vendor is connected). The limit is per vendor (90 by default, <code>--limit</code> to change it); every result is appended to a file as it arrives, and a later run skips rows already done. With the 29-company test set one run fits inside a free tier of about a hundred reads a day; a larger set would take a run a day, resuming where it stopped. No paid plan is needed to decide which plan to pay for.</p>
 <p>The design measures coverage, not truth. A vendor that returns a confident, wrong round scores the same as one that is right; the firm's own records seldom hold enough to tell. Checking a sample by hand would close part of that gap.</p>
 
 <h2 id="people-data">Data about people and where it comes from</h2>
@@ -190,23 +172,23 @@ self._history_file.write_text(json.dumps(data, ensure_ascii=False), encoding="ut
 <p><strong>Step 4.</strong> It finds three launches, and notes that all three fall outside the day it was asked about.</p>
 <p><strong>Step 5.</strong> It looks two of them up in the firm's database, reading only, and finds neither. It writes "not checked" beside the third.</p>
 <p><strong>Output.</strong> One message: X was unavailable and why, then the three launches, with what the database showed for each. 38 seconds; about 1.3 cents, of which 0.6 the model and 0.7 the search.</p>
-<p>The same instructions run once before the fallback existed produced a message reporting X's refusal and listing nothing.</p></div>
+<p>The same instructions run once without the fallback sentence produced a message reporting X's refusal and listing nothing.</p></div>
 <p>What the run also showed is as instructive as the result. Two of its four reads of the database failed on badly formed inputs, and a failed read still uses one of the twelve. It ended by offering to run again later, which a routine cannot do. And the fallback is a sentence in its instructions: the model followed it once.</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <div class="box example"><div class="label">Case note</div>
-<p>The first sign-in link produced for X asked for every permission X offers: reading, and also posting, sending direct messages and changing billing. The entry listed seven reading permissions. The sign-in library had replaced that list with the server's full list of what it supports, because the protocol tells a client to ask for what the server advertises. Both were behaving as designed; together they turned "read only" into "everything". It was caught because the link was read before it was opened; no approval was given and no token saved. The program now rewrites the link to ask for exactly the permissions the entry names, a test checks that a wider list is replaced and not added to, and the connect script prints what a sign-in asks for above the link. X's approval page then listed only reading, and the token returned carries the seven reading permissions and no others. A configuration is a statement of intent; whether it reached the wire is a separate fact.</p></div>
-<p><strong>A wider rule counted one thing twice.</strong> The ledger had counted the cost of one tool, web search. Making it count any tool call that reports a cost made every browser run cost double, because a browser run's cost is already part of its task. An older browser test caught it, with 0.07 where 0.04 was expected. The rule now names the exception.</p>
-<p><strong>An approval that did nothing.</strong> When the owner had the digest scheduled through the chat, the model wrote instructions of 972 characters; the schedule accepts 600. The owner was shown all 972, approved them, and only then did the schedule refuse. An approval followed by a refusal teaches the owner that approving does not mean it happened. The length is now checked while the question is built, and the tool's description gives the limit.</p>
-<p><strong>An approval that understated.</strong> The same question said a run "can only read (your mail and calendar, the web and my notes)". It could also read X, the meeting notes and the firm's database. The page now lists every service a run can read, from the same list the run is built from. A description of a permission must be generated from the thing it describes.</p>
+<p>The first sign-in link produced for X asked for every permission X offers: reading, and also posting, sending direct messages and changing billing. The entry listed seven reading permissions. The sign-in library had replaced that list with the server's full list of what it supports, because the protocol tells a client to ask for what the server advertises. Both were behaving as designed; together they turned "read only" into "everything". It was caught because the link was read before it was opened; no approval was given and no token saved. The program rewrites the link to ask for exactly the permissions the entry names, a test checks that a wider list is replaced and not added to, and the connect script prints what a sign-in asks for above the link. X's approval page then listed only reading, and the token returned carries the seven reading permissions and no others. A configuration is a statement of intent; whether it reached the wire is a separate fact.</p></div>
+<p><strong>A wider rule counted one thing twice.</strong> The ledger had counted the cost of one tool, web search. Making it count any tool call that reports a cost made every browser run cost double, because a browser run's cost is already part of its task. An older browser test caught it, with 0.07 where 0.04 was expected. The rule names the exception.</p>
+<p><strong>An approval that did nothing.</strong> When the owner had the digest scheduled through the chat, the model wrote instructions of 972 characters; the schedule accepts 600. The owner was shown all 972, approved them, and only then did the schedule refuse. An approval followed by a refusal teaches the owner that approving does not mean it happened. The length is checked while the question is built, and the tool's description gives the limit.</p>
+<p><strong>An approval that understated.</strong> The same question said a run "can only read (your mail and calendar, the web and my notes)". It could also read X, the meeting notes and the firm's database. The page lists every service a run can read, from the same list the run is built from. A description of a permission must be generated from the thing it describes.</p>
 
 <h2 id="testing">How to test it</h2>
-<p>A test of an unattended reader must check refusals as carefully as successes, because the refusals are the design. <code>tests/test_mcpapp.py</code> checks that an unlooked-up tool and a changing tool are refused without a call reaching the service; that the third read is refused when the allowance is two, and the next run starts afresh; that a search carrying an address from the owner's mail is refused while X's own identifier may go back to it; that the owner's own notes are exempt; that the estimate is half a cent a post, a cent a profile, a tenth of a cent for the owner's own data and nothing for a refusal; and that a paid read is counted once and a browser run not twice. <code>tests/test_schedule.py</code> checks that a daily routine is shown its last three messages, across a restart, and that quiet or failed runs add nothing.</p>
+<p>A test of an unattended reader must check refusals as carefully as successes, because the refusals are the design. <code>tests/test_mcpapp.py</code> checks that an unlooked-up tool and a changing tool are refused without a call reaching the service; that the third read is refused when the allowance is two, and the next run starts afresh; that a search carrying an address from the owner's mail is refused while X's own identifier may go back to it; that the owner's own notes are exempt; that the estimate is half a cent a post, a cent a profile, a tenth of a cent for the owner's own data and nothing for a refusal; and that a paid read is counted once and a browser run not twice. <code>tests/test_schedule.py</code> checks that a daily routine is shown its last three messages, across a restart, and that quiet or failed runs add nothing. <code>tests/test_found_by_reading.py</code> checks that an unattended run can only read even where a conversation would add unasked, and that a read sent to somebody else's service in a conversation is checked for private details as a web search is.</p>
 <p>What none of this shows: any read of X that returned posts, so neither the estimate nor the limit of eight has met real data; three consecutive days of the digest, which is the only real test of not repeating; and whether the partner finds the finds worth reading.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
-<p><span class="g v">Verified</span>, live: X connected with reading permissions only; 59 tools offered, one hidden, every one a read; the owner's own profile read through the gate in half a second. The digest routine run twice with invented instructions while X had no credit: the first reported the refusal and listed nothing; the second fell back to web search as described (38 seconds, about 1.3 cents). The scheduling fixes, by test; the routine itself was created live through the chat and has not yet run on its schedule.</p>
-<p><span class="g v">Verified</span>: seven vendors' addresses answer as servers of this kind, three at addresses their documentation gives and four at addresses on their own domains that were tried; the India-built one is not in the public registry. A test set of 29 companies was written from the firm's database, 28 with a website and 12 with people on record.</p>
+<p><span class="g v">Verified</span>, live: X connected with reading permissions only; 59 tools offered, one hidden, every one a read; the owner's own profile read through the gate in half a second. The digest routine run twice with invented instructions while X had no credit: the first reported the refusal and listed nothing; the second fell back to web search as described (38 seconds, about 1.3 cents). The scheduling fixes, by test; the routine itself was created live through the chat and has not run on its schedule.</p>
+<p><span class="g v">Verified</span>: seven vendors' addresses answer as servers of this kind, three at addresses their documentation gives and four at addresses on their own domains that were tried; one of the seven is not in the public registry. A test set of 29 companies was written from the firm's database, 28 with a website and 12 with people on record.</p>
 <p><span class="g u">Not tested</span>: the vendor comparison has not made a single lookup. No vendor is connected, since each needs an account that only the owner can open, and the script's choice of lookup tool has been tried only on invented tool names. Also not tested: any paid read of X; the cost estimate against X's bill; three days of the digest; and any claim here about data on people from professional networks.</p></div>
 
 <div class="box summary"><div class="label">Summary</div>
@@ -215,9 +197,10 @@ self._history_file.write_text(json.dumps(data, ensure_ascii=False), encoding="ut
 <li>A digest is a routine: nobody is watching, so every doubt is settled by code as a refusal: not a plain read, a detail from the owner's accounts, or reads used up.</li>
 <li>X is connected to read only, by its read-only address and by reading permissions; the case note shows that the second must be checked on the wire.</li>
 <li>Metered reads are counted and their cost estimated from the items returned; the estimate is marked as one.</li>
-<li>When X refuses, the routine says so and falls back to web search, which is cheaper and later and cannot see the partner's own timeline.</li>
+<li>When X refuses, the routine is told to say so and fall back to web search (followed once); web search is cheaper and later and cannot see the partner's own timeline.</li>
+<li>An unattended run asks whether a tool only reads, not whether a conversation would run it unasked; in a conversation, a read sent to somebody else's service is checked for private details like a web search.</li>
 <li>Keeping the last three messages sent stops repetition and is the one path from one run to the next.</li>
-<li>Public search finds companies that announced themselves, not people who just left a job; that gap is why a data vendor is the one significant purchase, chosen by looking up companies the firm knows and counting what comes back. No lookup has yet been made.</li>
+<li>Public search finds companies that announced themselves, not people who just left a job; that gap is why a data vendor is the one significant purchase, chosen by looking up companies the firm knows and counting what comes back. No lookup has been made.</li>
 </ul></div>
 
 <div class="box exercises"><div class="label">Exercises</div>
@@ -226,7 +209,7 @@ self._history_file.write_text(json.dumps(data, ensure_ascii=False), encoding="ut
 <li>Why does <code>_foreign</code> exempt values the same service returned earlier in the run? Construct a request that the exemption would wrongly let through, if any exists.</li>
 <li>A failed read of the database uses up one of the twelve. Change <code>unattended</code> so that a read rejected for badly formed inputs does not count, and write the test. What new risk does your change create?</li>
 <li>The history keeps the last three messages, cut to 1,500 characters each in the prompt. Argue for a different number or length, and say what evidence would settle it.</li>
-<li>Add a fifth column to the vendor comparison that measures correctness rather than coverage on a small hand-checked sample. Describe the sample and how you would keep it out of the repository.</li>
+<li>Add a fifth column to the vendor comparison (its four are set out in {{ch:build-or-buy}}) that measures correctness rather than coverage on a small hand-checked sample. Describe the sample and how you would keep it out of the repository.</li>
 <li>Write the instruction for a routine that sends a digest only when something new and relevant appeared, using <code>NO_REPLY</code>. How would you test that it stays quiet on a day with nothing?</li>
 <li>(Hard, open.) The fallback to web search is a sentence the model followed once. Design a way to make it a mechanism in code, and say what the model would still have to decide.</li>
 </ol></div>
