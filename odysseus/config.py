@@ -25,6 +25,7 @@ class Settings:
     composio_api_key: str = ""   # optional: without it, mail and calendar are simply not there
     browser_use_api_key: str = ""  # optional: without it, there is no browser
     browser_ask_signed_in: bool = True    # ask the owner before a browser run that is signed in as them; 0 turns it off
+    capture_at: str = "08:30"             # when each day to ask about people met or heard from who are not in the database; "off": never
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
     viewer_email: str = ""                # the address given to a document site that asks who is viewing. Empty: the connected mailbox's
     pages_model: str = ""                 # the model that looks at a PDF's pages (pages.py). Empty: the main model
@@ -109,6 +110,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),
         langfuse_full_content=merged.get("LANGFUSE_FULL_CONTENT", "").strip().lower() in ("1", "true", "yes", "on"),
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() not in ("0", "false", "no", "off"),
+        capture_at=(merged.get("ODYSSEUS_CAPTURE_AT", "") or "08:30").strip().lower(),
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),
         viewer_email=merged.get("ODYSSEUS_VIEWER_EMAIL", "").strip(),
         pages_model=merged.get("ODYSSEUS_PAGES_MODEL", "").strip(),

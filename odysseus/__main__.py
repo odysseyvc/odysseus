@@ -7,6 +7,7 @@ _BEGAN = time.monotonic()      # before the heavy imports below, so that start-u
 
 import asyncio  # noqa: E402
 import os  # noqa: E402
+import re  # noqa: E402
 import sys  # noqa: E402
 
 RESTART = 75      # the exit code by which the child asks to be started again
@@ -48,6 +49,8 @@ from .mcpapp import connected as connected_services
 from .mcpapp import load_custom as load_custom_services
 from .apps import Apps, ComposioBackend
 from .browser import Browser, BrowserUseBackend
+from .capture import MATERIAL as CAPTURE_MATERIAL
+from .capture import Capture
 from .closing import make_closer
 from .config import ConfigError, load, make_clock
 from .conversation import Conversation
@@ -282,6 +285,18 @@ async def main() -> int:
     ticking = asyncio.create_task(scheduler.run_forever())
     if briefer is not None:
         briefing = asyncio.create_task(briefer.run_forever())
+    # Each morning: who the owner met or heard from that is not in the firm's database (capture.py). Code only, reads only.
+    capturing = None
+    if apps is not None and attio is not None and re.fullmatch(r"\d\d:\d\d", settings.capture_at):
+        async def in_database(email: str) -> bool:
+            return (await attio.intake._existing("people", {"email_addresses": [email]}))[0] is not None
+
+        async def propose(question: str, prompt: str) -> None:
+            await conversation.offer_task(notify, question, prompt, CAPTURE_MATERIAL)
+        from zoneinfo import ZoneInfo
+        capture = Capture(apps.events_between, apps.messages_for_code, apps.my_address, in_database, propose, journal, now=now,
+                          state_file=settings.data_dir / "captured.json", at=settings.capture_at, zone=ZoneInfo(settings.tz) if settings.tz else None)
+        capturing = asyncio.create_task(capture.run_forever())
     dispatcher = build_dispatcher(bot, conversation)
     again = []
 
@@ -297,6 +312,8 @@ async def main() -> int:
         ticking.cancel()
         if briefing is not None:
             briefing.cancel()
+        if capturing is not None:
+            capturing.cancel()
             await brief_runner.runner.close()
         if watching is not None:
             watching.cancel()

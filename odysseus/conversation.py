@@ -98,7 +98,7 @@ class Conversation:
         self._carry = ""
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
-        self._offers: dict[str, str] = {}       # facts put to the owner for saving, by the id on their buttons
+        self._offers: dict[str, Any] = {}       # what the program has put to the owner, by the id on its buttons: a fact to save, or work to run
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
@@ -398,6 +398,15 @@ class Conversation:
         if user_id != self._s.owner_id:
             self._journal.write("dropped", user_id=user_id, what="approval tap")
             return ""
+        if approval_id in self._offers and isinstance(self._offers[approval_id], tuple):
+            # A piece of work the program proposed (capture.py). It runs only on this tap, as an ordinary task, with what
+            # the program found handed over as material that other people wrote.
+            prompt, material, chat = self._offers.pop(approval_id)
+            self._journal.write("offer", accepted=approved)
+            if not approved:
+                return "Left as they are."
+            asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material))
+            return "Approved. Filing them now."
         if approval_id in self._offers:
             # A fact from a closed conversation, offered for saving (closing.py). Saved only by this tap.
             fact = self._offers.pop(approval_id)
@@ -511,6 +520,19 @@ class Conversation:
 
     def record_delivery(self, text: str) -> None:
         self._delivered.append(text)
+
+    async def offer_task(self, chat: Chat, question: str, prompt: str, material: str) -> None:
+        """Put a piece of work to the owner with two buttons. Approve runs `prompt` as a task; nothing runs otherwise.
+
+        The question is also remembered as something the owner was sent, so that "file 1 and 3" typed in reply makes sense."""
+        offer = "w" + secrets.token_hex(4)
+        self._offers[offer] = (prompt, material, chat)
+        try:
+            await chat.ask(question, offer)
+        except Exception:
+            self._offers.pop(offer, None)
+            raise
+        self.record_delivery(question)
 
     async def _run(self, prompt: str, chat: Chat, images: list[tuple[str, bytes]] | None = None, material: str | None = None) -> None:
         self._draft_seq += 1
