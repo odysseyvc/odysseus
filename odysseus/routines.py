@@ -40,18 +40,30 @@ async def _bounded(runner: AgentRunner, journal: Journal, prompt: str, seconds: 
 
 def make_routine_runner(settings: Settings, journal: Journal, read_only_server: Any, memory: MemoryStore,
                         now: Callable[[], datetime] = datetime.now,
-                        client_factory: Callable[..., Any] = ClaudeSDKClient, with_apps: bool = False):
+                        client_factory: Callable[..., Any] = ClaudeSDKClient, with_apps: bool = False, services: Any = (), attio: Any = None):
+    reads = "".join(s.routine_prompt() for s in services)
+    if attio is not None:
+        reads += ("\n\nYou can read Attio, the firm's customer database, with attio_find and attio_run, for example to check whether a "
+                  "company or person is already known to the firm. You cannot file or change anything there.")
     runner = AgentRunner(settings, journal, read_only_server, client_factory, model=settings.background_model,
-                         system_prompt=ROUTINE_PROMPT + (ROUTINE_APPS_PROMPT if with_apps else ""),
-                         allowed_tools=routine_tools(with_apps))
+                         system_prompt=ROUTINE_PROMPT + (ROUTINE_APPS_PROMPT if with_apps else "") + reads,
+                         allowed_tools=routine_tools(with_apps, services, attio))
 
     async def noop(text: str) -> None:
         pass
 
-    async def run_routine(instructions: str) -> tuple[str, str, float]:
+    async def run_routine(instructions: str, previous: tuple[str, ...] = ()) -> tuple[str, str, float]:
         await runner.forget_session()
+        for service in services:
+            service.start_unattended_run()      # a fresh allowance of reads for this run
+        if attio is not None:
+            attio.unattended_left, attio.unattended_seen = 12, []
+        # A routine remembers nothing between runs, so a daily digest would send the same finds every day. It is shown what
+        # this same routine sent the last few times. That text is its own earlier output, written from what it had read.
+        before = ("\n\nWHAT THIS ROUTINE SENT THE LAST TIMES IT RAN, oldest first. Do not send an item again unless something about it has "
+                  "changed, and say what changed. If there is nothing new, say so in one line.\n" + "\n---\n".join(p[:1500] for p in previous[-3:])) if previous else ""
         prompt = (f"MEMORY\n{MEMORY_NOTE}\n{memory.profile_text()}\nEND OF MEMORY\n\n"
-                  f"ROUTINE INSTRUCTIONS (written earlier, at the owner's request)\n{instructions}\n\n"
+                  f"ROUTINE INSTRUCTIONS (written earlier, at the owner's request)\n{instructions}{before}\n\n"
                   f"[{now().strftime('%A %d %B %Y, %H:%M')}]")
         try:
             outcome = await _bounded(runner, journal, prompt, ROUTINE_TIMEOUT_S, "routine")

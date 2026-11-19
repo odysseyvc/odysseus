@@ -151,11 +151,12 @@ async def main() -> int:
     notify = whatsapp.chat() if on_whatsapp else telegram
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
-    run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps),
-                                      memory, now, with_apps=apps is not None)
+    run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
+                                                                           services=services),
+                                      memory, now, with_apps=apps is not None, services=services, attio=attio)
     scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
                           run_routine, now=now, on_delivered=conversation.record_delivery,
-                          fallback=telegram if on_whatsapp else None)     # WhatsApp refuses messages outside its 24-hour window
+                          fallback=telegram if on_whatsapp else None, history_file=settings.data_dir / "routine_history.json")     # WhatsApp refuses messages outside its 24-hour window
 
     watcher = triage = watching = None
     if watches is not None:

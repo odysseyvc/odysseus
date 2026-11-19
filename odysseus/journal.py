@@ -57,7 +57,8 @@ def cost_of(rec: dict[str, Any]) -> float:
 
     task_end   a conversation task or a routine: the model's cost as the agent library reported it, plus any browser run
     event      one check of an incoming event against the watches
-    tool       a web search, at the price the search service reported for that call
+    tool       a web search, at the price the search service reported for that call; or a paid read of a connected
+               service such as X, estimated from how many items came back and the service's published prices
     file       a file read by the text-recognition service (estimated per page)
     voice      a voice note transcribed (estimated per minute)
 
@@ -67,8 +68,8 @@ def cost_of(rec: dict[str, Any]) -> float:
     try:
         if kind in ("task_end", "event"):
             return float(rec.get("cost_usd") or 0.0)
-        if kind == "tool" and rec.get("name") == "web_search":
-            return float(rec.get("cost_usd") or 0.0)
+        if kind == "tool" and rec.get("name") != "browse":      # a web search at the price the service reported; a paid read of a
+            return float(rec.get("cost_usd") or 0.0)             # connected service, as estimated. A browser run is in its task_end.
         if kind == "file" and rec.get("ok") and rec.get("pages"):
             return float(rec["pages"]) * OCR_USD_PER_PAGE
         if kind == "voice" and rec.get("ok"):

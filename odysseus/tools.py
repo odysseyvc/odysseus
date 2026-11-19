@@ -86,9 +86,13 @@ def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False) ->
             f"Instructions it will follow:\n{text}")
 
 
-def routine_tools(with_apps: bool) -> frozenset[str]:
-    """What an unattended routine may use: reading only, including the owner's mail and calendar once connected."""
-    return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset())
+def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -> frozenset[str]:
+    """What an unattended routine may use: reading only, including the owner's mail and calendar once connected, and the
+    reading tools of any other connected service."""
+    extra = {f"mcp__odysseus__{s.slug}_{t}" for s in services for t in ("find", "run")}
+    if attio is not None:
+        extra |= {attio_mod.ATTIO_FIND, attio_mod.ATTIO_RUN}
+    return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset()) | frozenset(extra)
 
 
 def describe_search(args: dict[str, Any], taint: Taint) -> str:
@@ -250,14 +254,18 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         m["remember"] = gate.guarded(_name("remember"), m["remember"])      # lock 2
         m["note"] = gate.guarded(_name("note"), m["note"])
         search_handler = gate.guarded(SEARCH_TOOL, search_handler)     # lock 2, for a search that carries private details
-    elif apps is not None:
+    elif apps is not None or attio is not None or services:
         # An unattended routine has nobody to ask, so a search carrying details from the accounts is simply refused.
+        # Whatever the routine can read (mail, the firm's database, another service) shares one record of what was read.
         plain = search_handler
+        readers = [r for r in (apps, attio, *services) if r is not None]
 
         async def search_handler(args: dict[str, Any]) -> dict[str, Any]:
-            if apps.taint is not None and apps.taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}"):
+            taint = next((r.taint for r in readers if getattr(r, "taint", None) is not None), None)
+            if taint is not None and taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}"):
                 journal.write("tool", name="web_search", ok=False, error="carries details from the accounts")
-                return _err("Not searched: the query contains details from the owner's mail or calendar, and nobody is here to approve sending them.")
+                return _err("Not searched: the query contains details from the owner's mail, calendar or other accounts, and nobody is here "
+                            "to approve sending them.")
             return await plain(args)
     search = tool("web_search", spec.description, spec.input_schema)(search_handler)
     recall = tool("recall", "Search your saved notes and entries by keyword, for when the owner refers to something that is not in view.",
@@ -271,7 +279,18 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                 h[short] = gate.guarded(name, h[short])   # lock 2
         app_tools = {n: tool(n, apps_mod.SCHEMAS[n][0], apps_mod.SCHEMAS[n][1])(h[n]) for n in apps_mod.SCHEMAS}
     if read_only:
-        return create_sdk_mcp_server(name=SERVER, tools=[search, recall, *[app_tools[n] for n in ("mail_search", "mail_read", "calendar_list") if n in app_tools]])
+        from .mcpapp import unattended
+        reading = []
+        for service in services:            # another connected service: its reads only, checked by code (mcpapp.unattended)
+            h, schemas = service.handlers(), service.schemas()
+            h[f"{service.slug}_run"] = unattended(service, h[f"{service.slug}_run"], journal)
+            reading += [tool(n, schemas[n][0], schemas[n][1])(h[n]) for n in schemas]
+        if attio is not None:               # the firm's database, to read; filing is never offered to a routine
+            h = attio.handlers()
+            h["attio_run"] = unattended(attio, h["attio_run"], journal)
+            reading += [tool(n, attio_mod.SCHEMAS[n][0], attio_mod.SCHEMAS[n][1])(h[n]) for n in ("attio_find", "attio_run")]
+        return create_sdk_mcp_server(name=SERVER, tools=[search, recall, *[app_tools[n] for n in ("mail_search", "mail_read", "calendar_list") if n in app_tools],
+                                                           *reading])
     tools = [
         search,
         tool(

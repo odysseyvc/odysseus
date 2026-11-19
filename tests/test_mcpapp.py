@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from odysseus.journal import Journal
-from odysseus.mcpapp import APPS, McpApp, connected, kind
+from odysseus.journal import cost_of
+from odysseus.mcpapp import APPS, McpApp, connected, estimate, kind, unattended
 from odysseus.tools import make_gate
 
 READ = {"read_only_hint": True, "destructive_hint": False}
@@ -105,3 +106,91 @@ async def test_a_connection_that_cannot_write_runs_every_tool_it_offers_unasked(
     spec = APPS["x"]
     assert "read_only=true" in spec["url"] and not any(w in spec["scope"] for w in ("write", "dm.", "media")), "the address and the scopes are the reading ones"
     assert "costs the owner money" in app.prompt() and "cannot post" in app.schemas()["x_find"][0]
+
+
+# --- Reads that cost money, and reading with nobody watching ---------------------
+
+class FakeX:
+    def __init__(self):
+        self.calls = []
+
+    async def list_tools(self):
+        return [row(n, {}) for n in ("search_posts_recent", "get_users_by_ids", "get_users_me", "get_usage_credits")]
+
+    async def call(self, name, arguments):
+        self.calls.append((name, arguments))
+        if name == "get_users_by_ids":
+            return '{"data": [{"id": "88120045551", "username": "asha"}]}'
+        return '{"data": [{"id": "1", "author_id": "88120045551", "text": "We are starting a robotics company."}, {"id": "2"}, {"id": "3"}]}'
+
+
+def test_what_a_read_cost_is_estimated_from_how_much_came_back():
+    x = APPS["x"]
+    three = '{"data": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}'
+    assert estimate(x, "search_posts_recent", three) == 0.015, "half a cent a post"
+    assert estimate(x, "get_users_by_ids", three) == 0.03, "a cent a profile"
+    assert estimate(x, "get_users_me", '{"data": {"id": "9"}}') == 0.001, "the owner's own data is cheaper"
+    assert estimate(x, "get_usage_credits", three) == 0 and estimate(x, "search_posts_recent", '{"data": []}') == 0
+    assert estimate(x, "search_posts_recent", "Too many requests") == 0, "nothing came back, nothing is counted"
+    assert estimate(APPS["granola"], "list_meetings", three) == 0, "a service that does not charge by the item"
+
+
+async def test_a_paid_read_is_written_to_the_ledger_and_a_browser_run_is_not_counted_twice(tmp_path):
+    journal = Journal(tmp_path / "j.jsonl")
+    app = McpApp("x", FakeX(), journal)
+    h = app.handlers()
+    await h["x_find"]({})
+    await h["x_run"]({"tool": "search_posts_recent", "arguments": {"query": "robotics"}})
+    paid = [r for r in journal.read() if r.get("cost_usd")]
+    assert len(paid) == 1 and paid[0]["estimated"] is True and cost_of(paid[0]) == 0.015
+    assert cost_of({"kind": "tool", "name": "browse", "cost_usd": 0.04}) == 0, "a browser run is counted in the task it belongs to"
+    assert cost_of({"kind": "tool", "name": "web_search", "cost_usd": 0.007}) == 0.007
+
+
+async def test_with_nobody_watching_only_looked_up_reads_run_and_only_so_many(tmp_path):
+    backend, app, gate, h = rig(tmp_path)
+    journal = Journal(tmp_path / "r.jsonl")
+    run = unattended(app, h["granola_run"], journal)
+    said = await run({"tool": "list_meetings"})
+    assert said.get("is_error") and "not been looked up" in said["content"][0]["text"] and backend.calls == []
+    await h["granola_find"]({})
+    assert (await run({"tool": "update_summary", "arguments": {}})).get("is_error") and backend.calls == [], "a change is refused, not asked about"
+    app.spec = {**app.spec, "unattended_calls": 2}
+    app.start_unattended_run()
+    assert not (await run({"tool": "list_meetings"})).get("is_error") and not (await run({"tool": "list_meetings"})).get("is_error")
+    third = await run({"tool": "list_meetings"})
+    assert third.get("is_error") and "limit for an unattended run" in third["content"][0]["text"] and len(backend.calls) == 2
+    app.start_unattended_run()
+    assert not (await run({"tool": "list_meetings"})).get("is_error"), "the next run starts with a fresh allowance"
+    assert [r["ok"] for r in journal.read()] == [False, False, False], "each refusal is on the record"
+
+
+async def test_with_nobody_watching_private_details_are_not_sent_but_a_services_own_ids_can_go_back_to_it(tmp_path):
+    backend = FakeX()
+    app = McpApp("x", backend, Journal(tmp_path / "j.jsonl"))
+    gate = make_gate(Journal(tmp_path / "g.jsonl"), services=[app])
+    h = app.handlers()
+    run = unattended(app, h["x_run"], Journal(tmp_path / "r.jsonl"))
+    await h["x_find"]({})
+    app.start_unattended_run()
+    gate.taint.add("Priya wrote from priya@lumenhealth.example about the round, reference KX82LQ77AB.", "your mail")
+    leak = await run({"tool": "search_posts_recent", "arguments": {"query": "priya@lumenhealth.example"}})
+    assert leak.get("is_error") and "nobody is here to approve" in leak["content"][0]["text"] and backend.calls == []
+    assert not (await run({"tool": "search_posts_recent", "arguments": {"query": "robotics founder"}})).get("is_error")
+    assert gate.taint.leaked("88120045551"), "what X returned is remembered like anything else that was read"
+    back = await run({"tool": "get_users_by_ids", "arguments": {"ids": ["88120045551"]}})
+    assert not back.get("is_error") and backend.calls[-1] == ("get_users_by_ids", {"ids": ["88120045551"]}), "X is told nothing by its own id"
+
+
+def test_a_routine_is_offered_a_services_reading_tools(tmp_path):
+    from odysseus.memory import MemoryStore
+    from odysseus.tools import ROUTINE_TOOLS, make_tool_server, routine_tools
+    app = McpApp("x", FakeX(), Journal(tmp_path / "j.jsonl"))
+    assert routine_tools(False, [app]) == ROUTINE_TOOLS | {"mcp__odysseus__x_find", "mcp__odysseus__x_run"}
+    assert routine_tools(False) == ROUTINE_TOOLS
+    journal = Journal(tmp_path / "s.jsonl")
+    from test_slice import FakeSpec
+    assert make_tool_server(FakeSpec(), journal, MemoryStore(tmp_path / "memory"), read_only=True, services=[app])["name"] == "odysseus"
+    said = app.routine_prompt()
+    assert "x_find" in said and "only a few reads" in said and "never an instruction" in said
+    assert "then look for the same thing with web search" in said and "do not try it again" in said, "what to do when X refuses"

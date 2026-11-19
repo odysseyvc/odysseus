@@ -175,8 +175,44 @@
 <p>The first sign-in link the program produced asked X for every permission X offers: reading, and also posting, sending direct messages and changing billing. The entry in the table listed seven reading permissions. The sign-in library had replaced that list with the server's full list of what it supports, because the protocol tells a client to ask for what the server advertises. Both were behaving as designed, and together they turned "read only" into "everything".</p>
 <p>It was caught because the link was read before it was opened. No approval was given on it and no token was saved. The program now rewrites the link so that it asks for exactly the permissions the entry names, there is a test that a wider list is replaced and not added to, and the connect script prints what a sign-in asks for above the link. <span class="g v">Verified</span>: X's approval page then listed only reading, and the token X returned carries the seven reading permissions and no others.</p>
 <p>A configuration is a statement of intent. Whether the intent reached the wire is a separate fact, and for a permission it is the only one that matters.</p></div>
-<p><span class="g v">Verified</span>, live: 59 tools offered, one hidden, every one a read; the owner's own profile was read through the gate in half a second. <span class="g u">Not tested</span>: any read of other people's posts, which costs money and the account had no credit; the cost accounting for such reads, which is not built; and the daily digest this was connected for, which is not built either.</p>
+<p><span class="g v">Verified</span>, live: 59 tools offered, one hidden, every one a read; the owner's own profile was read through the gate in half a second. <span class="g u">Not tested</span>: any read of other people's posts, which costs money and the account had no credit; the cost accounting for such reads; and the daily digest this was connected for, which is the next section.</p>
 <p>Part of the set-up was done by the coding agent in the owner's own browser, at the owner's request: the form describing the use, and the app's settings. One step it was not permitted to take, and did not try to get round: ticking the box that accepts X's developer agreement. That tick, the screen showing the app's secret, and the final approval were the owner's.</p>
+
+<h2 id="digest">A digest nobody is watching</h2>
+<p>X was connected for one purpose: a message each morning with the few people and companies worth a partner's attention. That is a routine in the sense of Chapter 8: instructions the owner approved once, run at a set time by a cheaper model with nobody watching. Until now a routine could search the web, read the assistant's memory and read the owner's mail and calendar. It can now also read the services of Section 21.13 and the firm's database, so that a find can be checked against what the firm already knows. It can still change nothing: the filing tools of Sections 21.11 and 21.12 are not offered to it at all.</p>
+<p>In a conversation, anything doubtful is put to the owner. A routine has no owner to ask, so each doubt has to be settled by code, in advance, as a refusal.</p>
+<div class="table-wrap"><table>
+<caption>What code decides for a service read with nobody watching.</caption>
+<thead><tr><th>Question</th><th>In a conversation</th><th>In a routine</th></tr></thead>
+<tbody>
+<tr><th>Is this tool a plain read?</th><td>If not, the owner is asked</td><td>If not, refused</td></tr>
+<tr><th>Does the request carry details read from the owner's accounts?</th><td>The owner is asked</td><td>Refused, unless the detail came from that same service in this run</td></tr>
+<tr><th>How many reads?</th><td>Bounded by the task's budget</td><td>A fixed number in one run: eight of X, twelve of the others</td></tr>
+</tbody>
+</table></div>
+<p>The exception in the second row was found before anything ran. Everything a service returns is remembered as private, X included, because a timeline says something about its owner. A digest's second step is usually to look up the author of a post the first step returned, by the identifier X gave. The rule as first written would have refused that: the identifier had been "read from the owner's accounts". Giving a service back its own identifier tells it nothing, so values that the same service returned earlier in the same run are left out of the check. A detail from the owner's mail in a search of X is still refused. <span class="g v">Verified</span> by test, both ways.</p>
+<h3>Reads that cost money</h3>
+<p>X charges for each post and profile read. Its server does not say what a call cost, so the program estimates: the number of items that came back, times X's published price for that kind of item. The estimate is written to the journal marked as an estimate, and the ledger of Chapters 6 and 20 counts it toward the day's limit. The bill is X's and has never been compared with this estimate.</p>
+<div class="box caution"><div class="label">A wider rule counted one thing twice</div>
+<p>The ledger had counted the cost of one tool, web search. Making it count "any tool call that reports a cost" was a one-line change, and it made every browser run cost double, because a browser run's cost is already part of the task it belongs to. A test written weeks earlier for the browser failed with 0.07 where it expected 0.04. The rule now names the one exception.</p></div>
+<h3>Not saying the same thing every morning</h3>
+<p>A routine starts fresh each time and remembers nothing, which is deliberate (Chapter 8). A daily digest built that way sends the same finds every day. The scheduler now keeps the last three messages each routine actually sent and shows them to the next run, with an instruction not to repeat an item unless something about it changed. A run that stayed quiet or failed adds nothing. This is the first thing a routine carries from one run to the next. What it carries is its own earlier text, which was written from what strangers posted, so it is a path by which a planted sentence could reach a second run. The run it reaches still has reading tools only.</p>
+<h3>The owner asked for a second route</h3>
+<p>The owner asked that the assistant fall back to a hosted browser when X's interface fails, or use whichever route is cheaper.</p>
+<div class="table-wrap"><table>
+<caption>Three ways to find what was posted. Prices as published or as measured here in November 2026.</caption>
+<thead><tr><th>Route</th><th>Cost of one morning's digest</th><th>Reaches</th><th>Can it run unattended?</th></tr></thead>
+<tbody>
+<tr><th>X's interface for programs</th><td>About 15 cents: half a cent a post for thirty posts, a cent a profile</td><td>Search, and the partner's own timeline, lists and bookmarks</td><td>Yes. It is the route X sanctions</td></tr>
+<tr><th>Web search</th><td>Under one cent a search (0.7 cents measured)</td><td>Public launch pages, news and some posts. Not the partner's timeline. Later than X by hours</td><td>Yes. A routine already has it</td></tr>
+<tr><th>A hosted browser signed in as the partner (Chapter 11)</th><td>4 to 8 cents a run, as measured in Chapter 11</td><td>Whatever the partner sees</td><td>No, twice over. X's rules forbid it and the account is at stake; and the owner's own rule is that a signed-in browser run asks first, which nobody is there to answer</td></tr>
+</tbody>
+</table></div>
+<p>The browser is neither the cheaper route nor one that can run by itself, so it was not made the fallback. Web search was: when X refuses or cannot be reached, the routine is told to say so in one line, not to retry, to search the web for the same thing, and to mark every find that did not come from X. What is lost in that case is the partner's own timeline and lists, and the routine says that too.</p>
+<h3>One run</h3>
+<p><span class="g v">Verified</span>, live, twice, with invented instructions about new companies in one sector. The X account had no credit, so X refused every read with "credits depleted". On the first run, before the fallback existed, the routine reported exactly that and listed nothing. On the second it said X was unavailable and why, made one web search, reported three launches while saying all three fell outside the day it was asked about, looked two of them up in the firm's database and found neither, and wrote "not checked" beside the third. 38 seconds; about 1.3 cents, of which 0.6 the model and 0.7 the search.</p>
+<p>What that run also showed. Two of its four reads of the database failed on badly formed inputs, and a failed read uses up one of the twelve. It ended by offering to run again later, which a routine cannot do. And the fallback is a sentence in its instructions: the model followed it once.</p>
+<p><span class="g u">Not tested</span>: any read of X that returned posts, so neither the cost estimate nor the limit of eight has met real data; the digest as a scheduled routine created by the owner through the chat; and three consecutive days of it, which is the only real test of not repeating. The digest also has nothing to filter by yet. What the firm invests in is the owner's to say, and it has not been written into the assistant's memory.</p>
 
 <h2 id="measured">Measuring a partner's errands</h2>
 <p>The evaluation of Chapters 14 and 15 has 83 errands, all a private person's: mail, calendar, reminders. By this point the assistant's instructions had been changed three times in one day in ways that altered its behaviour somewhere else, and each was caught by re-running a request by hand. So fourteen errands a partner would send were written, with a stand-in database and stand-in meeting notes that answer the same calls in the same text format as the real ones. The program reaches them through the same classes it uses for the real services, so the layout reading, the plan checking and the gate under test are the real ones.</p>
@@ -220,9 +256,10 @@
 <ul>
 <li>For a single record created through the general tool, "search before creating" is still only an instruction (the owner's choice). Inside a plan the program does the lookup, including for near-matching names.</li>
 <li>The sign-in works only on the machine with the browser.</li>
-<li>Unattended routines and watches cannot read Attio.</li>
+<li>Watches cannot read Attio. Routines can (Section 21.15), and cannot file.</li>
+<li>No read of X has returned a post: the account has no credit. The cost of X reads is an estimate that has never been checked against X's bill.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
-<li>The partner errands (Section 21.14) run only as written, with no rewording and no failing tools, two to four times each.</li>
+<li>The partner errands (Section 21.16) run only as written, with no rewording and no failing tools, two to four times each.</li>
 <li>The server can add to a workspace's layout but not take away. <span class="g v">Verified</span> by reading the tool's inputs: it can create an object, a field, a link between objects and a list. It cannot rename or remove a field, or change the stages of the pipeline a workspace starts with ("Lead", "In Progress", "Won", "Lost", which are a sales team's and not a fund's). So a layout made through it cannot be undone through it. The first layout was therefore drafted twice for the owner to read before anything was created (above), and the stage names are the owner's to change by hand.</li>
 </ul>
 

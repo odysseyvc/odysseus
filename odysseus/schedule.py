@@ -179,13 +179,41 @@ RunRoutine = Callable[[str], Awaitable[tuple[str, str, float]]]
 class Scheduler:
     def __init__(self, store: ScheduleStore, chat: Chat, journal: Journal, ledger: Ledger, daily_usd: float,
                  run_routine: RunRoutine, now: Callable[[], datetime] = datetime.now,
-                 on_delivered: Callable[[str], None] | None = None, tick_s: float = 20.0, fallback: Chat | None = None):
+                 on_delivered: Callable[[str], None] | None = None, tick_s: float = 20.0, fallback: Chat | None = None,
+                 history_file: Any = None):
         self._store, self._chat, self._journal, self._ledger = store, chat, journal, ledger
         self._daily_usd, self._run_routine, self._now = daily_usd, run_routine, now
         self._on_delivered = on_delivered or (lambda text: None)
         self._tick_s = tick_s
         self._fallback = fallback                        # a second channel, used when the first refuses a message
         self._retries: dict[str, tuple[int, datetime]] = {}     # job id -> (tries so far, when it was first due)
+        self._history_file = history_file                # what each routine sent the last few times, so it does not repeat itself
+        try:
+            import inspect
+            self._takes_previous = len(inspect.signature(run_routine).parameters) >= 2
+        except (TypeError, ValueError):
+            self._takes_previous = False
+
+    def _sent_before(self, job_id: str) -> tuple[str, ...]:
+        try:
+            import json
+            return tuple(json.loads(self._history_file.read_text(encoding="utf-8")).get(job_id, [])) if self._history_file else ()
+        except (OSError, ValueError):
+            return ()
+
+    def _remember_sent(self, job_id: str, text: str) -> None:
+        if not self._history_file:
+            return
+        try:
+            import json
+            try:
+                data = json.loads(self._history_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+            data[job_id] = (data.get(job_id, []) + [text[:3000]])[-3:]
+            self._history_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        except OSError as e:
+            self._journal.write("error", where="scheduler.history", error=type(e).__name__)
 
     async def _send(self, text: str) -> None:
         try:
@@ -247,7 +275,7 @@ class Scheduler:
     async def _routine(self, job: Job, suffix: str) -> tuple[str, str, float]:
         if self._ledger.spent_today() >= self._daily_usd:
             return "failed", f"today's budget of ${self._daily_usd:.2f} is used up", 0.0
-        status, text, cost = await self._run_routine(job.text)
+        status, text, cost = await (self._run_routine(job.text, self._sent_before(job.id)) if self._takes_previous else self._run_routine(job.text))
         self._journal.write("task_end", status=status, cost_usd=cost, routine=job.id)      # the ledger counts this line
         text = (text or "").strip()
         if status != "done":
@@ -258,4 +286,5 @@ class Scheduler:
             return "quiet", "", cost
         await self._send(f"{text}\n\n(Scheduled routine [{job.id}]){suffix}")
         self._on_delivered(text)
+        self._remember_sent(job.id, text)
         return "delivered", "", cost

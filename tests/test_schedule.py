@@ -369,3 +369,69 @@ async def test_the_model_is_told_what_scheduled_jobs_sent_so_follow_ups_make_sen
     assert "SENT TO THE OWNER BY SCHEDULED JOBS" in p and "a new chip was announced" in p
     await say(x, "thanks")
     assert "SENT TO THE OWNER" not in x.clients[0].prompts[1], "told once, not on every message"
+
+
+# --- A routine that runs every day must not say the same thing every day ---------
+
+async def test_a_repeating_routine_is_shown_what_it_sent_before(tmp_path):
+    clock, journal = Clock(), Journal(tmp_path / "journal.jsonl")
+    store, chat, seen = ScheduleStore(tmp_path / "schedule.db", now=clock), FakeChat(), []
+
+    async def run_routine(text, previous=()):
+        seen.append(previous)
+        return "done", f"Digest {len(seen)}", 0.01
+
+    def scheduler():
+        return Scheduler(store, chat, journal, Ledger(journal), 3.0, run_routine, now=clock, history_file=tmp_path / "history.json")
+
+    job = store.add("routine", "Send me the sourcing digest.", "2026-11-17T10:00", "daily")
+    sched = scheduler()
+    for _ in range(4):
+        await sched.tick()
+        clock.advance(days=1)
+    assert seen == [(), ("Digest 1",), ("Digest 1", "Digest 2"), ("Digest 1", "Digest 2", "Digest 3")]
+    clock.advance(days=1)
+    await scheduler().tick()
+    assert seen[-1] == ("Digest 2", "Digest 3", "Digest 4"), "kept across a restart, and only the last three"
+    assert job.id in (tmp_path / "history.json").read_text(encoding="utf-8")
+
+
+async def test_a_quiet_or_failed_run_adds_nothing_to_what_was_sent(tmp_path):
+    clock, journal = Clock(), Journal(tmp_path / "journal.jsonl")
+    store, chat, seen = ScheduleStore(tmp_path / "schedule.db", now=clock), FakeChat(), []
+    replies = iter([("done", NO_REPLY, 0.0), ("error", "", 0.0), ("done", "Two new founders.", 0.01), ("done", "x", 0.0)])
+
+    async def run_routine(text, previous=()):
+        seen.append(previous)
+        return next(replies)
+
+    store.add("routine", "Digest.", "2026-11-17T10:00", "daily")
+    sched = Scheduler(store, chat, journal, Ledger(journal), 3.0, run_routine, now=clock, history_file=tmp_path / "history.json")
+    for _ in range(4):
+        await sched.tick()
+        clock.advance(days=1)
+    assert seen == [(), (), (), ("Two new founders.",)]
+
+
+async def test_the_routine_agent_is_told_what_it_sent_before_and_gets_a_fresh_allowance(tmp_path):
+    from odysseus.mcpapp import McpApp
+    from odysseus.tools import routine_tools
+    from test_mcpapp import FakeService
+    settings = Settings(telegram_token="t", owner_id=OWNER, anthropic_api_key="k", exa_api_key="e", data_dir=tmp_path)
+    journal, memory, clients = Journal(tmp_path / "j.jsonl"), MemoryStore(tmp_path / "memory", now=Clock()), []
+    app = McpApp("granola", FakeService(), journal)
+
+    def factory(options=None):
+        clients.append(FakeClient([[result(text="Nothing new today.", cost=0.003)]], options=options))
+        return clients[-1]
+
+    run = make_routine_runner(settings, journal, object(), memory, Clock(), client_factory=factory, services=[app])
+    app.unattended_left = 0
+    await run("Send the digest.", ("Asha Rao is starting a robotics company.",))
+    assert app.unattended_left == 12 and app.unattended_seen == []
+    o, p = clients[0].options, clients[0].prompts[0]
+    assert set(o.allowed_tools) == routine_tools(False, [app]) and "granola_find" in o.system_prompt
+    assert "WHAT THIS ROUTINE SENT THE LAST TIMES IT RAN" in p and "Asha Rao is starting a robotics company." in p
+    assert p.index("ROUTINE INSTRUCTIONS") < p.index("WHAT THIS ROUTINE SENT") and p.endswith("[Tuesday 17 November 2026, 10:00]")
+    await run("Send the digest.")
+    assert "WHAT THIS ROUTINE SENT" not in clients[1].prompts[0]
