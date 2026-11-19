@@ -30,8 +30,11 @@ SEEN_NOTE = ("You are also shown this file itself, page by page, so you can see 
 PDF = "application/pdf"
 # What stands in for the owner's words when a file comes with none. It is the program speaking, after the file's end.
 NO_MESSAGE = ("(The owner sent this file with no message. If it is a pitch deck or another company's fundraising material, do not describe it "
-              "and ask what to do: deal with it now as your instructions for a pitch deck say, which means check it, file it, and give your "
-              "take. For any other file, say briefly what it is and ask what they would like done.)")
+              "and ask what to do. Deal with it now, as your instructions for a pitch deck say, and do every step: 1. search the web for the "
+              "company and its founders by name; 2. file it, which includes a deal at the earliest stage of the pipeline with the owner as its "
+              "owner (do not ask which stage; if the company is already in the database and has no deal, add the deal); 3. reply with your "
+              "take in the order given there, ending with the line on a first call. For any other file, say briefly what it is and ask what "
+              "they would like done.)")
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/bmp", "image/tiff"}
 DOCUMENT_TYPES = {
