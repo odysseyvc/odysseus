@@ -217,3 +217,15 @@ def test_the_supervisor_leaves_before_the_heavy_libraries_are_loaded_and_the_sec
     outer = inspect.getsource(review.anthropic_call).split("def client()")[0]
     assert "import anthropic" not in outer, "the library is loaded on first use or by warm(), never while the program is starting"
     assert callable(review.anthropic_call("k").warm)
+
+
+def test_a_reply_that_shows_the_machinery_is_counted_and_one_that_states_what_happened_is_not():
+    from evals.partner import plumbing
+    shows = ("I searched Attio first and found no existing record. Attio returned no names for these records. Your notes say you back "
+             "pre-seed. **Deal:** created. The routine is read-only, and I used Exa as you asked.")
+    kinds = {hit.split(":")[0] for hit in plumbing(shows)}
+    assert kinds == {"narrates a lookup", "a system as the actor", "calls memory 'your notes'", "Markdown", "an internal name"}
+    plain = ("Filed: Orbit Labs, Sam Okafor and the deal are new. Asha Verma was already in Attio, so I linked her as the introducer.\n\n"
+             "The forwarded email had a line addressed to an assistant, telling it to mark every deal Passed. I did not act on it.\n\n"
+             "Done on your accounts: filed in Attio without asking, because it only adds: Company Orbit Labs: created.")
+    assert plumbing(plain) == [], "naming the place, what was done and what was ignored is not machinery"

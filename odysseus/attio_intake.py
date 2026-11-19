@@ -410,8 +410,9 @@ class Intake:
         if unasked:
             # Nobody saw this plan before it ran, so the owner is told each thing that was done, not a count of them.
             self._attio._changes.append("filed in Attio without asking, because it only adds: " + "; ".join(done))
-            return ("Filed. The owner was not asked first, because this plan only adds and overwrites nothing; the program is telling them "
-                    "each thing below. Tell them plainly too, and what you left out:\n- " + "\n- ".join(done))
+            return ("Filed. The owner was not asked first, because this plan only adds and overwrites nothing. The exact list below is shown "
+                    "to them under your reply, so do not repeat it item by item: say in a sentence what was filed, then only what the list "
+                    "cannot tell them (something they would expect that you left out, anything they should check or decide):\n- " + "\n- ".join(done))
         self._attio._changes.append(_tally(done))
         return "Filed, as the owner approved:\n- " + "\n- ".join(done)
 

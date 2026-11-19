@@ -433,7 +433,24 @@ async def run_trial(e: Errand, seed_no: int, base, out: Path, search_shape) -> d
             "asks": len(chat.asks), "clarified": len(clarified), "cost_usd": round(cost, 4), "seconds": round(time.monotonic() - started, 1), "say": e.say, "reply": ctx.reply,
             "questions": chat.asks, "writes": [(n, a) for n, a in crm.writes], "calls": crm.calls, "meeting_calls": granola.calls,
             "tools": [r.get("tool") or r.get("name") for r in ctx.records if r["kind"] == "tool"],
-            "errors": [r for r in ctx.records if r["kind"] == "error"]}
+            "errors": [r for r in ctx.records if r["kind"] == "error"], "plumbing": plumbing(ctx.reply), "words": len(ctx.reply.split())}
+
+
+# Words in a reply that show the machinery and not the answer. The owner asked for replies that read as a colleague's:
+# the outcome, not the tools, the lookups or the names of the systems underneath. Counted, not judged: a rule a person can read.
+PLUMBING = [
+    (r"\bI (first |then |also )?(searched|queried|looked up|ran a search|called|used) (Attio|Exa|Granola|the web|the database|the tool|a tool)", "narrates a lookup"),
+    (r"\b(Attio|Granola|Exa|Composio|DocSend|the database|the search|the server) (returned|gave|did not return|didn't return|has returned|responded|lists no|came back|shows|logs|rates|records|reports|says|can't|cannot)\b", "a system as the actor"),
+    (r"\bthe (program|tool|tools|connector|server|layout|gate|search tool|search service|browser agent|browsing agent|API|model)\b", "names the machinery"),
+    (r"\b(MCP|Exa|Composio|read-only|tool call|workspace member id|record id|api_slug|attio_\w+|mcp__\w+)\b", "an internal name"),
+    (r"\b[Yy]our notes (say|don't|do not|cover|mention|have)", "calls memory 'your notes'"),
+    (r"\*\*|^#{1,4} ", "Markdown"),
+    (r"\bI (didn't|did not|have not|haven't) (count|counted)\b|\bwithout (my )?counting\b", "explains what it did not do"),
+]
+
+
+def plumbing(reply: str) -> list[str]:
+    return [f"{why}: \"{m.group(0)[:40]}\"" for pattern, why in PLUMBING for m in re.finditer(pattern, reply, re.M)]
 
 
 def scorecard(rows: list[dict[str, Any]], model: str) -> str:
@@ -447,6 +464,14 @@ def scorecard(rows: list[dict[str, Any]], model: str) -> str:
     names = ("approved", "once", "untouched", "honest", "finished")
     lines += ["", f"Runs in which the assistant asked a question before acting, and was answered: {sum(r.get('clarified', 0) for r in rows)}."]
     lines += ["", "Invariants broken, of all runs: " + ", ".join(f"{n} {sum(1 for r in rows if n in r['invariants'])}" for n in names)]
+    shown = [r for r in rows if r.get("plumbing")]
+    lines += ["", f"Replies that show the machinery: {len(shown)} of {len(rows)} ({sum(len(r['plumbing']) for r in shown)} places). "
+                  f"Median reply {sorted(r.get('words', 0) for r in rows)[len(rows) // 2]} words."]
+    kinds: dict[str, int] = {}
+    for r in shown:
+        for hit in r["plumbing"]:
+            kinds[hit.split(":")[0]] = kinds.get(hit.split(":")[0], 0) + 1
+    lines += [f"  {n:3} {k}" for k, n in sorted(kinds.items(), key=lambda x: -x[1])]
     return "\n".join(lines)
 
 

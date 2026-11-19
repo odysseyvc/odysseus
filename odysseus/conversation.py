@@ -168,7 +168,8 @@ class Conversation:
                     rest = " ".join(text.replace(where, " ").split()).strip(" .,:;-")
                     how = (" The site asked for an email address and yours was given" + (", and verified from your mailbox" if view.verified else "")
                            + "; the sender is told who looked." )
-                    said = (text if rest else NO_MESSAGE) + f"\n\n[The program read this document in a browser.{how} Tell the owner that in one line.]"
+                    said = (text if rest else NO_MESSAGE) + (f"\n\n[The program read this document in a browser.{how} Tell the owner, in one short line and "
+                                                             "in plain words, that their email address was given to open it and that the sender can see they viewed it.]")
                     await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser")
                     return
                 text += (f"\n\n[The program tried to read the document at that link in a browser and could not: {view.text}. Nothing of it "
