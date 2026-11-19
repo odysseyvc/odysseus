@@ -110,10 +110,10 @@ fly logs</code></pre></div>
 <tr><th><code>ODYSSEUS_MODEL</code></th><td>claude-sonnet-5-5</td><td>The model for conversations</td></tr>
 <tr><th><code>ODYSSEUS_BACKGROUND_MODEL</code></th><td>claude-haiku-5-5</td><td>The model for unattended routines</td></tr>
 <tr><th><code>ODYSSEUS_TZ</code></th><td>the machine's clock</td><td>Your time zone, for reminders and message times. Set it on any server.</td></tr>
-<tr><th><code>ODYSSEUS_BROWSER_ASK_SIGNED_IN</code></th><td>off</td><td>Set to <code>1</code> to be asked before every browser run that is signed in as you</td></tr>
+<tr><th><code>ODYSSEUS_BROWSER_ASK_SIGNED_IN</code></th><td>on</td><td>You are asked before every browser run that is signed in as you. Set to <code>0</code> to let such runs start without asking</td></tr>
 </tbody>
 </table></div>
-<div class="callout bad"><p><b>Consider turning that last one on.</b> By default a browser run signed in as you starts without asking and is reported afterwards, and nothing asks before a click inside it. If you sign the browser in to anything that can spend money or speak for you, set <code>ODYSSEUS_BROWSER_ASK_SIGNED_IN=1</code>. <a href="hands-the-browser.html#door">Chapter 11</a> explains what is at stake.</p></div>
+<div class="callout bad"><p><b>Think before turning that last one off.</b> You are asked before a browser run signed in as you starts, but nothing asks before a click inside it. With the setting at <code>0</code> such a run starts without asking and is only reported afterwards. If you sign the browser in to anything that can spend money or speak for you, leave it on. <a href="hands-the-browser.html#door">Chapter 11</a> explains what is at stake.</p></div>
 
 <h2>What you are trusting</h2>
 <p>Running Odysseus yourself means nobody stands between you and your data except the services you choose to connect. Each one sees something:</p>

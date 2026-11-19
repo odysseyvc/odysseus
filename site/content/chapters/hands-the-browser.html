@@ -60,7 +60,10 @@
 <div class="box caution"><div class="label">The question was removed</div>
 <p>Within hours of this chapter being written, the owner asked for signed-in runs to be "as simple as possible" and not to ask. The rule was changed. A browser signed in as the owner now starts on the model's request alone. The owner is told afterwards, in a line written by the program that quotes the task. One setting switches the question back on, and the code and tests for it remain.</p>
 <p>The rest of this section describes the question as it was built, because it is still there behind the setting, and then states what its removal means.</p></div>
-<p>With the setting on, the question for a signed-in run looks like this:</p>
+<div class="box caution"><div class="label">The question was put back (19 November 2026)</div>
+<p>Two days later a second, independent reading of the program (Chapter 20) named this as one of sixteen defects: the browser is the one tool that reads what strangers wrote, holds the owner's sign-ins and can act, all at once, and nothing stood in front of it. Asked whether a signed-in run should ask first, the owner answered "Yes, ask first". The question is now the default. The setting remains, with its meaning reversed: <code>ODYSSEUS_BROWSER_ASK_SIGNED_IN=0</code> lets signed-in runs start unasked. The owner is still told afterwards, by the program, what task was run.</p>
+<p>Where this section says what removing the question gives up, read it as the cost of turning that setting off. No signed-in run has yet happened, asked or unasked.</p></div>
+<p>The question for a signed-in run looks like this:</p>
 <pre><code>Run this in a browser that is signed in as you?
 
 It will work by itself, using your saved logins, until the task is
@@ -116,7 +119,7 @@ one. Do not buy or change anything.
 <caption>The 14 browser tests, all passing on 17 November 2026 against a stand-in for the vendor.</caption>
 <thead><tr><th>Group</th><th>Tests</th><th>What they establish</th></tr></thead>
 <tbody>
-<tr><th>When a run may start</th><td>6</td><td>A run signed in to nothing needs no question and carries the spending cap; by default a signed-in run also starts without a question and its task is reported afterwards; asking is off unless the setting turns it on; with it on, a signed-in run is put to the owner with the exact task and runs once, declined or altered runs do not start, and the question ends with the task word for word.</td></tr>
+<tr><th>When a run may start</th><td>6</td><td>A run signed in to nothing needs no question and carries the spending cap; with asking turned off a signed-in run also starts without a question and its task is reported afterwards; asking is on unless the setting turns it off (the reverse, until 19 November); with it on, a signed-in run is put to the owner with the exact task and runs once, declined or altered runs do not start, and the question ends with the task word for word.</td></tr>
 <tr><th>What comes back</th><td>3</td><td>The report is labelled and sign-in codes are removed; failures are returned to the model and still costed; empty and over-long tasks are refused.</td></tr>
 <tr><th>In a conversation</th><td>3</td><td>A run's cost is added to the task and reported; "stop" cancels a run at the vendor; the owner signs in by hand, and a stranger gets no link.</td></tr>
 <tr><th>Routines and instructions</th><td>2</td><td>A routine never has a browser; the model's instructions follow what is connected.</td></tr>
@@ -138,7 +141,7 @@ one. Do not buy or change anything.
 <ul>
 <li>The browser is for what search and connectors cannot do. It is the slowest, dearest and least safe of the three.</li>
 <li>Browsing is done by a vendor's agent from a task in plain words, with the vendor's handling of bot defences left on, by the owner's decision.</li>
-<li>Our gate can only decide whether a run starts. As built, a browser signed in as the owner was asked about every time. By the owner's later choice it is now allowed without a question and reported afterwards; one setting restores the question.</li>
+<li>Our gate can only decide whether a run starts. As built, a browser signed in as the owner was asked about every time. By the owner's later choice it was allowed without a question and reported afterwards. After a second audit the owner reversed that: it is asked about again, and one setting removes the question.</li>
 <li>Inside a run nothing asks before a click, and now nothing asks before the run either. For the browser, the principle of Chapter 3 no longer holds, and the chapter does not pretend otherwise.</li>
 <li>The owner signs in by hand through a live view. Odysseus holds no passwords; the vendor holds the sign-ins.</li>
 <li>A run's report is another model's account of a page. In the first live run it was doubtful, and Odysseus said so.</li>

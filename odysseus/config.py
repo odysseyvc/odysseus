@@ -24,7 +24,7 @@ class Settings:
     exa_api_key: str
     composio_api_key: str = ""   # optional: without it, mail and calendar are simply not there
     browser_use_api_key: str = ""  # optional: without it, there is no browser
-    browser_ask_signed_in: bool = False   # ask the owner before a browser run that is signed in as them
+    browser_ask_signed_in: bool = True    # ask the owner before a browser run that is signed in as them; 0 turns it off
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
     # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
     whatsapp_token: str = ""          # a permanent access token for the Meta app
@@ -101,7 +101,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),
         langfuse_full_content=merged.get("LANGFUSE_FULL_CONTENT", "").strip().lower() in ("1", "true", "yes", "on"),
-        browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() in ("1", "true", "yes", "on"),
+        browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() not in ("0", "false", "no", "off"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
         background_model=merged.get("ODYSSEUS_BACKGROUND_MODEL", "claude-haiku-5-5"),
         voice_model=merged.get("ODYSSEUS_VOICE_MODEL", "voxtral-small-transcribe-3"),

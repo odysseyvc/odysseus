@@ -50,7 +50,7 @@ class FakeBackend:
 
 
 def rig(tmp_path, ask=True, **kw):
-    """ask=True is the stricter setting (signed-in runs are put to the owner). The default in use is ask=False."""
+    """ask=True is the default: signed-in runs are put to the owner. ask=False is the setting that turns that off."""
     journal = Journal(tmp_path / "journal.jsonl")
     backend = FakeBackend(**kw)
     browser = Browser(backend, journal, task_usd=0.5)
@@ -82,7 +82,7 @@ async def test_a_run_signed_in_to_nothing_needs_no_question(tmp_path):
     assert x.backend.runs == [(PUBLIC["task"], False, 0.5)], "the task goes through unchanged, with the per-task spending cap"
 
 
-async def test_by_default_a_signed_in_run_starts_without_a_question_and_the_owner_is_told_after(tmp_path):
+async def test_with_asking_turned_off_a_signed_in_run_starts_without_a_question_and_the_owner_is_told_after(tmp_path):
     x = rig(tmp_path, ask=False)
     assert isinstance(await x.gate.permission(BROWSE_TOOL, dict(SIGNED)), PermissionResultAllow)
     out = await x.browse(dict(SIGNED))
@@ -94,11 +94,13 @@ async def test_by_default_a_signed_in_run_starts_without_a_question_and_the_owne
     assert x.browser.pop_changes() == ["ran a browser task ($0.03)"], "a run signed in to nothing is reported briefly"
 
 
-def test_asking_is_off_unless_the_setting_turns_it_on(tmp_path):
+def test_asking_is_on_unless_the_setting_turns_it_off(tmp_path):
     from odysseus.config import load
     base = {"TELEGRAM_BOT_TOKEN": "t", "OWNER_TELEGRAM_ID": "1", "ANTHROPIC_API_KEY": "k", "EXA_API_KEY": "e"}
-    assert load(env=base, env_file=tmp_path / "none").browser_ask_signed_in is False
-    assert load(env={**base, "ODYSSEUS_BROWSER_ASK_SIGNED_IN": "1"}, env_file=tmp_path / "none").browser_ask_signed_in is True
+    for unset in ({}, {"ODYSSEUS_BROWSER_ASK_SIGNED_IN": ""}, {"ODYSSEUS_BROWSER_ASK_SIGNED_IN": "1"}, {"ODYSSEUS_BROWSER_ASK_SIGNED_IN": "maybe"}):
+        assert load(env={**base, **unset}, env_file=tmp_path / "none").browser_ask_signed_in is True, "anything but a clear no asks"
+    for off in ("0", "false", "No", " off "):
+        assert load(env={**base, "ODYSSEUS_BROWSER_ASK_SIGNED_IN": off}, env_file=tmp_path / "none").browser_ask_signed_in is False
 
 
 async def test_with_asking_on_a_signed_in_run_is_put_to_the_owner_with_the_exact_task(tmp_path):

@@ -91,8 +91,8 @@
           "n": 11,
           "slug": "hands-the-browser",
           "title": "Hands: the browser",
-          "revised": "17 November 2026",
-          "summary": "Tasks handed to a vendor's browsing agent, for everything without a connector. The gate can only decide whether a run starts, and by the owner's choice it no longer asks even then. The chapter says plainly what that gives up. Browsed two public pages live; one report was doubtful."
+          "revised": "19 November 2026",
+          "summary": "Tasks handed to a vendor's browsing agent, for everything without a connector. The gate can only decide whether a run starts. For two days, by the owner's choice, it did not ask even then; after a second audit it asks again. The chapter says plainly what not asking gives up. Browsed two public pages live; one report was doubtful."
         },
         {
           "n": 12,

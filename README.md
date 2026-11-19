@@ -65,9 +65,9 @@ reminders fire in UTC.
 ## Know before you use it
 
 - It spends your money with each vendor. Limits per task and per day are in `.env`.
-- The browser hands a whole task to a third-party browsing agent. By default a browser
-  run signed in as you starts without asking. Set `ODYSSEUS_BROWSER_ASK_SIGNED_IN=1` to
-  be asked first.
+- The browser hands a whole task to a third-party browsing agent. A browser run signed in
+  as you asks you first, showing the task; nothing asks before a click inside it. Set
+  `ODYSSEUS_BROWSER_ASK_SIGNED_IN=0` to let such runs start without asking.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.

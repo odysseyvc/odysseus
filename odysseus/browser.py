@@ -12,11 +12,13 @@ What this design can and cannot promise:
     has started, the vendor's agent clicks and types without asking anyone.
     So the only decision Odysseus can make is whether a run starts:
       - a run in a fresh browser, signed in to nothing, is allowed;
-      - a run in the owner's signed-in browser is, by the owner's choice, also
-        allowed without a question. Inside it the agent can act as the owner.
-        Setting ODYSSEUS_BROWSER_ASK_SIGNED_IN=1 puts such runs to the owner
-        first, with the exact task text. Either way the owner is told
-        afterwards, by code, that a signed-in run happened and what its task was.
+      - a run in the owner's signed-in browser is put to the owner first, with
+        the exact task text, because inside it the agent can act as the owner.
+        (For a while it was not, by the owner's choice; a second audit advised
+        reversing that and the owner did.) Setting
+        ODYSSEUS_BROWSER_ASK_SIGNED_IN=0 lets such runs start unasked. Either
+        way the owner is told afterwards, by code, that a signed-in run
+        happened and what its task was.
   * No password is stored or typed by Odysseus. The owner signs in to sites by
     hand, through a live view of the browser, and the vendor keeps the
     resulting cookies in a profile.
@@ -128,7 +130,7 @@ def describe_browse(args: dict[str, Any]) -> str:
             f"Task it will be given:\n{task}")
 
 
-def add_rules(gate: Gate, ask_signed_in: bool = False, taint: Any = None) -> None:
+def add_rules(gate: Gate, ask_signed_in: bool = True, taint: Any = None) -> None:
     """A browser run is asked about if it is signed in and the owner wants that, or if its task carries details
     read from the owner's accounts (taint.py): the task is handed to another company's agent and typed into websites."""
     def leak(a: dict[str, Any]) -> list[str]:
@@ -206,7 +208,7 @@ class Browser:
                             cost_usd=result.cost_usd, error=result.error[:200])
         note = f"ran a {'signed-in ' if signed_in else ''}browser task (${result.cost_usd:.2f}" \
                + ("" if result.status == "done" else f", {result.status}") + ")"
-        if signed_in:   # the owner was not asked beforehand, so they are told exactly what was asked for
+        if signed_in:   # asked beforehand or not, the owner is told exactly what was asked for
             note += f' as you: "{task[:300]}{"…" if len(task) > 300 else ""}"'
         self._pending.append(note)
         report = hide_secrets(result.text.strip())[:8000]

@@ -111,7 +111,7 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 
 
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
-              browser_ask_signed_in: bool = False, anyapp: AnyApp | None = None, apps: Apps | None = None,
+              browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
               with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 

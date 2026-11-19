@@ -139,7 +139,7 @@
 
 <h2 id="open">What this round did not fix</h2>
 <ul>
-<li><strong>A browser run signed in as the owner still starts without a question.</strong> This is the owner's standing choice (Chapter 11), and the audit recommends reversing it. It is the one tool that reads what strangers wrote, holds the owner's sign-ins and can act, all at once.</li>
+<li><strong>Closed since this chapter was first written: a browser run signed in as the owner.</strong> It started without a question, by the owner's earlier choice (Chapter 11), and the audit recommended reversing that. It is the one tool that reads what strangers wrote, holds the owner's sign-ins and can act, all at once. Put the question, the owner answered "Yes, ask first", and asking is now the default; a setting turns it off. <span class="g v">Verified</span> by unit tests only: no signed-in run has happened.</li>
 <li><strong>The leak check is still a text match.</strong> It survives restarts now and no longer goes quiet. It still misses a paraphrase, a short fact, and anything re-encoded. It is a hint, and a later stage will have to replace it with rules that do not depend on recognising text.</li>
 <li><strong>A stream of events that dies after it was opened is not noticed.</strong> Only a failure to open it is. And events that arrive while the program is not running are still missed, with nothing that goes back for them.</li>
 <li><strong>The sorting of app actions by name has never been run over the real catalogue.</strong> It errs towards asking, which is the safe direction, but how often it asks needlessly is unknown.</li>
