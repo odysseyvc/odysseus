@@ -48,6 +48,17 @@ from odysseus.config import load  # noqa: E402
 from odysseus.conversation import Conversation  # noqa: E402
 from odysseus.journal import Journal, Ledger  # noqa: E402
 from odysseus.mcpapp import McpApp  # noqa: E402
+from odysseus.review import anthropic_call, make_escalator  # noqa: E402
+
+_CALLS: dict = {}
+
+
+def SMALL_CALL(settings):
+    """One connection to the small model for the whole run, as the program keeps one."""
+    if "c" not in _CALLS:
+        _CALLS["c"] = anthropic_call(settings.anthropic_api_key)
+        _CALLS["c"].warm()
+    return _CALLS["c"]
 from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.ocr import NO_MESSAGE, OcrResult, file_block, join_pages  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
@@ -385,7 +396,8 @@ async def run_trial(e: Errand, seed_no: int, base, out: Path, search_shape) -> d
     ids = seed(crm, granola)
     before = {k: (crm.records[ids[k]]["values"].get("stage"), crm.records[ids[k]]["values"].get("value")) for k in ("d_north", "d_lumen", "d_kestrel")}
     attio, notes = Attio(crm, journal), McpApp("granola", granola, journal)
-    gate = make_gate(journal, timeout_s=30, attio=attio, services=[notes], auto_small=True)       # as the program runs it
+    gate = make_gate(journal, timeout_s=30, attio=attio, services=[notes], auto_small=True,       # as the program runs it
+                     escalate=make_escalator(journal, SMALL_CALL(base), base.background_model))
     search = FakeSearch(*search_shape)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, gate=gate, attio=attio, services=[notes]), gate=gate,
                          system_prompt=conversation_prompt(False, with_files=True, with_attio=True) + notes.prompt())

@@ -260,7 +260,7 @@ class Intake:
             checked.append((ref, obj, attrs, values, match, changes, r.get("new") is True))
         for ref, obj, attrs, values, match, changes, said_new in checked:
             found, by = await self._existing(obj, match)
-            near = await self._similar(obj, _show(values.get("name"))) if not found and obj in ("companies", "people") and values.get("name") else []
+            near = await self._similar(obj, _show(values.get("name"))) if not found and obj in ("companies", "people", "deals") and values.get("name") else []
             if near and not said_new:
                 raise AppError(f"record {ref}: Attio has nothing called exactly '{_show(values.get('name'))}', but it has {', '.join(repr(n) for n in near)}. "
                                "If one of those is the same one, give its exact name (and its website or email address if you know it) in `values`, so "

@@ -78,6 +78,11 @@ class Gate:
         self._second: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None = None
         self._second_tools: frozenset[str] = frozenset()
         self.request = ""                  # what the owner asked in this task, with the exchanges before it; set by the conversation
+        # A change that the rules let run unasked can still be put to the owner: when the task has read what other people
+        # wrote, it is counted and read once more (review.make_escalator). This can only add a question.
+        self._escalate: Callable[..., Awaitable[str]] | None = None
+        self._escalate_when: Callable[[str, dict[str, Any]], bool] | None = None
+        self._unasked = 0                  # such changes so far in this task
 
     # --- set-up ----------------------------------------------------------------
 
@@ -96,6 +101,29 @@ class Gate:
     def set_second_reader(self, reader: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None, tools: Any = ()) -> None:
         """Have `reader` look at the question for each of `tools` before it is shown. What it returns is put under the question."""
         self._second, self._second_tools = reader, frozenset(tools)
+
+    def set_escalator(self, check: Callable[..., Awaitable[str]] | None, when: Callable[[str, dict[str, Any]], bool] | None = None) -> None:
+        """`when(tool, args)` says whether an allowed call is a change to look at again; `check` returns why to ask, or ""."""
+        self._escalate, self._escalate_when = check, when
+
+    def new_task(self, request: str = "") -> None:
+        """The conversation is starting a task: what the owner asked, and a fresh count of changes made unasked."""
+        self.request, self._unasked = request, 0
+
+    async def _escalation(self, tool: str, args: dict[str, Any]) -> str:
+        """Why a call the rules would allow should be put to the owner after all, or "" to let it run."""
+        if self._escalate is None or self._escalate_when is None or self._asker is None:
+            return ""
+        try:
+            if not self._escalate_when(tool, args):
+                return ""
+            self._unasked += 1
+            rule = self._rules[tool]
+            text = rule.describe(copy.deepcopy(args)) if rule.describe else f"{tool} with {json.dumps(args, ensure_ascii=False, default=str)}"
+            return str(await self._escalate(tool, copy.deepcopy(args), text, self.request, self._unasked) or "").strip()
+        except Exception as e:      # a reader that fails must never stop what the rules allow
+            self._journal.write("error", where="gate.escalation", error=type(e).__name__)
+            return ""
 
     async def _second_reading(self, tool: str, args: dict[str, Any], text: str) -> str:
         if self._second is None or tool not in self._second_tools:
@@ -126,7 +154,13 @@ class Gate:
     async def permission(self, tool: str, args: dict[str, Any], context: Any = None):
         verdict = self.decide(tool, args)
         if verdict == ALLOW:
-            return PermissionResultAllow()
+            why_ask = await self._escalation(tool, args)
+            if not why_ask:
+                return PermissionResultAllow()
+            approved, why, approval = await self.ask(tool, args, note=why_ask)
+            if approved:
+                return PermissionResultAllow(updated_input=copy.deepcopy(approval.args))
+            return PermissionResultDeny(message=why)
         if verdict == REFUSE:
             self._journal.write("gate", tool=tool, verdict="refused")
             return PermissionResultDeny(message=f"{tool} is not available.")
@@ -135,7 +169,7 @@ class Gate:
             return PermissionResultAllow(updated_input=copy.deepcopy(approval.args))
         return PermissionResultDeny(message=why)
 
-    async def ask(self, tool: str, args: dict[str, Any]) -> tuple[bool, str, Approval | None]:
+    async def ask(self, tool: str, args: dict[str, Any], note: str = "") -> tuple[bool, str, Approval | None]:
         if self._asker is None:
             self._journal.write("gate", tool=tool, verdict="refused", reason="nobody to ask")
             return False, "This needs the owner's approval and nobody is here to give it. It was not done.", None
@@ -152,8 +186,8 @@ class Gate:
             self._journal.write("gate", tool=tool, verdict="refused", reason="too long to show", chars=len(text))
             return False, (f"This is too long to show the owner in full ({len(text)} characters; the limit is {MAX_QUESTION}), so it was "
                            "not shown and was not done. Do it in smaller pieces."), None
-        note = await self._second_reading(tool, frozen, text)
-        if note:
+        note = note or await self._second_reading(tool, frozen, text)
+        if note and len(text) + len(note) + 2 <= MAX_QUESTION:
             text = f"{text}\n\n{note}"
         approval = Approval(secrets.token_hex(4), tool, frozen, text, asyncio.get_running_loop().create_future())
         self._pending[approval.id] = approval
@@ -213,6 +247,7 @@ class Gate:
             key = _key(tool, args)
             if key in self._grants:
                 self._grants.remove(key)
+                self._approved_now = True       # allowed by rule, but it was put to the owner after a second reading, and approved
             return True
         if verdict == ASK:
             key = _key(tool, args)

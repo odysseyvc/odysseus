@@ -507,8 +507,8 @@ class Conversation:
                 await chat.ask(approval.text, approval.id)
             self._gate.set_asker(ask_owner)
             # For the second reader of what is about to leave (review.py): the owner's words, and the exchanges before them.
-            self._gate.request = "\n\n".join([f"The owner said: {said}\nYou replied: {reply}" for said, reply in self._recent]
-                                               + [f"The owner said: {self._words(prompt)}"])
+            self._gate.new_task("\n\n".join([f"The owner said: {said}\nYou replied: {reply}" for said, reply in self._recent]
+                                              + [f"The owner said: {self._words(prompt)}"]))
         started = time.monotonic()
         last_draft = 0.0
         # The first words are kept so that, after a restart, the owner can be told what was interrupted.

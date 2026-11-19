@@ -14,6 +14,8 @@ it can search the web and search memory, and it can write nothing.
 """
 from __future__ import annotations
 
+import json
+
 from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
@@ -122,7 +124,7 @@ def empty_server() -> Any:
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
               with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None,
-              services: Any = (), auto_small: bool = False) -> Gate:
+              services: Any = (), auto_small: bool = False, escalate: Any = None) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 
     `auto_small` is the owner's choice (19 November 2026) to be asked as little as possible: small changes that can be
@@ -154,6 +156,20 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     for service in services:        # any other service with a server of its own: mcpapp.py
         service.taint = taint
         service.add_rules(gate)
+    if escalate is not None:
+        def changes_after_reading(tool: str, a: dict[str, Any]) -> bool:
+            """A change to the owner's records or files that the rules let run unasked, in a task that has read what other
+            people wrote, or that itself carries details recognised from their accounts."""
+            if tool == attio_mod.ATTIO_RUN:
+                change = attio is not None and not attio.reads(a)
+            elif tool == attio_mod.GUARDED["attio_file"]:
+                change = True
+            elif tool == anyapp_mod.APP_RUN:
+                change = anyapp is not None and anyapp.kind(str(a.get("tool", "")).strip().upper()) != "read"
+            else:
+                return False
+            return change and bool(taint.sources or taint.leaked(json.dumps(a, ensure_ascii=False, default=str)))
+        gate.set_escalator(escalate, changes_after_reading)
     if with_apps:
         from datetime import datetime
         apps_mod.add_rules(gate, now or datetime.now, apps)

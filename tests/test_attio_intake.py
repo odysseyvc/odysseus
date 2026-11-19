@@ -333,3 +333,25 @@ async def test_with_less_asking_a_record_beside_a_similarly_named_one_is_still_a
     plan = {"source": "Email from Meera", "records": [{"ref": "c1", "object": "companies", "new": True, "values": {"name": "Northwind"}}]}
     pid, shown = await plan_id(h, plan)
     assert "similarly named Northwind Robotics" in shown and gate.decide(ATTIO_FILE, {"plan": pid}) == "ask"
+
+
+async def test_a_second_deal_for_a_company_that_has_one_is_never_added_quietly(tmp_path):
+    from evals.crm import FakeAttio as World
+    crm = World()
+    company = crm.add("companies", name="Lumen Grid", domains=["lumengrid.example"])
+    crm.add("deals", name="Lumen Grid", stage="Met", owner="pat@acme-capital.example",
+            associated_company={"target_object": "companies", "target_record_id": company})
+    attio = Attio(crm, Journal(tmp_path / "j.jsonl"))
+    make_gate(Journal(tmp_path / "g.jsonl"), attio=attio, auto_small=True)
+    await attio.layout()
+    h = attio.handlers()
+    plan = {"source": "Lumen Grid seed deck.pdf", "records": [
+        {"ref": "c1", "object": "companies", "values": {"name": "Lumen Grid", "domains": ["lumengrid.example"]}},
+        {"ref": "d1", "object": "deals", "values": {"name": "Lumen Grid - Seed", "stage": "Sourced", "owner": "pat@acme-capital.example", "associated_company": "@c1"}}]}
+    out = await h["attio_plan"](plan)
+    assert out.get("is_error") and "it has 'Lumen Grid'" in text(out), "a deal beside a deal of nearly the same name is stopped at the plan"
+    plan["records"][1]["new"] = True
+    out = await h["attio_plan"](plan)
+    assert "is_error" not in out and "similarly named Lumen Grid" in text(out)
+    plan_no = text(out).split("Plan ")[1].split(".")[0]
+    assert attio.intake.decide({"plan": plan_no}) == "ask" and crm.writes == [], "a deliberate second deal is still the owner's to approve"

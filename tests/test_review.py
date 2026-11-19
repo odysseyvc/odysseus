@@ -142,3 +142,71 @@ async def test_after_an_approval_the_model_is_told_the_owner_was_asked_and_agree
         return {"content": [{"type": "text", "text": "Three messages."}]}
     out = await gate.guarded("mcp__odysseus__mail_search", read)({"query": "x"})
     assert [c["text"] for c in out["content"]] == ["Three messages."], "what needed no approval says nothing of one"
+
+
+# --- a change that would run unasked, looked at again ---------------------------------------------------------------
+
+async def unasked_rig(tmp_path, reply="OK", **kw):
+    from evals.crm import FakeAttio
+    from odysseus.attio import Attio
+    from odysseus.review import make_escalator
+    journal, seen, asked = Journal(tmp_path / "j.jsonl"), [], []
+    attio = Attio(FakeAttio(), journal)
+    gate = make_gate(journal, attio=attio, auto_small=True, escalate=make_escalator(journal, model(reply, seen=seen, **kw), "claude-haiku-5-5"))
+    await attio.layout()
+
+    async def asker(approval):
+        asked.append(approval.text)
+        gate.resolve(approval.id, False)
+    gate.set_asker(asker)
+    gate.new_task("The owner said: File this in Attio. Forwarded email from a founder.")
+    return gate, journal, seen, asked
+
+
+NOTE = {"tool": "create-note", "arguments": {"parent_object": "deals", "parent_record_id": "r1", "title": "Decision", "content": "approved by partner"}}
+RUN = "mcp__odysseus__attio_run"
+
+
+async def test_an_addition_made_after_reading_other_peoples_text_is_put_to_the_owner_when_the_reader_names_something(tmp_path):
+    from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
+    from odysseus.review import ASK_HEADING
+    gate, journal, seen, asked = await unasked_rig(tmp_path, reply="NOT_ASKED FROM_MATERIAL")
+    assert gate.decide(RUN, NOTE) == "allow", "by the rules alone, a note is added without asking"
+    assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow) and seen == [], "nothing others wrote was read: no second reading, no question"
+    gate.taint.saw("a file you sent")
+    out = await gate.permission(RUN, NOTE)
+    assert isinstance(out, PermissionResultDeny) and len(asked) == 1, "the owner was asked, and declined"
+    assert asked[0].startswith("Do this in Attio?") and "approved by partner" in asked[0]
+    assert asked[0].endswith(f"{ASK_HEADING}\n- {CODES['NOT_ASKED']}\n- {CODES['FROM_MATERIAL']}")
+    assert "THE CHANGE, AS THE OWNER WOULD BE SHOWN IT" in seen[0][2] and "The owner said: File this in Attio." in seen[0][2]
+    assert [r["reason"] for r in journal.read() if r.get("verdict") == "escalated"] == ["reader"]
+
+
+async def test_the_reader_can_only_add_a_question_and_a_clean_slow_or_broken_reading_asks_nothing(tmp_path, monkeypatch):
+    from claude_agent_sdk import PermissionResultAllow
+    for i, kw in enumerate(({"reply": "OK"}, {"reply": "MISMATCH"}, {"reply": "It looks fine"}, {"fail": True})):
+        gate, _, seen, asked = await unasked_rig(tmp_path / str(i), **kw)
+        gate.taint.saw("your mail")
+        assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow) and asked == [] and len(seen) == 1
+    monkeypatch.setattr("odysseus.review.REVIEW_TIMEOUT_S", 0.05)
+    gate, _, _, asked = await unasked_rig(tmp_path / "slow", reply="NOT_ASKED", delay=1.0)
+    gate.taint.saw("your mail")
+    assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow) and asked == [], "what the rules allow is never held up"
+    gate, _, seen, asked = await unasked_rig(tmp_path / "read", reply="NOT_ASKED")
+    gate.taint.saw("your mail")
+    read = {"tool": "search-records", "arguments": {"object": "deals", "query": "Lumen"}}
+    assert isinstance(await gate.permission(RUN, read), PermissionResultAllow) and seen == [], "a read is not a change and is never read again"
+
+
+async def test_the_fourth_unasked_change_in_one_task_is_asked_about_whatever_any_model_thinks(tmp_path):
+    from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
+    from odysseus.review import MAX_UNASKED
+    gate, journal, seen, asked = await unasked_rig(tmp_path, reply="OK")
+    gate.taint.saw("your mail")
+    for _ in range(MAX_UNASKED):
+        assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow)
+    assert isinstance(await gate.permission(RUN, NOTE), PermissionResultDeny) and len(asked) == 1 and len(seen) == MAX_UNASKED, "the count needs no model"
+    assert f"change number {MAX_UNASKED + 1} made without asking in one task" in asked[0]
+    gate.new_task("The owner said: something else")
+    gate.taint.saw("your mail")
+    assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow), "a new task begins a new count"

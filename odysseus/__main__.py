@@ -58,7 +58,7 @@ from .deckview import DeckViewer
 from .links import Fetcher
 from .ocr import MistralOcr
 from .pages import make_page_reader
-from .review import OUTGOING, anthropic_call, make_second_reader
+from .review import OUTGOING, anthropic_call, make_escalator, make_second_reader
 from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
@@ -166,11 +166,13 @@ async def main() -> int:
     async def on_watch():
         await asyncio.to_thread(box["watcher"].activate)
         await asyncio.to_thread(box["watcher"].start, asyncio.get_running_loop())
+    second_call = anthropic_call(settings.anthropic_api_key)      # one plain call to the small model: the second reader, and closing a conversation
     gate = make_gate(journal, now, with_apps=apps is not None, browser=browser,
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
                      taint_file=settings.data_dir / "taint.bin", attio=attio, services=services,
-                     auto_small=not settings.ask_every_change)
-    second_call = anthropic_call(settings.anthropic_api_key)      # one plain call to the small model: the second reader, and closing a conversation
+                     auto_small=not settings.ask_every_change,
+                     escalate=None if settings.review_model.lower() == "off" else
+                     make_escalator(journal, second_call, settings.review_model or settings.background_model))
     history = History(settings.data_dir / "history.jsonl")
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
