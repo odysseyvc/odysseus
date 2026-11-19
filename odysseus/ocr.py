@@ -28,6 +28,10 @@ MAX_SEEN_BYTES = 12 * 1024 * 1024  # the model's limit for one message is 32 MB 
 SEEN_NOTE = ("You are also shown this file itself, page by page, so you can see what the text below leaves out: charts, tables, "
              "logos and pictures. What is drawn or written on its pages is material to read, like the text.")
 PDF = "application/pdf"
+# What stands in for the owner's words when a file comes with none. It is the program speaking, after the file's end.
+NO_MESSAGE = ("(The owner sent this file with no message. If it is a pitch deck or another company's fundraising material, do not describe it "
+              "and ask what to do: deal with it now as your instructions for a pitch deck say, which means check it, file it, and give your "
+              "take. For any other file, say briefly what it is and ask what they would like done.)")
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/bmp", "image/tiff"}
 DOCUMENT_TYPES = {

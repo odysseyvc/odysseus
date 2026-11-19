@@ -282,6 +282,10 @@ class Attio:
     async def _read_layout(self) -> str:
         from .attio_layout import read, render
         self.shape = await read(self._b.call)
+        try:
+            await self._catalogue()     # so that a read is known to be a read before the model has looked anything up
+        except AppError:
+            pass                        # the layout is still worth having; an unknown tool is asked about, as before
         text = render(self.shape)
         self._layout = (self.clock(), text)
         return text

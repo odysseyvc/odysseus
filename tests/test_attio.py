@@ -187,3 +187,13 @@ async def test_with_less_asking_a_note_runs_and_is_reported_and_everything_else_
         assert gate.decide(ATTIO_RUN, {"tool": other, "arguments": {}}) == "ask", other
     await h["attio_run"](note)
     assert attio.pop_changes() == ['did "Create note" in Attio without asking'], "what ran unasked is said to be so"
+
+
+async def test_after_the_layout_is_read_a_read_is_known_as_a_read_without_being_looked_up_first(tmp_path):
+    from evals.crm import FakeAttio
+    from odysseus.gate import ALLOW, ASK
+    from odysseus.journal import Journal
+    attio = Attio(FakeAttio(), Journal(tmp_path / "j.jsonl"))
+    assert attio.decide({"tool": "search-records"}) == ASK, "nothing is known of it yet"
+    await attio.layout()
+    assert attio.decide({"tool": "search-records"}) == ALLOW and attio.decide({"tool": "update-record"}) == ASK

@@ -97,7 +97,7 @@ async def test_the_owners_file_is_read_and_its_text_reaches_the_model_with_the_c
 async def test_a_file_with_no_message_says_so_to_the_model(tmp_path):
     x = rig(tmp_path)
     await send(x, data=b"II*\x00 tiff", name="scan.tiff", mime="image/tiff")      # a scan: turned into text, not shown as a picture
-    assert (await said(x.clients[0].prompts[0])).split("END OF FILE")[1].strip().startswith("(The owner sent this file with no message.)")
+    assert (await said(x.clients[0].prompts[0])).split("END OF FILE")[1].strip().startswith("(The owner sent this file with no message. If it is a pitch deck")
 
 
 async def test_a_picture_is_shown_to_the_model_itself_and_is_not_turned_into_text(tmp_path):

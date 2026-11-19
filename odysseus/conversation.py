@@ -15,7 +15,7 @@ from .agent import AgentRunner, Outcome
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
-from .ocr import MAX_BYTES, OcrBackend, OcrError, file_block, resolve_type, shown_whole
+from .ocr import MAX_BYTES, NO_MESSAGE, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
 from .voice import VoiceBackend, VoiceError
 from .anyapp import AnyApp
@@ -281,7 +281,7 @@ class Conversation:
             return
         seen = shown_whole(kind, len(data), result.pages)
         self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text), seen=seen)
-        said = (caption or "").strip() or "(The owner sent this file with no message.)"
+        said = (caption or "").strip() or NO_MESSAGE
         await self.handle(user_id, f"{file_block(name, result, seen)}\n\n{said}", chat, images=[(kind, data)] if seen else None,
                           material="a file you sent")
 

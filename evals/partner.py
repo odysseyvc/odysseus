@@ -49,7 +49,7 @@ from odysseus.conversation import Conversation  # noqa: E402
 from odysseus.journal import Journal, Ledger  # noqa: E402
 from odysseus.mcpapp import McpApp  # noqa: E402
 from odysseus.memory import MemoryStore  # noqa: E402
-from odysseus.ocr import OcrResult, file_block, join_pages  # noqa: E402
+from odysseus.ocr import NO_MESSAGE, OcrResult, file_block, join_pages  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
 
 from .crm import ME, FakeAttio, FakeGranola  # noqa: E402
@@ -388,7 +388,7 @@ async def run_trial(e: Errand, seed_no: int, base, out: Path, search_shape) -> d
             await attio.layout()
             if e.file:      # as conversation.handle_file leaves it once the file's text has been recognised
                 block = file_block(e.file, OcrResult(e.say, e.say.count("[page ")))
-                await conv.handle(settings.owner_id, f"{block}\n\n(The owner sent this file with no message.)", chat, material="a file you sent")
+                await conv.handle(settings.owner_id, f"{block}\n\n{NO_MESSAGE}", chat, material="a file you sent")
             else:
                 await conv.handle(settings.owner_id, e.say, chat)
             await conv.wait()
