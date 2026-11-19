@@ -13,7 +13,8 @@ So filing is done in two steps.
                step by step, looking each record up again at the moment of creating it.
 
 The plan is kept by the program between the two steps and cannot be altered: the approval is for the plan the
-owner saw. A record that already exists is linked to and left as it is; a plan never overwrites what is in Attio.
+owner saw. A record that already exists is linked to and left as it is, unless the plan names a change to it, and then the owner
+is shown that change as before and after, and it is made only if the record still says what the owner was shown.
 Nothing can be undone through Attio's server, so if a step fails the program stops and says exactly how far it got.
 """
 from __future__ import annotations
@@ -165,6 +166,39 @@ class Intake:
                     return str(hit["record_id"]), f"{field} {_show(match[field])}"
         return None, ""
 
+    async def _now(self, obj: str, rid: str) -> dict[str, Any]:
+        """A record's values as they are in Attio at this moment."""
+        got = parse(await self._attio._call(self._attio._b.call("get-records-by-ids", {"object": obj, "record_ids": [rid]})))
+        rows = got.get("") or got.get("records") or []
+        row = rows[0] if rows and isinstance(rows[0], dict) else {}
+        return row.get("attributes") if isinstance(row.get("attributes"), dict) else row
+
+    @staticmethod
+    def _was(current: Any) -> str:
+        """A present value as the owner reads it."""
+        if current in (None, "", [], {}):
+            return "(empty)"
+        if isinstance(current, dict):
+            return "(set)" if not current.get("full_name") else str(current["full_name"])
+        if isinstance(current, list):
+            return ", ".join(Intake._was(x) for x in current)
+        return str(current)
+
+    def _differs(self, a: dict[str, Any], current: Any, wanted: Any) -> str | None:
+        """How setting `wanted` would change `current`, in words; None if it would change nothing."""
+        was = self._was(current)
+        if a.get("is_multiselect") is True and isinstance(wanted, list) and not _links(wanted):
+            have = {_norm(x) for x in (current if isinstance(current, list) else [current] if current else [])}
+            new = [w for w in wanted if _norm(w) not in have]
+            return f"add {', '.join(map(_show, new))} (now: {was})" if new else None     # Attio adds to a list of choices; it does not replace it
+        if str(a.get("type")) in ("currency", "number") and isinstance(wanted, (int, float)) and not isinstance(wanted, bool):
+            digits = re.sub(r"\D", "", str(current or ""))
+            if digits and digits == re.sub(r"\D", "", f"{wanted:.2f}" if "." in str(current) else str(int(wanted))):
+                return None
+        elif _norm(was) == _norm(_show(wanted)):
+            return None
+        return was
+
     async def plan(self, a: dict[str, Any]) -> str:
         if not self._attio.shape:
             await self._attio.layout()
@@ -187,20 +221,36 @@ class Intake:
             obj, ref = str(r.get("object", "")), str(r["ref"])
             attrs = self._attrs("objects", obj)
             values = self._check_values(f"record {ref}", attrs, r.get("values") or {}, refs)
+            changes = self._check_values(f"record {ref} changes", attrs, r.get("changes") or {}, refs)
             match = {k: values.get(k) for k in MATCH_BY.get(obj, ("name",)) if values.get(k)}
             if not match:
                 raise AppError(f"record {ref}: give at least one of {', '.join(MATCH_BY.get(obj, ('name',)))}, so it can be looked up first.")
             noun = {"companies": "the company", "people": "the person", "deals": "the deal"}.get(obj, obj)
             labels[ref] = f"{noun} {_show(values.get('name') or next(iter(match.values())))}"
-            checked.append((ref, obj, attrs, values, match))
-        for ref, obj, attrs, values, match in checked:
+            checked.append((ref, obj, attrs, values, match, changes))
+        for ref, obj, attrs, values, match, changes in checked:
             found, by = await self._existing(obj, match)
             label = labels[ref][4].upper() + labels[ref][5:] if labels[ref].startswith("the ") else labels[ref]      # "Company Orbit Labs"
-            if found:
+            updates, before = {}, {}
+            if found and changes:
+                now = await self._now(obj, found)
+                said = []
+                for slug, wanted in changes.items():
+                    was = self._differs(attrs[slug], now.get(slug), wanted)
+                    if was is None:
+                        continue                       # it already says this: nothing to change, and nothing to show
+                    updates[slug], before[slug] = wanted, self._was(now.get(slug))
+                    after = self._said(attrs, {slug: wanted}, labels).split(": ", 1)[1]
+                    said.append(f"{attrs[slug].get('title')}: {was}" if was.startswith("add ") else f"{attrs[slug].get('title')}: {was} → {after}")
+                if said:
+                    lines.append(f"- {label}: ALREADY IN ATTIO (found by {by}). CHANGES: {'; '.join(said)}. Everything else on it stays as it is.")
+            if found and not updates:
                 lines.append(f"- {label}: ALREADY IN ATTIO (found by {by}). It will be linked to and left exactly as it is.")
-            else:
+            if not found:
+                values = {**values, **changes}         # a record that does not exist yet is simply created with everything said about it
                 lines.append(f"- {label}: NEW. {self._said(attrs, values, labels)}")
-            steps.append({"do": "record", "ref": ref, "object": obj, "values": values, "match": match, "found": found, "label": label})
+            steps.append({"do": "record", "ref": ref, "object": obj, "values": values, "match": match, "found": found, "label": label,
+                          "updates": updates, "before": before})
         for e in entries:
             lst, ref = str(e.get("list", "")), str(e.get("record", "")).lstrip("@")
             attrs = self._attrs("lists", lst)
@@ -233,7 +283,8 @@ class Intake:
         return plan
 
     def describe(self, a: dict[str, Any]) -> str:
-        return "File this in Attio?\n\n" + self._get(a)["summary"] + "\n\nRecords already in Attio are not changed. This cannot be undone from here."
+        return ("File this in Attio?\n\n" + self._get(a)["summary"] + "\n\nA record already in Attio is changed only where a line above says "
+                "CHANGES. This cannot be undone from here.")
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(ATTIO_PLAN, ALLOW)                                # reads and checks; changes nothing
@@ -263,6 +314,20 @@ class Intake:
                         rid, _ = await self._existing(step["object"], step["match"])
                         if rid:
                             done.append(f"{step['label']}: appeared in Attio since the plan was made; linked, not created")
+                    elif step.get("updates"):
+                        # Look again at the moment of acting. The owner approved "Met → Diligence"; if it no longer says Met,
+                        # somebody has changed it since, and what was approved is no longer what would happen.
+                        now, attrs, apply, moved = await self._now(step["object"], rid), self._attrs("objects", step["object"]), {}, []
+                        for slug, wanted in step["updates"].items():
+                            if _norm(self._was(now.get(slug))) == _norm(step["before"][slug]):
+                                apply[slug] = wanted
+                            else:
+                                moved.append(f"{attrs[slug].get('title')} was {step['before'][slug]} when you approved and is now "
+                                             f"{self._was(now.get(slug))}, so it was left alone")
+                        if apply:
+                            await self._attio._call(run("update-record", {"object": step["object"], "record_id": rid, "values": self._fill(apply, ids)}))
+                        titles = ", ".join(str(attrs[s].get("title")) for s in apply)
+                        done.append(f"{step['label']}: " + (f"changed ({titles})" if apply else "not changed") + ("; " + "; ".join(moved) if moved else ""))
                     elif step["found"]:
                         done.append(f"{step['label']}: already there; linked")
                     if not rid:
@@ -314,7 +379,11 @@ SCHEMAS = {
                        "records": {"type": "array", "items": {"type": "object", "required": ["ref", "object", "values"], "properties": {
                            "ref": {"type": "string", "description": "A short name for this record within the plan: c1, p1, d1."},
                            "object": {"type": "string", "description": "companies, people or deals."},
-                           "values": {"type": "object", "description": "Field slug to value. A person's name is {first_name, last_name, full_name}. "
+                           "changes": {"type": "object", "description": "Only for something the source says that should be set on this record "
+                                       "even if it is already in Attio: a new stage, a next step, a date. Field slug to new value. The owner is "
+                                       "shown each as before → after. A choice from several is added to those already there, never removed."},
+                           "values": {"type": "object", "description": "What identifies the record, and what to create it with if it is new. An "
+                                      "existing record is never changed by `values`, only by `changes`. Field slug to value. A person's name is {first_name, last_name, full_name}. "
                                       "A link to another record is always \"@ref\" (several: a list of them), never an id: a record already in "
                                       "Attio that you want to link to goes in `records` too, with its name and website or email address, and is "
                                       "found and left unchanged. For a field that takes a member of the firm, \"me\" is the owner."}}}},
@@ -328,4 +397,4 @@ SCHEMAS = {
 
 PROMPT = """
 
-Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan with everything the source supports, then attio_file with the plan's id; the owner approves the whole plan with one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio; those are linked to and never changed by a plan, so if the source says something new about one of them, tell the owner and offer to update it separately. After filing, tell the owner what was created, what was already there, and what in the source you left out and why."""
+Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan with everything the source supports, then attio_file with the plan's id; the owner approves the whole plan with one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio. To change one of those, put only what the source newly says in that record's `changes` (a stage the deal has moved to, the next step, a date); the owner is shown each change as before and after. Never use `changes` to tidy, to fill a gap from a guess, or to empty a field. After a meeting about a company already in Attio, the usual plan is: the company and the deal as they are, the deal's stage and next step in `changes` if the meeting moved them, and a note of what was said. After filing, tell the owner what was created, what was already there, and what in the source you left out and why."""

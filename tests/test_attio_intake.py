@@ -62,6 +62,15 @@ class FakeAttio:
                            + (f"\n      domains[1]: {v['domains'][0]}" if v.get("domains") else "")
                            + (f"\n      email_addresses[1]: {v['email_addresses'][0]}" if v.get("email_addresses") else "") for rid, v in hits)
             return f"results[{len(hits)}]:{body}\nhas_more_results: false"
+        if name == "get-records-by-ids":
+            obj, v = self.records[a["record_ids"][0]]
+            body = "".join(f"\n      {k}[{len(x)}]: {','.join(x)}" if isinstance(x, list) else f"\n      {k}: {x}" for k, x in v.items())
+            return f"[1]:\n  - record_id: {a['record_ids'][0]}\n    attributes:{body}"
+        if name == "update-record":
+            obj, v = self.records[a["record_id"]]
+            for k, x in a["values"].items():
+                v[k] = (v.get(k, []) + x) if isinstance(x, list) and isinstance(v.get(k), list) else x
+            return "ok: true"
         if name == "create-record":
             self.n += 1
             self.records[f"new{self.n}"] = (a["object"], a["values"])
@@ -193,3 +202,68 @@ async def test_the_owner_and_money_are_written_in_words(tmp_path):
     assert "Deal owner: you (Pat Owner)" in shown and "Deal value: USD 2,000,000" in shown and "M1" not in shown
     await h["attio_file"]({"plan": pid})
     assert [a["values"]["owner"] for n, a in backend.calls if n == "create-record"] == ["M1"], "Attio is given the member id"
+
+
+# --- changing a record that is already there ---------------------------------------------------------------
+
+def with_deal_fields(attio):
+    deals = attio.shape["objects"]["deals"]["attrs"]
+    if not any(a["api_slug"] == "next_step" for a in deals):
+        deals += [attr("next_step", "Next step"), attr("value", "Deal value", "currency", currency_code="USD"),
+                  attr("pass_reasons", "Pass reasons", "select", is_multiselect=True, select_options=[{"title": "Too early"}, {"title": "Team"}])]
+
+
+FOLLOW_UP = {"source": "Second call with Jo, 12 Nov", "records": [
+    {"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"},
+     "changes": {"stage": "Term sheet", "next_step": "Send the term sheet", "value": 250000, "pass_reasons": ["Team"]}}],
+    "notes": [{"on": "@d1", "title": "Second call", "content": "Jo confirmed the round closes in March."}]}
+
+
+async def test_a_change_to_an_existing_record_is_shown_as_before_and_after_and_then_made(tmp_path):
+    existing = [("deals", {"name": "Orbit Labs", "stage": "Sourced", "value": "US$250,000.00", "pass_reasons": ["Too early"]})]
+    backend, attio, _, h = rig(tmp_path, existing=existing)
+    with_deal_fields(attio)
+    pid, shown = await plan_id(h, FOLLOW_UP)
+    assert "- Deal Orbit Labs: ALREADY IN ATTIO (found by name Orbit Labs). CHANGES: Deal stage: Sourced → Term sheet; " \
+           "Next step: (empty) → Send the term sheet; Pass reasons: add Team (now: Too early). Everything else on it stays as it is." in shown
+    assert "Deal value" not in shown, "a value that is already what the plan says is not listed as a change"
+    assert "changed only where a line above says CHANGES" in attio.intake.describe({"plan": pid})
+    out = text(await h["attio_file"]({"plan": pid}))
+    updates = [a for n, a in backend.calls if n == "update-record"]
+    assert updates == [{"object": "deals", "record_id": "r0", "values": {"stage": "Term sheet", "next_step": "Send the term sheet", "pass_reasons": ["Team"]}}]
+    assert "Deal Orbit Labs: changed (Deal stage, Next step, Pass reasons)" in out and not any(n == "create-record" for n, _ in backend.calls)
+    assert backend.records["r0"][1]["pass_reasons"] == ["Too early", "Team"], "a choice is added to the others, not put in their place"
+
+
+async def test_a_change_is_not_made_if_the_record_no_longer_says_what_the_owner_was_shown(tmp_path):
+    backend, attio, _, h = rig(tmp_path, existing=[("deals", {"name": "Orbit Labs", "stage": "Sourced"})])
+    with_deal_fields(attio)
+    pid, _ = await plan_id(h, FOLLOW_UP)
+    backend.records["r0"][1]["stage"] = "Passed"                 # a colleague moves it between the plan and the approval
+    out = text(await h["attio_file"]({"plan": pid}))
+    sent = [a["values"] for n, a in backend.calls if n == "update-record"][0]
+    assert "stage" not in sent and sent["next_step"] == "Send the term sheet", "the untouched fields are still changed"
+    assert "Deal stage was Sourced when you approved and is now Passed, so it was left alone" in out
+    assert backend.records["r0"][1]["stage"] == "Passed"
+
+
+async def test_changes_that_would_change_nothing_leave_the_record_alone_and_a_new_record_is_just_created(tmp_path):
+    backend, attio, _, h = rig(tmp_path, existing=[("deals", {"name": "Orbit Labs", "stage": "Term sheet", "pass_reasons": ["Team"]})])
+    with_deal_fields(attio)
+    same = {"source": "x", "records": [{"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"}, "changes": {"stage": "term sheet", "pass_reasons": ["Team"]}}]}
+    pid, shown = await plan_id(h, same)
+    assert "It will be linked to and left exactly as it is." in shown and "CHANGES" not in shown
+    await h["attio_file"]({"plan": pid})
+    assert not any(n == "update-record" for n, _ in backend.calls)
+    fresh = {"source": "x", "records": [{"ref": "d1", "object": "deals", "values": {"name": "Brand New"}, "changes": {"stage": "Sourced"}}]}
+    pid, shown = await plan_id(h, fresh)
+    assert "- Deal Brand New: NEW. Deal name: Brand New; Deal stage: Sourced" in shown
+    await h["attio_file"]({"plan": pid})
+    assert [a["values"] for n, a in backend.calls if n == "create-record"] == [{"name": "Brand New", "stage": "Sourced"}]
+
+
+async def test_a_change_must_fit_the_workspace_like_any_other_value(tmp_path):
+    _, attio, _, h = rig(tmp_path, existing=[("deals", {"name": "Orbit Labs", "stage": "Sourced"})])
+    for changes, why in (({"stage": "Won"}, "'Won' is not a choice for stage"), ({"colour": "red"}, "no field 'colour'")):
+        out = await h["attio_plan"]({"source": "x", "records": [{"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"}, "changes": changes}]})
+        assert out.get("is_error") and why in text(out)

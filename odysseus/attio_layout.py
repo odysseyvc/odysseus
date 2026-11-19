@@ -16,7 +16,7 @@ import json
 import re
 from typing import Any, Awaitable, Callable
 
-_KEY = re.compile(r"^([\w.\-]+)(?:\[(\d+)\])?(?:\{([^}]*)\})?:(?:\s(.*))?$")
+_KEY = re.compile(r"^([\w.\-]*)(?:\[(\d+)\])?(?:\{([^}]*)\})?:(?:\s(.*))?$")      # the name may be empty: a list with no name, "[2]:"
 
 
 def _scalar(v: str) -> Any:

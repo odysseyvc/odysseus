@@ -112,3 +112,8 @@ async def test_an_old_layout_is_still_given_while_a_new_one_is_read_and_a_failed
     broken = Attio(FakeBackend(fail=True), Journal(tmp_path / "k.jsonl"))
     out = await broken.handlers()["attio_find"]({})
     assert "is_error" not in out and "How this workspace is laid out" not in out["content"][0]["text"] and "whoami" in out["content"][0]["text"]
+
+
+def test_a_list_with_no_name_is_read_too():
+    got = parse("[1]:\n  - record_id: r1\n    attributes:\n      name: Orbit Labs\n      stage: Term sheet\n      tags[2]: a,b")
+    assert got == {"": [{"record_id": "r1", "attributes": {"name": "Orbit Labs", "stage": "Term sheet", "tags": ["a", "b"]}}]}
