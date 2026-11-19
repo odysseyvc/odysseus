@@ -64,6 +64,12 @@ def A(slug: str, title: str, kind: str = "text", many: bool = False, required: b
     return a
 
 
+STRENGTHS = ("No connection", "Very weak", "Weak", "Good", "Strong", "Very strong")
+COLLEAGUE = {"workspace_membership_id": "00000000-0000-4000-8000-00000000bbbb", "name": "Sam Rivera", "email": "sam@acme-capital.example"}
+# What Attio fills in by itself from synced mail and calendars. Not writable: set in a test with FakeAttio.fill.
+KNOWS = [A("strongest_connection_strength", "Connection strength", "select", writable=False, options=STRENGTHS),
+         A("strongest_connection_user", "Strongest connection", "actor-reference", writable=False),
+         A("next_interaction", "Next interaction", "interaction", writable=False)]
 STAGES = ("Sourced", "Contacted", "Met", "Diligence", "IC", "Term sheet", "Invested", "Passed")
 ATTRS: dict[str, list[dict[str, Any]]] = {
     "companies": [A("record_id", "Record ID", writable=False), A("name", "Name"), A("domains", "Domains", "domain", many=True),
@@ -71,11 +77,12 @@ ATTRS: dict[str, list[dict[str, Any]]] = {
                   A("relationship", "Relationship", "select", many=True, options=("Prospect", "Portfolio", "Co-investor", "LP", "Advisor")),
                   A("company_stage", "Company stage", "select", options=("Pre-seed", "Seed", "Series A", "Series B+")),
                   A("associated_deals", "Associated deals", "record-reference", many=True, writable=False),
-                  A("last_interaction", "Last interaction", "interaction", writable=False)],
+                  A("last_interaction", "Last interaction", "interaction", writable=False), *KNOWS],
     "people": [A("record_id", "Record ID", writable=False), A("name", "Name", "personal-name"),
                A("email_addresses", "Email addresses", "email-address", many=True), A("linkedin", "LinkedIn"), A("job_title", "Job title"),
                A("company", "Company", "record-reference"), A("associated_deals", "Associated deals", "record-reference", many=True, writable=False),
-               A("role", "Role", "select", many=True, options=("Founder", "Investor", "LP", "Operator", "Advisor", "Scout"))],
+               A("role", "Role", "select", many=True, options=("Founder", "Investor", "LP", "Operator", "Advisor", "Scout")),
+               A("last_interaction", "Last interaction", "interaction", writable=False), *KNOWS],
     "deals": [A("record_id", "Record ID", writable=False), A("name", "Deal name", required=True),
               A("stage", "Deal stage", "status", required=True, options=STAGES), A("owner", "Deal owner", "actor-reference", required=True),
               A("value", "Deal value", "currency", desc="Our cheque."), A("associated_company", "Associated company", "record-reference"),
@@ -97,6 +104,7 @@ OBJ = {"type": "string", "description": "companies, people or deals."}
 TOOLS = [
     ("whoami", "Who am I", READ, "Who is signed in, and to which workspace.", {}),
     ("list-objects", "List objects", READ, "List the workspace's objects.", {}),
+    ("list-workspace-members", "List workspace members", READ, "List members of the workspace: id, name, email address.", {"query": {"type": "string"}}),
     ("list-attribute-definitions", "List attribute definitions", READ, "List attribute definitions for a given object.",
      {"object": OBJ, "limit": {"type": "number", "default": 20, "maximum": 30}, "offset": {"type": "number"}, "query": {"type": "string"}}),
     ("list-lists", "List lists", READ, "List the workspace's lists.", {}),
@@ -143,6 +151,10 @@ class FakeAttio:
         rid = self._id()
         self.records[rid] = {"object": obj, "values": self._clean(obj, values)}
         return rid
+
+    def fill(self, rid: str, **values: Any) -> None:
+        """Set what Attio fills in by itself (a connection's strength, the last interaction). No tool can do this."""
+        self.records[rid]["values"].update(values)
 
     def note(self, rid: str, title: str, content: str) -> None:
         self.notes.append({"note_id": self._id(), "parent_object": self.records[rid]["object"], "parent_record_id": rid, "title": title, "content": content})
@@ -250,6 +262,9 @@ class FakeAttio:
         self.calls.append(name)
         if name == "whoami":
             return text({**ME, "teams": []})
+        if name == "list-workspace-members":
+            me = {"workspace_membership_id": ME["workspace_member_id"], "name": ME["name"], "email": ME["email"]}
+            return text({"members": [{**m, "access_level": "admin"} for m in (me, COLLEAGUE)]})
         if name == "list-objects":
             return text({"objects": [{"object_id": f"obj-{o}", "api_slug": o, "singular_noun": o[:-1].capitalize() if o != "people" else "Person",
                                       "plural_noun": o.capitalize(), "is_standard_object": True} for o in ATTRS], "has_more": False})

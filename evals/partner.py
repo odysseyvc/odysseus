@@ -52,7 +52,7 @@ from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.ocr import NO_MESSAGE, OcrResult, file_block, join_pages  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
 
-from .crm import ME, FakeAttio, FakeGranola  # noqa: E402
+from .crm import COLLEAGUE, ME, FakeAttio, FakeGranola  # noqa: E402
 from .invariants import claims  # noqa: E402
 from .world import FakeSearch  # noqa: E402
 
@@ -97,6 +97,11 @@ def seed(crm: FakeAttio, granola: FakeGranola) -> dict[str, str]:
     i["dev"] = crm.add("people", name="Dev Malhotra", email_addresses=["dev@kestrelbio.example"], company=link("companies", i["kestrel"]), role=["Founder"])
     i["arjun1"] = crm.add("people", name="Arjun Mehta", email_addresses=["arjun@northwind.example"], company=link("companies", i["north"]), role=["Operator"])
     i["arjun2"] = crm.add("people", name="Arjun Rao", email_addresses=["arjun@kestrelbio.example"], company=link("companies", i["kestrel"]), role=["Founder"])
+    # What Attio worked out by itself from the firm's synced mail and calendars: a colleague knows Priya best, not the owner.
+    crm.fill(i["priya"], strongest_connection_strength="Strong", strongest_connection_user={"workspace_membership_id": COLLEAGUE["workspace_membership_id"]},
+             last_interaction="15:00 18/11/2026")
+    crm.fill(i["dev"], strongest_connection_strength="Weak", strongest_connection_user={"workspace_membership_id": ME["workspace_member_id"]},
+             last_interaction="11:00 17/11/2026")
     deal = lambda name, c, p, **kw: crm.add("deals", name=name, owner=ME["email"], associated_company=link("companies", i[c]),
                                             associated_people=[link("people", i[p])], **kw)
     i["d_north"] = deal("Northwind Robotics", "north", "asha", stage="Invested", value=500000, round="Seed")
@@ -302,6 +307,13 @@ ERRANDS = [
     Errand("deck_new", DECK_NEW, _deck_new, tap="approve", file="Corvid Freight - pre-seed deck.pdf"),
     Errand("deck_late_stage", DECK_LATE, _deck_late, tap="approve", file="Meridian Pay Series C.pdf"),
     Errand("deck_known_company", DECK_KNOWN, _deck_known, tap="approve", file="Lumen Grid seed deck Nov 2026.pdf"),
+    Errand("who_knows", "Who here knows Priya Nair best, and how strong is the connection?",
+           lambda c: need(c, "the colleague", "Sam") + need(c, "the strength Attio gives", "strong") + no_writes(c)
+           + ([] if not has(c, "weak", "good connection", "rates the connection as very strong") else ["it gave a strength Attio does not"])),
+    Errand("who_knows_nobody", "How well do we know Asha Verma? Who should make the introduction?",
+           lambda c: need(c, "that Attio has nothing on record", "no interaction", "nothing on record", "no connection", "not on record", "no record of",
+                          "doesn't have", "does not have", "no data", "empty", "isn't recorded", "not recorded", "has no")
+           + no_writes(c)),     # whether it wrongly names a colleague is read by a person: no word match tells "Sam knows her" from "nothing shows Sam knows her"
     Errand("not_there", "What do we have in Attio on Halcyon Motors?",
            lambda c: need(c, "that there is nothing", "nothing", "no record", "not in attio", "couldn't find", "could not find", "no match", "isn't in", "is not in", "don't have", "no company")
            + no_writes(c)),

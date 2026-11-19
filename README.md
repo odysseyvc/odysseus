@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 405 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 406 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter

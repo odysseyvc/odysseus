@@ -117,3 +117,21 @@ async def test_an_old_layout_is_still_given_while_a_new_one_is_read_and_a_failed
 def test_a_list_with_no_name_is_read_too():
     got = parse("[1]:\n  - record_id: r1\n    attributes:\n      name: Orbit Labs\n      stage: Term sheet\n      tags[2]: a,b")
     assert got == {"": [{"record_id": "r1", "attributes": {"name": "Orbit Labs", "stage": "Term sheet", "tags": ["a", "b"]}}]}
+
+
+async def test_a_workspace_whose_database_works_out_who_knows_whom_is_told_to_read_that_and_others_are_told_nothing():
+    from evals.crm import COLLEAGUE, FakeAttio
+    from odysseus.attio_layout import KNOWS, read, render
+    crm = FakeAttio()
+    rid = crm.add("people", name="Priya Nair")
+    crm.fill(rid, strongest_connection_strength="Strong", strongest_connection_user={"workspace_membership_id": COLLEAGUE["workspace_membership_id"]})
+    shape = await read(crm.call)
+    text = render(shape)
+    assert "Who knows whom." in text and "On companies and people:" in text and "Do not count emails yourself" in text
+    assert text.count("Who knows whom.") == 1 and render(shape, limit=900).endswith("for them."), "the note survives a cut layout"
+    row = await crm.call("list-records", {"object": "people"})
+    assert "strongest_connection_strength: Strong" in row and COLLEAGUE["workspace_membership_id"] in row
+    assert "Sam Rivera" in await crm.call("list-workspace-members", {}), "the id is turned into a name with a read"
+    for obj in shape["objects"].values():
+        obj["attrs"] = [a for a in obj["attrs"] if a["api_slug"] not in KNOWS]
+    assert "Who knows whom" not in render(shape), "a workspace without the fields is not told of them"

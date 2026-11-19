@@ -130,6 +130,22 @@ async def read(call: Callable[[str, dict[str, Any]], Awaitable[str]]) -> dict[st
     return shape
 
 
+KNOWS = ("strongest_connection_strength", "strongest_connection_user")
+KNOWS_NOTE = ("\nWho knows whom. Attio itself works out how well the firm knows a person or a company, from the mail and calendars its "
+              "members have synced to it. On {where}: strongest_connection_strength (from No connection to Very strong), "
+              "strongest_connection_user (the colleague who knows them best, as a workspace member id: name them with "
+              "list-workspace-members), last_interaction and next_interaction. To answer who knows someone, how well, or when we "
+              "last spoke, read these on the record. Do not count emails yourself. If they are empty, say Attio has no "
+              "interactions on record for them.")
+
+
+def knows_note(shape: dict[str, Any]) -> str:
+    """One paragraph on the relationship fields, only if this workspace has them. Bought, not built: Attio computes them."""
+    where = [slug for slug, obj in (shape.get("objects") or {}).items()
+             if set(KNOWS) <= {a.get("api_slug") for a in obj.get("attrs") or [] if isinstance(a, dict) and a.get("is_archived") is not True}]
+    return KNOWS_NOTE.format(where=" and ".join(where)) if where else ""
+
+
 def render(shape: dict[str, Any], limit: int = 12000) -> str:
     """The layout as a page of plain lines for the model."""
     me = shape.get("me") or {}
@@ -142,8 +158,10 @@ def render(shape: dict[str, Any], limit: int = 12000) -> str:
         lines.append(f"\nList `{slug}` (\"{lst.get('name')}\"), a list of {', '.join(map(str, lst.get('parents') or ['?']))}. "
                      "Fields that belong to an entry in this list, not to the record:")
         lines += _fields(lst.get("attrs") or [])
+    note = knows_note(shape)
+    limit -= len(note)          # the note is short and is never the part that is cut
     text = "\n".join(lines)
-    return text if len(text) <= limit else text[:limit] + "\n[Cut. List the attributes of an object yourself if a field you need is not shown.]"
+    return (text if len(text) <= limit else text[:limit] + "\n[Cut. List the attributes of an object yourself if a field you need is not shown.]") + note
 
 
 async def describe(call: Callable[[str, dict[str, Any]], Awaitable[str]], limit: int = 12000) -> str:
