@@ -156,22 +156,82 @@ def _leaves(e: BaseException) -> list[BaseException]:
     return [x for sub in inner for x in _leaves(sub)] if inner else [e]
 
 
-class McpBackend:
-    """Attio's server, one short session per call. Never starts a sign-in by itself."""
+class _Closed(Exception):
+    """The open session ended before this request reached it. The request was not sent; it is safe to send again."""
 
-    def __init__(self, tokens: FileTokens):
-        self._tokens = tokens
+
+class McpBackend:
+    """Attio's server. Never starts a sign-in by itself.
+
+    Opening a session costs several seconds (the server is asked afresh where sign-in happens, then greeted), and
+    one question to the assistant is often five or six calls. So one session is kept open and reused, and closed
+    after `idle_s` without a call. The library requires a session to be opened and closed by the same task, so a
+    single task owns it and the calls are handed to that task through a queue.
+    """
+
+    def __init__(self, tokens: FileTokens, idle_s: float = 120.0, opener: Any = None):
+        self._tokens, self._idle = tokens, idle_s
+        self._open = opener or (lambda: session(self._tokens))
+        self._queue: asyncio.Queue | None = None
+        self._task: asyncio.Task | None = None
+        self.opened = 0
+
+    async def _serve(self, queue: asyncio.Queue) -> None:
+        failure: BaseException = _Closed()
+        try:
+            async with self._open() as s:
+                self.opened += 1
+                while True:
+                    try:
+                        fut, fn = await asyncio.wait_for(queue.get(), self._idle)
+                    except asyncio.TimeoutError:
+                        return
+                    try:
+                        result = await fn(s)
+                    except Exception as e:
+                        if not fut.done():
+                            fut.set_exception(e)
+                        if type(e).__name__ != "McpError":      # the server refusing one request leaves the session usable
+                            return                              # anything else may have broken it: the next call opens a new one
+                        continue
+                    if not fut.done():
+                        fut.set_result(result)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            raise
+        except BaseException as e:          # could not open: most often the sign-in
+            failure = e
+        finally:
+            self._queue = None
+            while not queue.empty():
+                fut, _ = queue.get_nowait()
+                if not fut.done():
+                    fut.set_exception(failure)
+
+    async def _do(self, fn: Any) -> Any:
+        for attempt in (1, 2):
+            if self._task is None or self._task.done() or self._queue is None:
+                self._queue = asyncio.Queue()
+                self._task = asyncio.create_task(self._serve(self._queue))
+            fut: asyncio.Future = asyncio.get_running_loop().create_future()
+            self._queue.put_nowait((fut, fn))
+            try:
+                return await fut
+            except _Closed:
+                if attempt == 2:
+                    raise AppError("Attio's session closed twice before the request was sent.") from None
+
+    async def close(self) -> None:
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
 
     async def list_tools(self) -> list[dict[str, Any]]:
-        async with session(self._tokens) as s:
-            tools = (await s.list_tools()).tools
+        tools = (await self._do(lambda s: s.list_tools())).tools
         return [{"name": t.name, "title": (t.annotations.title if t.annotations and t.annotations.title else t.name),
                  "labels": t.annotations.model_dump(exclude_none=True) if t.annotations else {},
                  "description": " ".join((t.description or "").split()), "inputs": t.input_schema} for t in tools]
 
     async def call(self, name: str, arguments: dict[str, Any]) -> str:
-        async with session(self._tokens) as s:
-            result = await s.call_tool(name, arguments)
+        result = await self._do(lambda s: s.call_tool(name, arguments))
         text = "\n".join(getattr(c, "text", "") for c in result.content if getattr(c, "text", ""))
         if getattr(result, "is_error", getattr(result, "isError", False)):
             raise AppError(text[:600] or f"Attio refused {name}.")

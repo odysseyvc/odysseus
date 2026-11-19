@@ -59,6 +59,14 @@
 <p><span class="g v">Verified</span>, one live run. The workspace had been created the day before. It held the three objects every workspace starts with (companies, people, deals) and no lists: no pipeline had been set up. Listing the tools took 12 seconds; each read took 4 to 6.</p>
 <p>Two lessons. The plan had been to read the workspace's structure and build what a partner needs from it; there is not yet a structure to read, so the next decision is the owner's: how the firm's pipeline should be laid out. And the reads are slow, because the program opens a fresh session for each call and Attio's server is asked afresh where to sign in. One open session kept for the conversation would remove most of that. It is not built.</p>
 
+<h2 id="model">The real model, with every change declined</h2>
+<p>Everything above was a script calling the tools. The first run with the real model asked it two things, with a stand-in owner who declines every approval so that nothing could be written. <span class="g v">Verified</span>, one run, 7 cents:</p>
+<ul>
+<li>"What stages can a deal be in, and how many deals are in the pipeline?" It looked the tools up, listed the lists, the objects, the deal fields and the deals, and answered correctly: the eight stages in order, and no deals. It also tried Attio's reporting tool with inputs the server rejected, and said so in its reply instead of hiding it.</li>
+<li>"Add a company called Example Robotics and open a Seed deal for it." It checked who it was signed in as, searched for the company, then asked to create it. The question showed the action and its inputs. Declined, it replied that neither the company nor the deal had been created, and why the second depended on the first.</li>
+</ul>
+<p>The first answer took 52 seconds. Six calls at four to six seconds each is what Section 21.6 predicted. The repair was the one named there: one session is kept open and reused, and closed after two minutes without a call. The library insists that a session is opened and closed by the same task, so one task owns it and calls reach it through a queue. <span class="g v">Verified</span>, live: the first call now takes about four seconds and each later one between one and two. <span class="g u">Not tested</span>: the same two questions again through the real model after the repair, and any approval actually given.</p>
+
 <h2 id="layout">Giving the workspace a shape</h2>
 <p>An empty database cannot answer "what is in the pipeline". The assistant's first useful act for the firm was therefore not a lookup but a layout: what a deal is, what stages it passes through, and what is recorded about it.</p>
 <p>The first draft was made from the firm's own earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" It was not, and the honest answer was that nobody had checked. The draft had been written before reading what the vendor and practitioners recommend. Reading them afterwards (the vendor's own guide for venture firms, and one implementation consultancy's write-up, which is sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as the allocation offered and the committee date; a single reason for passing where several are needed; nothing recorded about a holding after investing; nothing for the fund's own investors; and no automation at all.</p>
@@ -77,7 +85,6 @@
 <ul>
 <li>No change has been made in Attio, and the real model has not used these tools.</li>
 <li>The sign-in works only on the machine with the browser.</li>
-<li>Each call opens its own session, at four to six seconds.</li>
 <li>Unattended routines and watches cannot read Attio.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
 <li>No errand in the evaluation is a partner's.</li>

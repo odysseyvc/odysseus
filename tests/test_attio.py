@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
+from contextlib import asynccontextmanager
+from pathlib import Path
+from types import SimpleNamespace
 
-from odysseus.attio import ATTIO_RUN, LAPSED, Attio, FileTokens, NotSignedIn, kind
+from odysseus.attio import ATTIO_RUN, LAPSED, Attio, FileTokens, McpBackend, NotSignedIn, kind
 from odysseus.journal import Journal
 from odysseus.tools import make_gate
 
@@ -98,3 +102,59 @@ def test_the_token_file_round_trips_and_says_whether_anyone_is_signed_in(tmp_pat
     assert not tokens.signed_in() and asyncio.run(tokens.get_tokens()) is None and asyncio.run(tokens.get_client_info()) is None
     asyncio.run(tokens.set_tokens(OAuthToken(access_token="a", token_type="Bearer", refresh_token="r")))
     assert tokens.signed_in() and asyncio.run(tokens.get_tokens()).refresh_token == "r"
+
+
+# --- one session kept open and reused ------------------------------------------------------------------------
+
+class FakeSession:
+    def __init__(self, log):
+        self.log = log
+
+    async def call_tool(self, name, arguments):
+        self.log.append(name)
+        if name == "boom":
+            raise RuntimeError("connection lost")
+        return SimpleNamespace(content=[SimpleNamespace(text=f"did {name}")], is_error=False)
+
+
+def opener(log, fail=None):
+    @asynccontextmanager
+    async def open_():
+        if fail:
+            raise fail
+        log.append("open")
+        try:
+            yield FakeSession(log)
+        finally:
+            log.append("close")
+    return open_
+
+
+async def test_one_session_serves_many_calls_and_closes_when_idle():
+    log: list[str] = []
+    b = McpBackend(None, idle_s=0.05, opener=opener(log))
+    assert [await b.call("a", {}), await b.call("b", {})] == ["did a", "did b"]
+    assert log == ["open", "a", "b"] and b.opened == 1
+    await asyncio.sleep(0.15)
+    assert log[-1] == "close", "closed after sitting idle"
+    assert await b.call("c", {}) == "did c" and b.opened == 2, "and opened again when next needed"
+    await b.close()
+
+
+async def test_a_broken_session_fails_that_call_and_the_next_call_gets_a_new_one():
+    log: list[str] = []
+    b = McpBackend(None, idle_s=5, opener=opener(log))
+    try:
+        await b.call("boom", {})
+        raise AssertionError("should have failed")
+    except RuntimeError:
+        pass
+    assert await b.call("a", {}) == "did a" and b.opened == 2
+    await b.close()
+
+
+async def test_a_session_that_cannot_open_reports_why_to_the_caller():
+    b = McpBackend(None, opener=opener([], fail=NotSignedIn("x")))
+    attio = Attio(b, Journal(Path(tempfile.mkdtemp()) / "j.jsonl"))
+    out = await attio.handlers()["attio_run"]({"tool": "whoami", "arguments": {}})
+    assert out.get("is_error") and out["content"][0]["text"] == LAPSED
