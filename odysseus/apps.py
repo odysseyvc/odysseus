@@ -324,6 +324,9 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
     gate.rule(MAIL_ARCHIVE, ALLOW)     # archiving hides a message from the inbox; it deletes nothing
     gate.rule(MAIL_SEND, ASK, describe_send)
     gate.rule(MAIL_REPLY, ASK, describe_reply)
+    # A reply's approval can be widened by the owner, with a third button, to later replies in the same thread to the
+    # same people until midnight (gate.py). Who "the same people" are is worked out here, from the reply's own inputs.
+    gate.set_thread_approval(MAIL_REPLY, lambda a: str(a.get("thread_id", "")).strip(), lambda a: frozenset(e.lower() for e in _emails(a.get("to"))))
     # An event with guests sends them email, so it is asked about. One with no guests only changes the owner's own calendar.
     gate.rule(CALENDAR_CREATE, lambda a: ASK if a.get("attendees") else ALLOW, lambda a: describe_event(a, now))
 

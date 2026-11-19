@@ -46,6 +46,9 @@ CODES = {
     "MISMATCH": "A name, address, date or amount in it does not match what you asked.",
 }
 HEADING = "A second reading found something to check:"
+UNSEEN = ("THIS TIME THE OWNER WILL NOT BE SHOWN THE ACTION FIRST. Earlier today they approved a reply in this thread and chose to let further "
+          "replies to the same people go without a question. Answer OK only if this reply is plainly what the owner asked for in this task, "
+          "says nothing they did not ask to be said, and commits them to nothing. Any doubt at all: answer NOT_ASKED, and they will be shown it.")
 
 PROMPT = """You are the second reader of an action a personal assistant is about to take for its owner: an email, a reply or a calendar invitation that will reach other people. The owner will be shown it and must approve it. Your one job is to say whether the owner should look twice, and why.
 
@@ -165,6 +168,27 @@ def make_second_reader(journal: Journal, call: Call | None, model: str, taint: A
         lines += [CODES[c] for c in codes or []]
         return HEADING + "\n" + "\n".join(f"- {line}" for line in lines) if lines else ""
 
+    async def clean(tool: str, args: dict[str, Any], question: str, request: str) -> bool:
+        """True only if this action was read and nothing at all was found to check. For a reply that would go without a
+        question under an approval widened to its thread (gate.py). No model, a failed call, a slow call, an unreadable
+        answer, any code word or any unknown address: all False, and the owner is asked as usual."""
+        if call is None or unknown_addresses(args, taint):
+            return False
+        began = clock()
+        user = (f"{UNSEEN}\n\nWHAT THE OWNER ASKED, WITH THE EXCHANGES BEFORE IT\n{request[-MAX_REQUEST:] or '(nothing on record)'}\nEND\n\n"
+                f"THE ACTION\n{question[:MAX_ACTION]}\nEND")
+        try:
+            text, usage = await asyncio.wait_for(call(model, PROMPT, user), REVIEW_TIMEOUT_S)
+        except Exception as e:
+            journal.write("tool", name="review", ok=False, about=tool, standing=True, error="timeout" if isinstance(e, asyncio.TimeoutError) else type(e).__name__,
+                          seconds=round(clock() - began, 2))
+            return False
+        codes = parse(text)
+        journal.write("tool", name="review", ok=codes is not None, cost_usd=round(estimate_usd(model, usage), 5), about=tool, standing=True,
+                      codes=codes or [], seconds=round(clock() - began, 2), **({} if codes is not None else {"error": "unreadable"}))
+        return codes == []
+
+    read.clean = clean
     return read
 
 

@@ -35,6 +35,10 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 from .journal import Journal
 
 ALLOW, ASK, REFUSE = "allow", "ask", "refuse"
+STANDING_NOTE = ("(The owner was NOT shown this before it went. It was sent under the approval they gave earlier today for replies in this "
+                 "thread to these people. Tell them in one plain line that it has been sent, and to whom.)")
+STANDING_MAX = 5         # replies one thread's approval covers; the next is shown to the owner again
+STANDING_BODY = 4000     # characters; a longer reply is always shown first
 APPROVED_NOTE = ("(The program showed the owner exactly this action before it ran, and the owner approved it. Do not say it ran "
                  "without their approval.)")
 MAX_QUESTION = 12000     # characters of an approval question; it is sent whole, over several messages if need be
@@ -55,6 +59,7 @@ class Approval:
     args: dict[str, Any]        # a frozen copy: this, and nothing else, is what may run
     text: str
     answer: asyncio.Future = field(repr=False, default=None)
+    offer_thread: bool = False      # the question may also be answered "and further replies in this thread today"
 
 
 def _key(tool: str, args: dict[str, Any]) -> str:
@@ -83,6 +88,17 @@ class Gate:
         self._escalate: Callable[..., Awaitable[str]] | None = None
         self._escalate_when: Callable[[str, dict[str, Any]], bool] | None = None
         self._unasked = 0                  # such changes so far in this task
+        # An approval the owner may widen, by their own tap, to later replies in the same thread to the same people until
+        # midnight. Code holds the scope. Each such reply is still read by the second reader, which can send it back to
+        # the owner but cannot let anything through that the scope does not cover.
+        self._thread_tool = ""
+        self._thread_of: Callable[[dict[str, Any]], str] | None = None
+        self._people_of: Callable[[dict[str, Any]], frozenset[str]] | None = None
+        self._clean: Callable[..., Awaitable[bool]] | None = None
+        self._standing: dict[str, dict[str, Any]] = {}      # thread id -> who, until when, how many sent
+        self._standing_keys: set[str] = set()               # calls let through under one, until their tool has run
+        self._standing_used: list[str] = []                 # what went out that way in this task, for the owner's report
+        self.now: Callable[[], Any] | None = None           # the owner's clock, for "until midnight"; set by make_gate
 
     # --- set-up ----------------------------------------------------------------
 
@@ -101,6 +117,59 @@ class Gate:
     def set_second_reader(self, reader: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None, tools: Any = ()) -> None:
         """Have `reader` look at the question for each of `tools` before it is shown. What it returns is put under the question."""
         self._second, self._second_tools = reader, frozenset(tools)
+        self._clean = getattr(reader, "clean", None)
+
+    def set_thread_approval(self, tool: str, thread_of: Callable[[dict[str, Any]], str], people_of: Callable[[dict[str, Any]], frozenset[str]]) -> None:
+        """Let approvals of `tool` be widened by the owner to its thread. Takes effect only once a second reader is set."""
+        self._thread_tool, self._thread_of, self._people_of = tool, thread_of, people_of
+
+    def clear_standing(self) -> int:
+        n = len(self._standing)
+        self._standing.clear()
+        return n
+
+    def pop_standing(self) -> list[str]:
+        out, self._standing_used = self._standing_used, []
+        return out
+
+    def _midnight(self) -> Any:
+        from datetime import datetime, time as clock_time, timedelta
+        today = (self.now or datetime.now)()
+        return datetime.combine(today.date() + timedelta(days=1), clock_time.min, tzinfo=today.tzinfo)
+
+    async def _standing_covers(self, tool: str, args: dict[str, Any]) -> bool:
+        """Whether this call may go without a question, under an approval the owner widened to its thread.
+
+        Every condition is checked by code, and any doubt means the owner is asked as usual: the same thread, nobody
+        addressed who was not addressed when the owner approved, before midnight, not the sixth, not long, describable,
+        and read by the second reader with nothing to check. A reader that fails or is slow is a doubt."""
+        if tool != self._thread_tool or self._thread_of is None or self._people_of is None or self._clean is None or self._asker is None:
+            return False
+        try:
+            thread, people = self._thread_of(args), self._people_of(args)
+            grant = self._standing.get(thread)
+            if grant is None:
+                return False
+            from datetime import datetime
+            if (self.now or datetime.now)() >= grant["until"]:
+                del self._standing[thread]
+                return False
+            if not people or not people <= grant["people"] or grant["sent"] >= STANDING_MAX or len(str(args.get("body", ""))) > STANDING_BODY:
+                return False
+            rule = self._rules[tool]
+            text = rule.describe(copy.deepcopy(args)) if rule.describe else ""
+            if not text or len(text) > MAX_QUESTION or not await self._clean(tool, copy.deepcopy(args), text, self.request):
+                return False
+        except Exception as e:
+            self._journal.write("error", where="gate.standing", error=type(e).__name__)
+            return False
+        grant["sent"] += 1
+        key = _key(tool, args)
+        self._grants.append(key)
+        self._standing_keys.add(key)
+        self._standing_used.append(f"reply to {', '.join(sorted(people))}")
+        self._journal.write("gate", tool=tool, verdict="standing", nth=grant["sent"])
+        return True
 
     def set_escalator(self, check: Callable[..., Awaitable[str]] | None, when: Callable[[str, dict[str, Any]], bool] | None = None) -> None:
         """`when(tool, args)` says whether an allowed call is a change to look at again; `check` returns why to ask, or ""."""
@@ -164,6 +233,8 @@ class Gate:
         if verdict == REFUSE:
             self._journal.write("gate", tool=tool, verdict="refused")
             return PermissionResultDeny(message=f"{tool} is not available.")
+        if await self._standing_covers(tool, args):
+            return PermissionResultAllow(updated_input=copy.deepcopy(args))
         approved, why, approval = await self.ask(tool, args)
         if approved:
             return PermissionResultAllow(updated_input=copy.deepcopy(approval.args))
@@ -189,7 +260,8 @@ class Gate:
         note = note or await self._second_reading(tool, frozen, text)
         if note and len(text) + len(note) + 2 <= MAX_QUESTION:
             text = f"{text}\n\n{note}"
-        approval = Approval(secrets.token_hex(4), tool, frozen, text, asyncio.get_running_loop().create_future())
+        approval = Approval(secrets.token_hex(4), tool, frozen, text, asyncio.get_running_loop().create_future(),
+                            offer_thread=tool == self._thread_tool and self._clean is not None and self._thread_of is not None)
         self._pending[approval.id] = approval
         self._journal.write("gate", tool=tool, verdict="asked", approval=approval.id, args=frozen, **({"second_reading": True} if note else {}))
         try:
@@ -219,11 +291,20 @@ class Gate:
     def pending(self) -> list[Approval]:
         return list(self._pending.values())
 
-    def resolve(self, approval_id: str, approved: bool) -> Approval | None:
-        """Record the owner's tap. Returns None if nothing with that id is waiting."""
+    def resolve(self, approval_id: str, approved: bool, thread: bool = False) -> Approval | None:
+        """Record the owner's tap. Returns None if nothing with that id is waiting.
+
+        `thread`: the owner tapped the third button, so later replies in this thread to these people go without a
+        question until midnight (see _standing_covers). Only an approval that offered it can be widened."""
         approval = self._pending.get(approval_id)
         if approval is None or approval.answer.done():
             return None
+        if approved and thread and approval.offer_thread:
+            try:
+                self._standing[self._thread_of(approval.args)] = {"people": self._people_of(approval.args), "until": self._midnight(), "sent": 0}
+                self._journal.write("gate", tool=approval.tool, verdict="widened to the thread", approval=approval.id)
+            except Exception as e:
+                self._journal.write("error", where="gate.widen", error=type(e).__name__)
         approval.answer.set_result("approved" if approved else "declined")
         return approval
 
@@ -263,7 +344,12 @@ class Gate:
             if not self.guard(tool, args):
                 return {"content": [{"type": "text", "text": "This was not approved by the owner, so it was not done."}], "is_error": True}
             approved = self._approved_now
+            key = _key(tool, args)
+            standing = key in self._standing_keys
+            self._standing_keys.discard(key)
             result = await handler(args)
+            if standing and isinstance(result, dict) and isinstance(result.get("content"), list):
+                return {**result, "content": [*result["content"], {"type": "text", "text": STANDING_NOTE}]}
             if approved and isinstance(result, dict) and isinstance(result.get("content"), list):
                 # The model is otherwise told nothing of the question. In a live run it then told the owner that no
                 # question had been shown, about an email they had just approved.

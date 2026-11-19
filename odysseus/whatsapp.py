@@ -85,7 +85,7 @@ class WhatsAppChat:
     async def draft(self, draft_id: int, text: str) -> None:
         pass      # WhatsApp has no way to show a reply as it is being written
 
-    async def ask(self, text: str, approval_id: str) -> None:
+    async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The question is sent whole. The buttons go on the last part, so they are reached only after
         # everything they cover has been shown. The buttons carry only the approval's id.
         parts = split_message(text, BUTTON_BODY_LIMIT)
@@ -94,7 +94,8 @@ class WhatsAppChat:
         await self._post({"type": "interactive", "interactive": {
             "type": "button", "body": {"text": parts[-1]},
             "action": {"buttons": [{"type": "reply", "reply": {"id": f"ap:{approval_id}:y", "title": "Approve"}},
-                                   {"type": "reply", "reply": {"id": f"ap:{approval_id}:n", "title": "Decline"}}]}}})
+                                   {"type": "reply", "reply": {"id": f"ap:{approval_id}:n", "title": "Decline"}},
+                                   *([{"type": "reply", "reply": {"id": f"ap:{approval_id}:t", "title": "Approve thread today"}}] if thread else [])]}}})
 
 
 class WhatsApp:
@@ -173,7 +174,8 @@ class WhatsApp:
                 reply = ((m.get("interactive") or {}).get("button_reply") or {}).get("id", "")
                 if reply.startswith("ap:") and reply.count(":") == 2:
                     _, approval_id, answer = reply.split(":")
-                    line = await self._conv.handle_decision(self._owner_id, approval_id, answer == "y")
+                    line = (await self._conv.handle_decision(self._owner_id, approval_id, True, thread=True) if answer == "t"
+                            else await self._conv.handle_decision(self._owner_id, approval_id, answer == "y"))
                     if line == "This request is no longer waiting.":
                         await chat.send(line)
             elif kind in ("image", "document"):

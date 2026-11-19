@@ -259,6 +259,18 @@ def guard(self, tool: str, args: dict[str, Any]) -> bool:
 <p>The first run of those errands did raise one needless question, twice, on a clean filing of a pitch deck. The word the reader gave was "mismatch": it had noticed that a late-stage company was being filed at the earliest stage of the pipeline, which is what the instructions say to do. A mismatch is a mistake to mention, not a sign that a change came from somewhere else, so that word no longer asks. Notice what the measurement was for: the reader had scored 40 of 40 on invented cases before the real errands showed a false alarm that none of those cases contained.</p>
 <p>Two limits. Nothing here stops a single planted note that looks like part of the filing; the count allows three and the reader may miss one. And this defence has met only attacks written by its builders. An attempt was made to test it with an attacker that adapts, a model told what happened to each try and asked to write the next; the models asked to play the attacker declined, and that test was not run. <span class="g u">Not tested</span> against an attacker who adapts.</p>
 
+<h3 id="thread">An approval the owner can widen</h3>
+<p>Between "asked every time" and "runs unasked" there was nothing. A back-and-forth with one person over a meeting time meant a question for every short reply, and questions asked that often stop being read. The owner chose to add one step between the two, for replies only.</p>
+<p>The question for a reply carries a third button: approve this one, and this thread for today. Tapping it is still the owner's act, and what it widens is fixed in code, not left to any model:</p>
+<ul>
+<li>the same thread, and nobody addressed who was not addressed in the reply the owner approved;</li>
+<li>until midnight on the owner's clock, and at most five replies;</li>
+<li>a reply of ordinary length, which the program can lay out as a question;</li>
+<li>read by the second reader, told that this time nobody else will see it first, with nothing at all found to check.</li>
+</ul>
+<p>Anything outside that is put to the owner as before: another thread, a new recipient, a long reply, the sixth, the day after, any word from the reader, and a reader that fails, is slow or cannot be read. Each reply that does go is listed under the assistant's answer by code as sent without being shown first, and the model is told the owner did not see it. <code>/ask</code> ends it at once, and so does "stop".</p>
+<p>This keeps the chapter's rule and bends a different one. The model still grants nothing: the owner granted, code holds the scope, and the reader can only send a reply back to be asked about. What is given up is the promise that everything that leaves was seen first. For up to five replies a day in a thread the owner chose, it rests on the scope and on a reader that has been measured on invented cases only. <span class="g v">Verified</span> by unit tests (<code>tests/test_thread.py</code>, five tests covering each way it still asks). <span class="g u">Not tested</span> in real use: no reply has gone out this way.</p>
+
 <h2 id="families">How each family of tool is sorted</h2>
 <p>Three questions sort any action: does it only read; if it changes something, does it reach anyone else; and can it be put back. Each family of tools answers them from different evidence.</p>
 

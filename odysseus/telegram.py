@@ -40,12 +40,13 @@ class TelegramChat:
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
 
-    async def ask(self, text: str, approval_id: str) -> None:
+    async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The buttons carry only the approval's id. What will run is held by the gate, not by the message.
-        buttons = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Approve", callback_data=f"ap:{approval_id}:y"),
-            InlineKeyboardButton(text="Decline", callback_data=f"ap:{approval_id}:n"),
-        ]])
+        rows = [[InlineKeyboardButton(text="Approve", callback_data=f"ap:{approval_id}:y"),
+                 InlineKeyboardButton(text="Decline", callback_data=f"ap:{approval_id}:n")]]
+        if thread:      # a reply: the owner may approve this one and let the rest of the thread go for today (gate.py)
+            rows.append([InlineKeyboardButton(text="Approve, and this thread today", callback_data=f"ap:{approval_id}:t")])
+        buttons = InlineKeyboardMarkup(inline_keyboard=rows)
         # The question is sent whole. If it is longer than one message, the buttons go on the last part,
         # so that they are reached only after everything they cover has been shown.
         parts = split_message(text)
@@ -130,7 +131,10 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     @dp.callback_query(F.data.startswith("ap:"))
     async def on_tap(callback: CallbackQuery) -> None:
         _, approval_id, answer = (callback.data or "::").split(":", 2)
-        line = await conversation.handle_decision(callback.from_user.id, approval_id, answer == "y")
+        if answer == "t":
+            line = await conversation.handle_decision(callback.from_user.id, approval_id, True, thread=True)
+        else:
+            line = await conversation.handle_decision(callback.from_user.id, approval_id, answer == "y")
         await callback.answer(line or None)
         if line and callback.message is not None:
             # Remove the buttons and leave a record of what was decided on the message itself.

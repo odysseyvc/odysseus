@@ -137,6 +137,7 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     `taint_file` is where that record is kept between runs of the program.
     """
     gate = Gate(journal, timeout_s)
+    gate.now = now
     taint = gate.taint = Taint(taint_file, on_full=lambda: journal.write("taint", outcome="full", note="oldest fingerprints are now being dropped"))
     with_apps = with_apps or apps is not None
     if apps is not None:
