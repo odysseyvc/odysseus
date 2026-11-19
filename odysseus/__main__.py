@@ -18,6 +18,7 @@ from .conversation import Conversation
 from .journal import Journal, Ledger
 from .memory import MemoryStore
 from .ocr import MistralOcr
+from .pages import make_page_reader
 from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
@@ -134,8 +135,12 @@ async def main() -> int:
                                settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
+    # A short PDF's pages are looked at in a run of their own, with no tools; only its notes reach the conversation.
+    pages = make_page_reader(settings, journal, make_tool_server(search, journal, memory, read_only=True),
+                             model=settings.pages_model or None) if ocr is not None else None
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
-                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services)
+                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
+                                pages=pages)
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
     bot = Bot(settings.telegram_token)

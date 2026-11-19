@@ -32,6 +32,7 @@ from odysseus.conversation import Conversation  # noqa: E402
 from odysseus.journal import Journal, Ledger  # noqa: E402
 from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.ocr import MistralOcr  # noqa: E402
+from odysseus.pages import make_page_reader  # noqa: E402
 from odysseus.tools import make_gate, make_tool_server  # noqa: E402
 
 
@@ -67,7 +68,8 @@ async def main() -> int:
     search = Exa(api_key=settings.exa_api_key).tools.web_search()
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, gate=gate, attio=attio), gate=gate,
                          system_prompt=conversation_prompt(False, with_files=True, with_attio=True))
-    conv = Conversation(settings, journal, Ledger(journal), runner, memory, gate=gate, attio=attio, ocr=MistralOcr(real.mistral_api_key))
+    reader = make_page_reader(settings, journal, make_tool_server(search, journal, memory, read_only=True), model=sys.argv[3] if len(sys.argv) > 3 else None)
+    conv = Conversation(settings, journal, Ledger(journal), runner, memory, gate=gate, attio=attio, ocr=MistralOcr(real.mistral_api_key), pages=reader)
     chat = Chat()
     attio.warm()
     await attio.layout()
@@ -87,13 +89,14 @@ async def main() -> int:
         if r["kind"] == "file":
             print("file", {k: r.get(k) for k in ("name", "ok", "type", "bytes", "pages", "chars", "seen", "error")})
         elif r["kind"] == "tool":
-            print("tool", r.get("name"), r.get("tool", ""), "ok" if r.get("ok") else f"REFUSED/FAILED: {str(r.get('error', ''))[:120]}")
+            print("tool", r.get("name"), r.get("tool", ""), f"${r['cost_usd']}" if r.get("name") == "see_pages" else "", "ok" if r.get("ok") else f"REFUSED/FAILED: {str(r.get('error', ''))[:120]}")
         elif r["kind"] in ("task_end", "error"):
             print(r["kind"], {k: v for k, v in r.items() if k not in ("ts", "kind")})
     print("asked the owner:", len(chat.asks))
     print("written to the database:", json.dumps([(n, {k: v for k, v in a.items() if k != "content"} | ({"content": a["content"][:600]} if "content" in a else {}))
                                                   for n, a in crm.writes], indent=1, ensure_ascii=False, default=str))
-    print(f"cost: ${sum(r.get('cost_usd') or 0 for r in journal.read() if r['kind'] == 'task_end'):.4f}")
+    from odysseus.journal import cost_of
+    print(f"cost: ${sum(cost_of(r) for r in journal.read()):.4f}")
     return 0
 
 
