@@ -70,17 +70,27 @@ Call = Callable[[str, str, str], Awaitable[tuple[str, dict[str, Any]]]]     # (m
 
 def anthropic_call(api_key: str) -> Call:
     """One plain call to the model's maker: no tools, no conversation, a dozen tokens back."""
-    import anthropic
-    client = anthropic.AsyncAnthropic(api_key=api_key, max_retries=0)
+    box: dict[str, Any] = {}
+
+    def client() -> Any:
+        # The library takes seconds to load, so it is loaded when first needed (or by warm(), in the background after
+        # start-up) and not while the program is starting.
+        if "c" not in box:
+            import anthropic
+            box["c"] = anthropic.AsyncAnthropic(api_key=api_key, max_retries=0)
+        return box["c"]
 
     async def call(model: str, system: str, user: str) -> tuple[str, dict[str, Any]]:
+        if "c" not in box:
+            await asyncio.to_thread(client)
         # These models think before they answer, and the thinking is counted against max_tokens: a limit sized for the
         # dozen tokens of the answer leaves none for it, and the reply comes back empty. Low effort keeps the thinking short.
-        msg = await client.messages.create(model=model, max_tokens=1024, output_config={"effort": "low"}, system=system,
+        msg = await client().messages.create(model=model, max_tokens=1024, output_config={"effort": "low"}, system=system,
                                            messages=[{"role": "user", "content": user}])
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         u = msg.usage
         return text, {k: getattr(u, k, 0) or 0 for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")}
+    call.warm = client
     return call
 
 

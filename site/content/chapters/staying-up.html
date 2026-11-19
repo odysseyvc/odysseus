@@ -180,6 +180,12 @@ return True</code></pre>
 <div class="box example"><div class="label">Case note: a restart that failed on start-up code</div>
 <p>One restart failed because of a wrong argument in the code that assembles the program at start-up. No test had caught it, because every other test builds its pieces by hand and never runs <code>main</code>. <code>tests/test_startup.py</code> was added for that reason: it runs <code>main</code> with stand-ins for Telegram and the agent client, once with every optional service configured and once with none. The lesson is general. The code that runs only at start is the code a restart depends on, and it needs a test of its own.</p></div>
 
+<h3 id="slow-start">A restart is only as quick as the start</h3>
+<p>Every restart is a stretch in which the assistant cannot answer, so how long a start takes is part of staying up. Nobody had measured it. On the laptop it took about a minute from launch to the first message it could answer, and felt longer when the machine was busy.</p>
+<p>The cause was found by writing the time at each stage of start-up into the <code>start</code> line of the journal, where it now stays. Almost all of the minute was the loading of libraries, in two avoidable places. The supervisor, a process whose whole job is to start the child and wait, was loading every library the child uses before starting it, and the child then loaded them all again: thirteen seconds spent twice. And the second reader of outgoing mail ({{ch:the-gate}}) loaded its own library while the program was starting, twelve seconds for something first needed minutes or hours later.</p>
+<p>The supervisor now leaves before those libraries are reached, and the reader's library is loaded in the background once the program is already answering. A start measured after the change took 31 seconds. <span class="g v">Verified</span>, one start before and one after; the figures vary by several seconds with what else the machine is doing. What is left is the loading of three libraries the program cannot run without, and connecting the agent loop.</p>
+<p>The lesson is the one from {{ch:cost}}, applied to time: a cost nobody writes down is a cost nobody reduces. The timing line cost four lines of code.</p>
+
 <h2 id="hosting">A home that stays awake</h2>
 <p>A program with a scheduler cannot live on a laptop: it does its scheduled work only while the laptop is awake. The fix is a rented machine that does not sleep. A deployment of Odysseus consists of four things.</p>
 <div class="box definition"><div class="label">Definitions</div>

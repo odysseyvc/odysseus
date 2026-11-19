@@ -205,3 +205,15 @@ def test_a_brief_that_ends_does_not_hide_an_interrupted_conversation(tmp_path):
     assert unfinished(journal)["preview"] == "Draft the note to Tara"
     journal.write("task_end", status="done", cost_usd=0.02)
     assert unfinished(journal) is None
+
+
+def test_the_supervisor_leaves_before_the_heavy_libraries_are_loaded_and_the_second_reader_loads_its_own_late():
+    import inspect
+    from odysseus import __main__ as program
+    from odysseus import review
+    source = inspect.getsource(program)
+    assert source.index("sys.exit(supervise())") < source.index("from aiogram import"), "the process that only waits must not load what the child loads"
+    assert '"boot"' in source or "boot=marks" in source, "each start records how long its stages took"
+    outer = inspect.getsource(review.anthropic_call).split("def client()")[0]
+    assert "import anthropic" not in outer, "the library is loaded on first use or by warm(), never while the program is starting"
+    assert callable(review.anthropic_call("k").warm)

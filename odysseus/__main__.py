@@ -1,10 +1,43 @@
 """Start Odysseus:  python -m odysseus"""
 from __future__ import annotations
 
-import asyncio
-import sys
+import time
 
-from aiogram import Bot
+_BEGAN = time.monotonic()      # before the heavy imports below, so that start-up can be timed whole
+
+import asyncio  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+
+RESTART = 75      # the exit code by which the child asks to be started again
+
+
+def supervise() -> int:
+    """Run the program as a child process, and start it again whenever it ends asking to be restarted.
+
+    A newly connected service needs a restart (connect.py). Starting again inside the same process was tried first and
+    worked six times in a row, except that whatever exists once per process, such as the tracing client, had been shut
+    down by the first run and stayed shut. A new process has none of that history.
+    """
+    import subprocess
+    env = {**os.environ, "ODYSSEUS_CHILD": "1"}
+    while True:
+        child = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "odysseus"], env=env)
+        try:
+            code = child.wait()
+        except KeyboardInterrupt:
+            child.terminate()
+            return 130
+        if code != RESTART:
+            return code
+
+
+# The supervisor only starts the child and waits. It leaves here, before the libraries below are loaded: loading
+# them took as long again as the child's own start.
+if __name__ == "__main__" and not os.environ.get("ODYSSEUS_CHILD"):
+    sys.exit(supervise())
+
+from aiogram import Bot  # noqa: E402
 from exa_py import Exa
 
 from .agent import AgentRunner, conversation_prompt
@@ -92,6 +125,7 @@ def restart_notice(task: dict, resumed: bool) -> str:
 
 
 async def main() -> int:
+    marks = {"imports": round(time.monotonic() - _BEGAN, 1)}      # seconds since the process began, at each stage of start-up
     try:
         settings = load()
     except ConfigError as e:
@@ -118,6 +152,7 @@ async def main() -> int:
     attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
     load_custom_services(settings.data_dir)                          # servers the owner connected from the chat, by address
     services = connected_services(settings.data_dir, journal)       # other services with a server of their own, once signed in to
+    marks["services"] = round(time.monotonic() - _BEGAN, 1)
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
@@ -135,19 +170,23 @@ async def main() -> int:
                      auto_small=not settings.ask_every_change)
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
-        gate.set_second_reader(make_second_reader(journal, anthropic_call(settings.anthropic_api_key),
+        second_call = anthropic_call(settings.anthropic_api_key)
+        gate.set_second_reader(make_second_reader(journal, second_call,
                                                   settings.review_model or settings.background_model, gate.taint), OUTGOING)
+    marks["gate"] = round(time.monotonic() - _BEGAN, 1)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
                                                             anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
                                                            with_files=ocr is not None, with_anyapp=anyapp is not None,
                                                            with_watches=watches is not None, with_attio=attio is not None)
                          + "".join(s.prompt() for s in services), persist=True)
+    marks["runner"] = round(time.monotonic() - _BEGAN, 1)
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
                                settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
+    marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     async def viewer_address() -> str:
         # The address given to a site that asks who is viewing: the one in the settings, or the connected mailbox's own.
@@ -155,11 +194,13 @@ async def main() -> int:
     # A short PDF's pages are looked at in a run of their own, with no tools; only its notes reach the conversation.
     pages = make_page_reader(settings, journal, empty_server(),
                              model=settings.pages_model or None) if ocr is not None else None
+    marks["pages"] = round(time.monotonic() - _BEGAN, 1)
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
                                 pages=pages, links=Fetcher() if ocr is not None else None,
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
+    marks["conversation"] = round(time.monotonic() - _BEGAN, 1)
     if apps is not None:
         apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
     if attio is not None:
@@ -199,6 +240,7 @@ async def main() -> int:
                           state_file=settings.data_dir / "briefed.json", search=make_search_handler(search, journal), taint=gate.taint,
                           on_delivered=conversation.record_delivery)
 
+    marks["jobs"] = round(time.monotonic() - _BEGAN, 1)
     watcher = triage = watching = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
@@ -211,7 +253,9 @@ async def main() -> int:
         watching = asyncio.create_task(watcher.keep_listening(asyncio.get_running_loop()))
 
     interrupted = unfinished(journal)      # read before this run of the program writes anything
+    marks["built"] = round(time.monotonic() - _BEGAN, 1)
     await runner.start()   # connect the agent loop now, so the first message is not slow
+    marks["loop"] = round(time.monotonic() - _BEGAN, 1)
     if interrupted is not None:
         # A task was running when the program last stopped. Say so: before this, it vanished without a word.
         try:
@@ -224,8 +268,10 @@ async def main() -> int:
             await notify.send(LOST_CONVERSATION)
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
+    if apps is not None and settings.review_model.lower() != "off":
+        asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None)
+                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, boot=marks)
     if whatsapp is not None:
         door = await serve(whatsapp, settings.whatsapp_port)
     ticking = asyncio.create_task(scheduler.run_forever())
@@ -264,30 +310,5 @@ async def main() -> int:
     return RESTART if again else 0
 
 
-RESTART = 75
-
-
-def supervise() -> int:
-    """Run the program as a child process, and start it again whenever it ends asking to be restarted.
-
-    A newly connected service needs a restart (connect.py). Starting again inside the same process was tried first and
-    worked six times in a row, except that whatever exists once per process, such as the tracing client, had been shut
-    down by the first run and stayed shut. A new process has none of that history.
-    """
-    import os
-    import subprocess
-    env = {**os.environ, "ODYSSEUS_CHILD": "1"}
-    while True:
-        child = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "odysseus"], env=env)
-        try:
-            code = child.wait()
-        except KeyboardInterrupt:
-            child.terminate()
-            return 130
-        if code != RESTART:
-            return code
-
-
 if __name__ == "__main__":
-    import os
-    sys.exit(asyncio.run(main()) if os.environ.get("ODYSSEUS_CHILD") else supervise())
+    sys.exit(asyncio.run(main()))
