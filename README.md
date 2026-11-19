@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 396 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 401 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -59,8 +59,9 @@ equivalents and have not been run by the author.
 For a firm that keeps its companies, people and deals in Attio. Run
 `python scripts/connect_attio.py` on the machine whose browser you will use, open the link
 it prints, sign in to Attio and approve. No key is created; the sign-in is kept in the data
-folder. Restart the bot. Reading Attio runs at once; every change asks you first. It has
-been read from live once and never written to; it does not yet work on a remote server.
+folder. Restart the bot. Reading Attio runs at once. Additions (a new record, a note) run and are listed in the
+reply; a change to anything already there asks you first. Records have been filed in a real workspace through it; it
+does not yet work on a remote server.
 `python scripts/live_attio.py` checks the connection without changing anything.
 
 ## Connect Granola (optional)

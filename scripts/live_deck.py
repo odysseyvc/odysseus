@@ -33,7 +33,7 @@ from odysseus.journal import Journal, Ledger  # noqa: E402
 from odysseus.memory import MemoryStore  # noqa: E402
 from odysseus.ocr import MistralOcr  # noqa: E402
 from odysseus.pages import make_page_reader  # noqa: E402
-from odysseus.tools import make_gate, make_tool_server  # noqa: E402
+from odysseus.tools import empty_server, make_gate, make_tool_server  # noqa: E402
 
 
 class Chat:
@@ -68,7 +68,7 @@ async def main() -> int:
     search = Exa(api_key=settings.exa_api_key).tools.web_search()
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, gate=gate, attio=attio), gate=gate,
                          system_prompt=conversation_prompt(False, with_files=True, with_attio=True))
-    reader = make_page_reader(settings, journal, make_tool_server(search, journal, memory, read_only=True), model=sys.argv[3] if len(sys.argv) > 3 else None)
+    reader = make_page_reader(settings, journal, empty_server(), model=sys.argv[3] if len(sys.argv) > 3 else None)
     conv = Conversation(settings, journal, Ledger(journal), runner, memory, gate=gate, attio=attio, ocr=MistralOcr(real.mistral_api_key), pages=reader)
     chat = Chat()
     attio.warm()

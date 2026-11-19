@@ -234,9 +234,10 @@ def unattended(app: Any, run: Any, journal: Journal) -> Any:
         def no(why: str) -> dict[str, Any]:
             journal.write("tool", name=f"{getattr(app, 'slug', 'attio')}_run", ok=False, tool=str(args.get("tool", ""))[:60], error=why[:120])
             return {"content": [{"type": "text", "text": why}], "is_error": True}
-        if app.decide(args) != ALLOW:
-            return no(f"Not done. Either that {title} tool changes something, and nobody is here to approve it, or it has not been looked up "
-                      "yet with the find tool.")
+        # Not app.decide: that answers "would this run unasked in a conversation?", and a small addition would.
+        if not app.reads(args):
+            return no(f"Not done. Either that {title} tool changes something, and an unattended run may only read, or it has not been "
+                      "looked up yet with the find tool.")
         taint = getattr(app, "taint", None)
         seen = getattr(app, "unattended_seen", None)
         if seen is None:
@@ -271,6 +272,7 @@ class McpApp:
         self.find_tool, self.run_tool = f"mcp__odysseus__{slug}_find", f"mcp__odysseus__{slug}_run"
         self._tools: dict[str, dict[str, Any]] = {}
         self._changes: list[str] = []
+        self._returned: list[str] = []      # what this service handed back lately; giving it back is not a leak
         self.taint = None       # set by make_gate
 
     def _kind(self, row: dict[str, Any]) -> str:
@@ -307,9 +309,24 @@ class McpApp:
 
     # --- the gate ---------------------------------------------------------------------
 
-    def decide(self, args: dict[str, Any]) -> str:
+    def reads(self, args: dict[str, Any]) -> bool:
+        """Whether this is a tool the program has looked up and knows only reads."""
         row = self._tools.get(str(args.get("tool", "")).strip())
-        return ALLOW if row is not None and self._kind(row) == "read" else ASK      # not yet looked up: asked about
+        return row is not None and self._kind(row) == "read"
+
+    def _leak(self, args: dict[str, Any]) -> list[str]:
+        """Private details in a request to a service that is not a store of the owner's own records.
+
+        A search sent to such a service is a message to that company, exactly as a web search is. What the service
+        itself returned earlier (the id of a post it listed) is not a detail from somewhere else, and is left out."""
+        if self.taint is None or self.spec.get("own_store"):
+            return []
+        return self.taint.leaked(_foreign(args.get("arguments") or {}, self._returned))
+
+    def decide(self, args: dict[str, Any]) -> str:
+        if not self.reads(args):
+            return ASK                      # a change, or a tool not yet looked up
+        return ASK if self._leak(args) else ALLOW
 
     def describe(self, args: dict[str, Any]) -> str:
         name = str(args.get("tool", "")).strip()
@@ -319,7 +336,13 @@ class McpApp:
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
         title = (self._tools.get(name) or {}).get("title") or name
-        return f"Do this in {self.title}?\n\nAction: {title} ({name})\nWith:\n{json.dumps(inputs, ensure_ascii=False, indent=1, default=str)}"
+        shown = json.dumps(inputs, ensure_ascii=False, indent=1, default=str)
+        if self.reads(args):
+            found = self._leak(args)
+            if found:
+                return (f"Send these details to {self.title}? They came from your mail, calendar or apps.\n\nDetails recognised: "
+                        f"{', '.join(found)}\n\nAction: {title} ({name})\nWith:\n{shown}")
+        return f"Do this in {self.title}?\n\nAction: {title} ({name})\nWith:\n{shown}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(self.find_tool, ALLOW)
@@ -364,6 +387,7 @@ class McpApp:
             self._journal.write("tool", name=f"{self.slug}_run", ok=True, tool=name, action=what, **({"cost_usd": cost, "estimated": True} if cost else {}))
             if what != "read":
                 self._changes.append(f"did \"{tools[name]['title']}\" in {self.title}")
+            self._returned = (self._returned + [text])[-20:]
             if self.taint is not None:
                 self.taint.add(text, self.title)
             cut = "" if len(text) <= 16000 else f"\n[Cut: {len(text)} characters in all. Ask for less, or for the next part.]"

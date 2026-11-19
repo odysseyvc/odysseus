@@ -26,7 +26,7 @@ from .pages import make_page_reader
 from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
 from .telegram import TelegramChat, build_dispatcher
-from .tools import make_gate, make_tool_server
+from .tools import empty_server, make_gate, make_tool_server
 from .tracing import Tracing
 from .voice import MistralVoice
 from .watch import ComposioTriggers, Watcher, WatchStore
@@ -52,7 +52,7 @@ def unfinished(journal: Journal) -> dict | None:
             open_task, waiting = None, {}       # an earlier restart: whatever was lost then has been reported already
         elif r["kind"] == "task_start":
             open_task = {"preview": r.get("preview", ""), "asked": False}
-        elif r["kind"] == "task_end" and "routine" not in r:
+        elif r["kind"] == "task_end" and "routine" not in r and "brief" not in r:
             open_task = None
         elif r["kind"] == "queued" and "q" in r:
             waiting[r["q"]] = r.get("preview", "")
@@ -148,7 +148,7 @@ async def main() -> int:
         # The address given to a site that asks who is viewing: the one in the settings, or the connected mailbox's own.
         return settings.viewer_email or await apps.my_address()
     # A short PDF's pages are looked at in a run of their own, with no tools; only its notes reach the conversation.
-    pages = make_page_reader(settings, journal, make_tool_server(search, journal, memory, read_only=True),
+    pages = make_page_reader(settings, journal, empty_server(),
                              model=settings.pages_model or None) if ocr is not None else None
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
@@ -197,7 +197,7 @@ async def main() -> int:
     watcher = triage = watching = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
-        triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps), now)
+        triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, mail_only=True), now)
         watcher = box["watcher"] = Watcher(watches, ComposioTriggers(settings.composio_api_key, f"odysseus-{settings.owner_id}"), triage, notify,
                                            journal, ledger, settings.daily_usd, now=now, on_delivered=conversation.record_delivery,
                                            on_read=lambda text: (gate.taint.add(text), tracing.hide(text)))

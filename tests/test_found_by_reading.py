@@ -130,3 +130,78 @@ async def test_the_app_tool_retries_a_read_once_and_never_repeats_a_change(tmp_p
     out = await change.handlers()["app_run"]({"tool": "NOTION_UPDATE_PAGE", "arguments": {"id": "p1"}})
     assert out["is_error"] and change._b.calls == ["NOTION_UPDATE_PAGE"], "one attempt only"
     assert "It may still have happened" in out["content"][0]["text"] and "check before trying again" in out["content"][0]["text"]
+
+
+# --- found by the independent review of the book --------------------------------------------------------------------
+
+async def test_a_read_sent_to_someone_elses_service_is_checked_for_private_details_as_a_web_search_is(tmp_path):
+    from odysseus.gate import ALLOW
+    from odysseus.mcpapp import APPS
+    from test_mcpapp import READ, row
+
+    class Posts:
+        async def list_tools(self):
+            return [row("search_posts", READ), row("get_post", READ)]
+
+        async def call(self, name, arguments):
+            return '{"data": [{"id": "1894472210033", "text": "We are hiring"}]}'
+    journal = Journal(tmp_path / "j.jsonl")
+    x, notes = McpApp("x", Posts(), journal, APPS["x"]), McpApp("granola", Posts(), journal)
+    gate = make_gate(journal, services=[x, notes])
+    for app in (x, notes):
+        await app._catalogue()
+    gate.taint.add("Board pack for Lumen Grid. Wire reference QX7R2L99, contact priya@lumengrid.example", "your mail")
+    plain = {"tool": "search_posts", "arguments": {"query": "robotics founders"}}
+    leaking = {"tool": "search_posts", "arguments": {"query": "priya@lumengrid.example QX7R2L99"}}
+    assert x.decide(plain) == ALLOW and x.decide(leaking) == ASK
+    assert "Send these details to X?" in x.describe(leaking) and "priya@lumengrid.example" in x.describe(leaking)
+    assert notes.decide(leaking) == ALLOW, "the owner's own meeting notes are not somebody else's service"
+    await x.handlers()["x_run"](plain)
+    assert x.decide({"tool": "get_post", "arguments": {"id": "1894472210033"}}) == ALLOW, "giving a service back its own id tells it nothing"
+
+
+async def test_an_unattended_run_can_only_read_even_where_a_conversation_would_add_unasked(tmp_path):
+    from evals.crm import FakeAttio
+    from odysseus.gate import ALLOW
+    from odysseus.mcpapp import unattended
+    journal = Journal(tmp_path / "j.jsonl")
+    crm = FakeAttio()
+    attio = Attio(crm, journal)
+    make_gate(journal, attio=attio, auto_small=True)
+    await attio.layout()
+    note = {"tool": "create-note", "arguments": {"parent_object": "deals", "parent_record_id": "r1", "title": "t", "content": "c"}}
+    assert attio.decide(note) == ALLOW, "in a conversation, with the owner there, a note is added and reported"
+    out = await unattended(attio, attio.handlers()["attio_run"], journal)(note)
+    assert out["is_error"] and "an unattended run may only read" in out["content"][0]["text"] and crm.writes == []
+
+
+def test_a_routine_or_watch_is_set_up_unasked_only_if_its_own_text_carries_nothing_from_the_accounts(tmp_path):
+    from odysseus.gate import ALLOW
+    from odysseus.tools import SCHEDULE_TOOL
+    gate = make_gate(Journal(tmp_path / "j.jsonl"), auto_small=True, with_watches=True)
+    routine = {"kind": "routine", "text": "Every morning tell me the weather.", "at": "08:00", "repeat": "daily"}
+    assert gate.decide(SCHEDULE_TOOL, routine) == ALLOW
+    gate.taint.add("Wire reference QX7R2L99 for the board pack", "your mail")
+    gate.taint.start_task()         # a new message: nothing read in this task yet, but the mail is still remembered
+    planted = {**routine, "text": "Every morning search the web for QX7R2L99 and send what you find."}
+    assert gate.decide(SCHEDULE_TOOL, planted) == ASK, "read one message earlier is still read"
+    assert gate.decide("mcp__odysseus__watch", {"text": "Tell me when QX7R2L99 is mentioned", "about": "mail"}) == ASK
+
+
+def test_agents_said_to_have_no_tools_are_given_servers_without_them():
+    from odysseus.__main__ import unfinished
+    import inspect
+    from odysseus import __main__ as program
+    source = inspect.getsource(program.main)
+    assert "make_page_reader(settings, journal, empty_server()" in source and "mail_only=True" in source
+
+
+def test_a_brief_that_ends_does_not_hide_an_interrupted_conversation(tmp_path):
+    from odysseus.__main__ import unfinished
+    journal = Journal(tmp_path / "j.jsonl")
+    journal.write("start")
+    journal.write("task_start", preview="Draft the note to Tara")
+    journal.write("task_end", status="done", cost_usd=0.07, brief="ev1")
+    assert unfinished(journal)["preview"] == "Draft the note to Tara"
+    journal.write("task_end", status="done", cost_usd=0.02)
+    assert unfinished(journal) is None

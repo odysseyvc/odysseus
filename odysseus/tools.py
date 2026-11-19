@@ -113,6 +113,11 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
             f"Purpose: {str(args.get('objective', '')).strip()}")
 
 
+def empty_server() -> Any:
+    """A tool server with nothing in it, for an agent that must be able to do nothing but write (pages.py)."""
+    return create_sdk_mcp_server(name=SERVER, tools=[])
+
+
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
               with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None,
@@ -174,14 +179,14 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
         # the reply. Once the task has read what other people wrote, the instructions may be theirs: the owner is asked.
         if str(a.get("kind", "")).strip().lower() != "routine":
             return ALLOW
-        return ALLOW if auto_small and not taint.sources else ASK
+        return ALLOW if auto_small and not _after_reading(taint, str(a.get("text", ""))) else ASK
 
     def schedule_question(a: dict[str, Any]) -> str:
         return describe_routine(a, now, with_apps, [s.title for s in services] + (["Attio"] if attio is not None else []))
     gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
-        gate.rule(WATCH_TOOL, lambda a: ALLOW if auto_small and not taint.sources else ASK, describe_watch)
+        gate.rule(WATCH_TOOL, lambda a: ALLOW if auto_small and not _after_reading(taint, str(a.get("text", ""))) else ASK, describe_watch)
         gate.rule(_name("list_watches"), ALLOW)
         gate.rule(_name("cancel_watch"), ALLOW)
     return gate
@@ -254,7 +259,7 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
-                     on_watch: Any = None, attio: Any = None, services: Any = ()):
+                     on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     m = make_memory_handlers(memory, journal)
     search_handler = make_search_handler(spec, journal)
@@ -312,8 +317,10 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             h = attio.handlers()
             h["attio_run"] = unattended(attio, h["attio_run"], journal)
             reading += [tool(n, attio_mod.SCHEMAS[n][0], attio_mod.SCHEMAS[n][1])(h[n]) for n in ("attio_find", "attio_run")]
-        return create_sdk_mcp_server(name=SERVER, tools=[search, recall, *[app_tools[n] for n in ("mail_search", "mail_read", "calendar_list") if n in app_tools],
-                                                           *reading])
+        mail = [app_tools[n] for n in ("mail_search", "mail_read", "calendar_list") if n in app_tools]
+        if mail_only:       # the agent that judges incoming mail: no search to carry anything out, no memory to write to
+            return create_sdk_mcp_server(name=SERVER, tools=mail)
+        return create_sdk_mcp_server(name=SERVER, tools=[search, recall, *mail, *reading])
     tools = [
         search,
         tool(

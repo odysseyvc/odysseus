@@ -356,6 +356,11 @@ class Attio:
             return "runs at once"
         return "runs at once; the owner is told afterwards" if self.auto and row["name"] in SMALL else "asks the owner first"
 
+    def reads(self, args: dict[str, Any]) -> bool:
+        """Whether this is a tool the program has looked up and knows only reads. The one question an unattended run asks."""
+        row = self._tools.get(str(args.get("tool", "")).strip())
+        return row is not None and kind(row["name"], row["labels"]) == "read"
+
     def decide(self, args: dict[str, Any]) -> str:
         row = self._tools.get(str(args.get("tool", "")).strip())
         # A tool the program has not yet looked up is asked about: nothing is known of it.
