@@ -17,6 +17,7 @@ from .config import ConfigError, load, make_clock
 from .conversation import Conversation
 from .journal import Journal, Ledger
 from .memory import MemoryStore
+from .links import Fetcher
 from .ocr import MistralOcr
 from .pages import make_page_reader
 from .routines import make_routine_runner, make_triage_runner
@@ -140,7 +141,7 @@ async def main() -> int:
                              model=settings.pages_model or None) if ocr is not None else None
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
-                                pages=pages)
+                                pages=pages, links=Fetcher() if ocr is not None else None)
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
     bot = Bot(settings.telegram_token)

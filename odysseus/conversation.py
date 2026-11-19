@@ -15,6 +15,7 @@ from .agent import AgentRunner, Outcome
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
+from . import links as links_mod
 from .ocr import MAX_BYTES, MAX_CHARS, NO_MESSAGE, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
 from .voice import VoiceBackend, VoiceError
@@ -60,8 +61,9 @@ class Conversation:
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
-                 services: Any = (), pages: Any = None):
+                 services: Any = (), pages: Any = None, links: Any = None):
         self._s = settings
+        self._links = links          # fetches a PDF from a link in the owner's own message: links.py
         self._pages = pages          # looks at a short PDF's pages in a run of its own: pages.py
         self._journal = journal
         self._ledger = ledger
@@ -107,6 +109,25 @@ class Conversation:
         if not text:
             return
         command = text.lower()
+
+        # A link to a file, typed or pasted by the owner, is fetched by code and then read as a file they sent.
+        # Only the owner's own message is looked at, never a file's text or a picture's, and not while a task is running.
+        if self._links is not None and self._ocr is not None and material is None and not images and not command.startswith("/") \
+                and not self.busy and not (self._gate is not None and self._gate.pending()):
+            found = links_mod.find(text)
+            if found:
+                written, where = found
+                try:
+                    data, name = await self._links.fetch(where)
+                except links_mod.LinkError as e:
+                    self._journal.write("link", ok=False, error=str(e)[:200])
+                    text += (f"\n\n[The program tried to fetch the file at that link and could not: {e}. Nothing of it has been read. "
+                             "Say so, and if you have another way to read it that the owner would expect, use it.]")
+                else:
+                    self._journal.write("link", ok=True, bytes=len(data))
+                    rest = " ".join(text.replace(written, " ").split()).strip(" .,:;-")
+                    await self.handle_file(user_id, data, name, "application/pdf", len(data), text if rest else "", chat)
+                    return
 
         # Signing in to sites is done by the owner, by hand, in a live view of the browser. No model is involved,
         # and no password passes through Odysseus.

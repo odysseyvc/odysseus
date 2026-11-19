@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 351 automated tests. The parts
+**Status: early.** It was built in three days and has 358 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -92,6 +92,8 @@ reminders fire in UTC.
 - A pitch deck sent as a file is filed in Attio and answered with a take, without a question first. The pages of a PDF
   of up to 25 pages are also looked at once, by a separate run with no tools, and its notes on charts and logos are
   given to the conversation as text. `ODYSSEUS_PAGES_MODEL` names a cheaper model for that run.
+- A link you type to a PDF, or to a file in Google Drive, Slides, Docs or Dropbox, is fetched and read as a file. Only
+  https, only public addresses, 20 MB at most. A link inside mail or a file is never fetched this way.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
