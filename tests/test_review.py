@@ -118,3 +118,27 @@ async def test_the_conversation_tells_the_gate_what_the_owner_asked(tmp_path):
     await say(x, "Who is Tara Menon?")
     await say(x, "Email her and say thanks.")
     assert gate.request == "The owner said: Who is Tara Menon?\nYou replied: Reply 1.\n\nThe owner said: Email her and say thanks."
+
+
+async def test_after_an_approval_the_model_is_told_the_owner_was_asked_and_agreed(tmp_path):
+    from odysseus.gate import APPROVED_NOTE
+    journal = Journal(tmp_path / "j.jsonl")
+    gate = make_gate(journal, lambda: NOW, with_apps=True)
+
+    async def asker(approval):
+        gate.resolve(approval.id, True)
+    gate.set_asker(asker)
+
+    async def send(args):
+        return {"content": [{"type": "text", "text": "Sent."}]}
+    guarded = gate.guarded(MAIL_SEND, send)
+    assert (await gate.ask(MAIL_SEND, EMAIL))[0]
+    out = await guarded(EMAIL)
+    assert [c["text"] for c in out["content"]] == ["Sent.", APPROVED_NOTE]
+    again = await guarded(EMAIL)
+    assert again["is_error"] and APPROVED_NOTE not in str(again), "the approval was for one sending"
+
+    async def read(args):
+        return {"content": [{"type": "text", "text": "Three messages."}]}
+    out = await gate.guarded("mcp__odysseus__mail_search", read)({"query": "x"})
+    assert [c["text"] for c in out["content"]] == ["Three messages."], "what needed no approval says nothing of one"

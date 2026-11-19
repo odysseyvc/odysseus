@@ -33,15 +33,16 @@
 <p>The price table the program uses is in <code>odysseus/agent.py</code>:</p>
 <pre><code># Dollars per million tokens: input, output, cache read, cache write.
 # Used only to end a task early; the recorded cost is the SDK's own figure.
-# Input and output prices were read from the maker's price list in November 2026;
-# the cache-write figures assume the standard 1.25x of input and are an estimate.
+# All four were checked against the maker's price list (cache writes are the five-minute rate); prices change.
+# Not in the table: the small model costs five times as much on a prompt over 100,000 tokens, so an estimate
+# for such a prompt on that model is too low. No prompt this program builds for it comes near that size.
 PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
 }
 DEAREST = max(PRICES.values())   # used for a model not in the table, so the estimate errs high</code></pre>
-<p>A cache read is priced at a twentieth of ordinary input for the two larger models and a tenth for the small one. Caching softens the cost of a long context; it does not remove it, since on the main model twenty cached readings cost as much as one uncached. Notice also that the comment says where each figure came from: input and output prices from a price list, cache-write prices assumed.</p>
+<p>A cache read is priced at a twentieth of ordinary input for the two larger models and a tenth for the small one. Caching softens the cost of a long context; it does not remove it, since on the main model twenty cached readings cost as much as one uncached. Notice also that the comment says where the figures came from and what the table leaves out. The cache-write figures were once an assumption (1.25 times input) and were later checked against the price list, which also offers a one-hour cache at twice the input price: an alternative to beginning a new conversation after a pause that has not been tried.</p>
 <div class="box example"><div class="label">Illustration: arithmetic, not a measurement</div>
 <p>Suppose, for the arithmetic only, that a PDF page shown to the model costs two to three thousand tokens (an assumed figure: the program has never measured it). Then fourteen pages are about 28,000 to 42,000. At $2 per million that is about 6 to 8 cents per model call uncached, or 0.3 to 0.4 cents read from a cache. A task of three calls in a conversation holding three copies of the deck pays for nine readings of fourteen pages. This shows the shape of the problem, not how the 34 cents was made up: the split between cached and uncached tokens was not measured.</p></div>
 
@@ -300,7 +301,7 @@ def cost_of(rec: dict[str, Any]) -> float:
 <p>A derived ledger moves the risk from forgetting to count to counting twice. The defence: a test for each case that must not be counted, beside those that must.</p>
 
 <h3>Budgets that are thresholds, not ceilings</h3>
-<p>The day's budget is checked before a task starts, so a task that begins a cent under the limit can still spend its full $0.50. The agent library's own hard cap is not set. The per-task limit rests on an estimate whose cache-write prices are assumptions, and it acts only after the call that crossed it has been paid for. These are known and not repaired.</p>
+<p>The day's budget is checked before a task starts, so a task that begins a cent under the limit can still spend its full $0.50. The agent library's own hard cap is not set. The per-task limit rests on an estimate that leaves out the small model's higher price for very long prompts, and it acts only after the call that crossed it has been paid for. These are known and not repaired.</p>
 
 <h3>Costs nobody reconciled</h3>
 <p>Every figure here is what a service said or what the program estimated. The code itself says the per-page and per-minute prices "should be checked against an invoice". X's estimate has never met a read that returned posts. Whether the running total continues correctly after a conversation is resumed from disk has not been measured. A ledger is only as good as its prices.</p>

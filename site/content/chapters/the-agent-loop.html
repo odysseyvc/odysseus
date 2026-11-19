@@ -28,7 +28,7 @@ PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
     ...
 }</code></pre>
-<p>For this model, writing a token costs five times as much as reading one, and reading a token the service has cached from a recent call costs a twentieth of reading it fresh. The comment beside the table in <code>odysseus/agent.py</code> records that the input and output prices were read from the maker's price list (they may since have changed), and that the cache-write figures are an estimate. Because a long conversation resends its history on every call, the cheaper cached rate is what makes long conversations affordable at all ({{ch:cost}}).</p>
+<p>For this model, writing a token costs five times as much as reading one, and reading a token the service has cached from a recent call costs a twentieth of reading it fresh. The comment beside the table in <code>odysseus/agent.py</code> records that all four prices were checked against the maker's price list, and that prices change. Because a long conversation resends its history on every call, the cheaper cached rate is what makes long conversations affordable at all ({{ch:cost}}).</p>
 
 <h2 id="tools">What a tool call is</h2>
 <p>As defined in {{ch:what-a-personal-agent-is}}, a tool is one action the model may choose, and a tool call is the model's request to use it. Here is what they look like on the wire. A tool is described to the model by a name, a sentence saying what it does, and a <em>schema</em>: a precise statement of what inputs it takes. A tool call is a structured message from the model naming a tool and giving inputs that fit its schema, in place of (or alongside) text for the person.</p>

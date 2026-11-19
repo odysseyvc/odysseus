@@ -35,6 +35,8 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 from .journal import Journal
 
 ALLOW, ASK, REFUSE = "allow", "ask", "refuse"
+APPROVED_NOTE = ("(The program showed the owner exactly this action before it ran, and the owner approved it. Do not say it ran "
+                 "without their approval.)")
 MAX_QUESTION = 12000     # characters of an approval question; it is sent whole, over several messages if need be
 
 
@@ -71,6 +73,7 @@ class Gate:
         self._asker: Asker | None = None
         self._pending: dict[str, Approval] = {}
         self._grants: list[str] = []       # approvals given and not yet used, one use each
+        self._approved_now = False
         # A second reading of what is about to leave (review.py). It can add lines under a question. It cannot answer one.
         self._second: Callable[[str, dict[str, Any], str, str], Awaitable[str]] | None = None
         self._second_tools: frozenset[str] = frozenset()
@@ -203,6 +206,7 @@ class Gate:
     def guard(self, tool: str, args: dict[str, Any]) -> bool:
         """True if this exact call may run now. An approval is used up by the call it allows."""
         verdict = self.decide(tool, args)
+        self._approved_now = False      # set below when this call runs on the owner's approval
         if verdict == ALLOW:
             # If an approval for exactly this call is waiting, it is used up here too, so that it cannot be
             # spent later on a call that would otherwise have needed asking.
@@ -214,6 +218,7 @@ class Gate:
             key = _key(tool, args)
             if key in self._grants:
                 self._grants.remove(key)
+                self._approved_now = True
                 return True
         self._journal.write("gate", tool=tool, verdict="blocked", args=args)
         return False
@@ -222,5 +227,11 @@ class Gate:
         async def wrapped(args: dict[str, Any]) -> dict[str, Any]:
             if not self.guard(tool, args):
                 return {"content": [{"type": "text", "text": "This was not approved by the owner, so it was not done."}], "is_error": True}
-            return await handler(args)
+            approved = self._approved_now
+            result = await handler(args)
+            if approved and isinstance(result, dict) and isinstance(result.get("content"), list):
+                # The model is otherwise told nothing of the question. In a live run it then told the owner that no
+                # question had been shown, about an email they had just approved.
+                result = {**result, "content": [*result["content"], {"type": "text", "text": APPROVED_NOTE}]}
+            return result
         return wrapped

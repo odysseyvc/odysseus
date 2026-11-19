@@ -63,8 +63,9 @@ Replies are read on a phone as plain text. Keep them short and direct. Do not us
 
 # Dollars per million tokens: input, output, cache read, cache write.
 # Used only to end a task early; the recorded cost is the SDK's own figure.
-# Input and output prices were read from the maker's price list in November 2026;
-# the cache-write figures assume the standard 1.25x of input and are an estimate.
+# All four were checked against the maker's price list (cache writes are the five-minute rate); prices change.
+# Not in the table: the small model costs five times as much on a prompt over 100,000 tokens, so an estimate
+# for such a prompt on that model is too low. No prompt this program builds for it comes near that size.
 PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
