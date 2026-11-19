@@ -77,6 +77,27 @@
 </ul>
 <p>The thread held three investments with their terms, a company under evaluation, and a dozen founders with a colleague's plain verdict on each. None was in the database. Two things kept it from being written straight in. The thread was months old, so "to be determined" may since have been determined. And one sentence attached the wrong website to a founder: a small slip by its author that a program copying from email would have turned into a wrong record. Mail is evidence of what someone wrote on a day, not a statement of what is true now. So the extraction was shown to the owner, and nothing was created.</p>
 
+<h2 id="first">The first real records</h2>
+<p>Shown the extraction, the owner chose: "The three investments". The real model then entered them, one request each, through the gate. <span class="g v">Verified</span>, three live runs, read back from Attio afterwards by a separate script:</p>
+<div class="table-wrap"><table>
+<caption>What the assistant did for three requests.</caption>
+<thead><tr><th>Request</th><th>Changes it asked for</th><th>Time</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><th>First investment</th><td>Company, founder, deal, portfolio entry, note</td><td>44 s</td><td>$0.13</td></tr>
+<tr><th>Second investment, and one correction</th><td>The same five, and an update to the first founder</td><td>43 s</td><td>$0.13</td></tr>
+<tr><th>Third, not yet in the portfolio</th><td>Company, founder, deal, note</td><td>46 s</td><td>$0.10</td></tr>
+</tbody>
+</table></div>
+<p>Every record came back as asked: the right stage, amount, ownership and links between company, founder and deal. Before each creation the model searched for an existing record, and said in its reply what it had searched for.</p>
+<p>Three things are worth keeping from it.</p>
+<ul>
+<li><strong>It used a field that already existed in place of the one that was meant.</strong> Told that a person's role was "Founder", it filled Attio's built-in job title and left the firm's own Role field empty. It said so in its reply, which is how the slip was found. A field's name is not enough; the second and third requests named the field exactly and it was filled. A firm's own fields need to be described to the model, once, in its instructions. That is not built.</li>
+<li><strong>It invented what a tool demanded and told the owner.</strong> Attio's notes need a title and none was given. It made one up and said it had.</li>
+<li><strong>About twenty reads for five writes.</strong> Each request began by listing objects, lists and every field, because the model starts each conversation knowing nothing of the workspace. That is most of the 44 seconds and most of the cost, and it would be removed by the same instructions.</li>
+</ul>
+<div class="box caution"><div class="label">Whose approval this was</div>
+<p>The owner approved these three investments in conversation with the coding agent. A script then pressed "approve" on the owner's behalf, for a fixed list of actions with a limit on each, and would have declined anything else. So the gate was exercised with the real model and real writes, and every change was one the owner had agreed to. But the owner has still not pressed the assistant's own button in the chat for a change in Attio. That remains <span class="g u">Not tested</span>.</p></div>
+
 <h2 id="layout">Giving the workspace a shape</h2>
 <p>An empty database cannot answer "what is in the pipeline". The assistant's first useful act for the firm was therefore not a lookup but a layout: what a deal is, what stages it passes through, and what is recorded about it.</p>
 <p>The first draft was made from the firm's own earlier design and common sense. The owner asked: "Is this SOTA for early-stage VC workflows?" It was not, and the honest answer was that nobody had checked. The draft had been written before reading what the vendor and practitioners recommend. Reading them afterwards (the vendor's own guide for venture firms, and one implementation consultancy's write-up, which is sales material) found six gaps: no rule for when a deal leaves a stage; missing fields such as the allocation offered and the committee date; a single reason for passing where several are needed; nothing recorded about a holding after investing; nothing for the fund's own investors; and no automation at all.</p>
@@ -93,7 +114,8 @@
 
 <h2 id="open">What is not done</h2>
 <ul>
-<li>No change has been made in Attio, and the real model has not used these tools.</li>
+<li>The owner has not yet approved a change in Attio from the chat itself (Section 21.9).</li>
+<li>The model is not told what the firm's own fields are for, and rediscovers the workspace at the start of every conversation.</li>
 <li>The sign-in works only on the machine with the browser.</li>
 <li>Unattended routines and watches cannot read Attio.</li>
 <li>The general connector still lists Attio's actions too. The prompt tells the model to use Attio's own tools; nothing in code prevents the other route.</li>
