@@ -15,7 +15,7 @@ from .agent import AgentRunner, Outcome
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
-from .ocr import MAX_BYTES, OcrBackend, OcrError, file_block, resolve_type
+from .ocr import MAX_BYTES, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
 from .voice import VoiceBackend, VoiceError
 from .anyapp import AnyApp
@@ -279,9 +279,11 @@ class Conversation:
             self._journal.write("file", name=name, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
             await chat.send("I could not read that file. The details are in the log.")
             return
-        self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text))
+        seen = shown_whole(kind, len(data), result.pages)
+        self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text), seen=seen)
         said = (caption or "").strip() or "(The owner sent this file with no message.)"
-        await self.handle(user_id, f"{file_block(name, result)}\n\n{said}", chat, material="a file you sent")
+        await self.handle(user_id, f"{file_block(name, result, seen)}\n\n{said}", chat, images=[(kind, data)] if seen else None,
+                          material="a file you sent")
 
     async def handle_voice(self, user_id: int, data: bytes | None, name: str, size: int, seconds: int, chat: Chat) -> None:
         """The owner sent a voice note. Turn it into text, show the owner what was heard, then treat it as a message."""
