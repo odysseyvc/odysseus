@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from odysseus.attio import FileTokens, session
 from odysseus.config import load
 
-SERVERS = {"granola": {"url": "https://mcp.granola.ai/mcp", "scope": None}}
+from odysseus.mcpapp import APPS as SERVERS  # noqa: E402
 
 
 async def main() -> int:

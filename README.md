@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 300 automated tests. The parts
+**Status: early.** It was built in three days and has 305 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -62,6 +62,12 @@ it prints, sign in to Attio and approve. No key is created; the sign-in is kept 
 folder. Restart the bot. Reading Attio runs at once; every change asks you first. It has
 been read from live once and never written to; it does not yet work on a remote server.
 `python scripts/live_attio.py` checks the connection without changing anything.
+
+## Connect Granola (optional)
+
+For meeting notes and transcripts. Run `python scripts/connect_mcp.py granola`, open the link, sign in and approve, then
+restart the bot. Reading runs at once; any change asks you first. Other services that run their own server can be added
+as an entry in `odysseus/mcpapp.py`. Read from live once; nothing has been changed through it.
 
 ## Put it on a server
 

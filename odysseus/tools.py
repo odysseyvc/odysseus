@@ -100,7 +100,8 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
-              with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None) -> Gate:
+              with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None,
+              services: Any = ()) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 
     Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
@@ -122,6 +123,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     if attio is not None:
         attio.taint = taint
         attio.add_rules(gate)
+    for service in services:        # any other service with a server of its own: mcpapp.py
+        service.taint = taint
+        service.add_rules(gate)
     if with_apps:
         from datetime import datetime
         apps_mod.add_rules(gate, now or datetime.now, apps)
@@ -223,7 +227,7 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
-                     on_watch: Any = None, attio: Any = None):
+                     on_watch: Any = None, attio: Any = None, services: Any = ()):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     m = make_memory_handlers(memory, journal)
     search_handler = make_search_handler(spec, journal)
@@ -362,6 +366,12 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         if gate is not None:
             h["app_run"] = gate.guarded(anyapp_mod.APP_RUN, h["app_run"])   # lock 2
         tools += [tool(n, anyapp_mod.SCHEMAS[n][0], anyapp_mod.SCHEMAS[n][1])(h[n]) for n in anyapp_mod.SCHEMAS]
+    for service in services:
+        h, schemas = service.handlers(), service.schemas()
+        short = f"{service.slug}_run"
+        if gate is not None:
+            h[short] = gate.guarded(service.run_tool, h[short])   # lock 2
+        tools += [tool(n, schemas[n][0], schemas[n][1])(h[n]) for n in schemas]
     if attio is not None:
         h = attio.handlers()
         if gate is not None:
