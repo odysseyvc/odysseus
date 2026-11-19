@@ -220,7 +220,7 @@ async def main() -> int:
         # A newly connected service brings tools that are fixed when the program starts, so it starts again, in place.
         again.append(True)
         asyncio.get_running_loop().call_later(1.5, lambda: asyncio.ensure_future(dispatcher.stop_polling()))
-    conversation._connector = Connector(settings.data_dir, journal, restart)
+    conversation._connector = Connector(settings.data_dir, journal, restart, also=("Attio",) if attio is not None else ())
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
         await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"])
@@ -248,7 +248,28 @@ async def main() -> int:
 
 RESTART = 75
 
+
+def supervise() -> int:
+    """Run the program as a child process, and start it again whenever it ends asking to be restarted.
+
+    A newly connected service needs a restart (connect.py). Starting again inside the same process was tried first and
+    worked six times in a row, except that whatever exists once per process, such as the tracing client, had been shut
+    down by the first run and stayed shut. A new process has none of that history.
+    """
+    import os
+    import subprocess
+    env = {**os.environ, "ODYSSEUS_CHILD": "1"}
+    while True:
+        child = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "odysseus"], env=env)
+        try:
+            code = child.wait()
+        except KeyboardInterrupt:
+            child.terminate()
+            return 130
+        if code != RESTART:
+            return code
+
+
 if __name__ == "__main__":
-    while (code := asyncio.run(main())) == RESTART:
-        pass
-    sys.exit(code)
+    import os
+    sys.exit(asyncio.run(main()) if os.environ.get("ODYSSEUS_CHILD") else supervise())

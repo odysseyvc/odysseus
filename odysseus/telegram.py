@@ -16,6 +16,11 @@ from .voice import MAX_BYTES as VOICE_MAX_BYTES, MAX_SECONDS as VOICE_MAX_SECOND
 STALE_AFTER_S = 600       # a message older than this when it arrives is reported, not acted on
 
 
+from aiogram.types import LinkPreviewOptions  # noqa: E402
+
+NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
+
+
 class TelegramChat:
     def __init__(self, bot: Bot, chat_id: int):
         self._bot = bot
@@ -23,12 +28,14 @@ class TelegramChat:
 
     async def send(self, text: str) -> None:
         # Plain text: no parse mode, so nothing the model writes is read as markup.
+        # No link previews: to make one Telegram fetches the link, and some links the program sends (a sign-in link) are
+        # meant to be opened once, by the owner.
         try:
-            await self._bot.send_message(self._chat_id, text, parse_mode=None)
+            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW)
         except TelegramRetryAfter as e:
             # Telegram says it is being sent too much, and how long to wait. Wait that long, once, and send again.
             await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
-            await self._bot.send_message(self._chat_id, text, parse_mode=None)
+            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW)
 
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)

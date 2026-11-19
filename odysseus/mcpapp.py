@@ -132,12 +132,13 @@ def load_custom(data_dir: Path) -> None:
     """Add the servers the owner connected from the chat to the ones this program knows. Called once at start."""
     for slug, saved in _custom(data_dir).items():
         if slug not in APPS and re.fullmatch(r"[a-z0-9]{1,20}", slug):
-            APPS[slug] = custom_spec(slug, saved["url"])
+            APPS[slug] = {**custom_spec(slug, saved["url"]), "open": saved.get("open") is True}
 
 
 def save_custom(data_dir: Path, slug: str, spec: dict[str, Any]) -> None:
     all_ = _custom(data_dir)
-    all_[slug] = {"url": spec["url"]}       # only the address is kept: the description is this program's, not the file's
+    # Only the address is kept, and whether the server asked for no sign-in at all: the description is this program's.
+    all_[slug] = {"url": spec["url"], **({"open": True} if spec.get("open") else {})}
     (Path(data_dir) / CUSTOM_FILE).write_text(json.dumps(all_, indent=1), encoding="utf-8")
     APPS.setdefault(slug, spec)
 
@@ -380,6 +381,6 @@ def connected(data_dir: Path, journal: Journal) -> list[McpApp]:
     out = []
     for slug, spec in APPS.items():
         tokens = FileTokens(Path(data_dir) / f"{slug}.json")
-        if tokens.signed_in():
+        if tokens.signed_in() or spec.get("open"):      # "open": a public server that asks for no sign-in
             out.append(McpApp(slug, McpBackend(tokens, url=spec["url"], scope=spec["scope"]), journal, spec))
     return out

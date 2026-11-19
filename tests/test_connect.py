@@ -10,7 +10,11 @@ import pytest
 
 from odysseus import mcpapp
 from odysseus.attio import FileTokens, _return_port
-from odysseus.connect import Connector, slug_for
+from urllib.parse import urlsplit
+
+from odysseus.connect import Connector, _published_by, slug_for
+
+REGISTRY = {"exa": ["https://mcp.exa.ai/mcp"], "exa.ai": ["https://mcp.exa.ai/mcp"], "twins": ["https://mcp.twins.com/mcp", "https://mcp.twins.ai/mcp"]}
 from odysseus.journal import Journal
 from test_ocr import rig
 from test_slice import OWNER
@@ -58,8 +62,13 @@ def make(tmp_path, server, public=True, timeout_s=5):
 
     async def is_public(url):
         return public
+    async def lookup(label, site):
+        return list(REGISTRY.get(site or label, []))
+
+    async def probe(url):
+        return urlsplit(url).path.rstrip("/").endswith("/mcp") and "website" not in url
     c = Connector(tmp_path, Journal(tmp_path / "j.jsonl"), lambda: restarts.append(1), opener=server, port=lambda: 51111, public=is_public,
-                  timeout_s=timeout_s)
+                  timeout_s=timeout_s, lookup=lookup, probe=probe)
     return c, send, sent, restarts
 
 
@@ -99,7 +108,8 @@ async def test_a_known_service_is_connected_by_name_with_the_permissions_this_pr
 
 async def test_what_is_refused_before_anything_is_opened(tmp_path):
     server = FakeServer()
-    for arg, words, public in (("http://mcp.site.example/mcp", "https address", True), ("nonsense", "https address", True),
+    for arg, words, public in (("http://mcp.site.example/mcp", "only connect to https", True), ("nonsense", "could not find a server for nonsense", True),
+                               ("twins", "more than one server", True), ("https://website.nowhere.example", "could not find a server for website.nowhere.example", True),
                                ("https://10.0.0.5/mcp", "not lead to a public server", False),
                                ("https://mcp.attio.example/mcp attio", "short name", True), ("https://x.example/mcp", "short name", True)):
         c, send, sent, restarts = make(tmp_path, server, public=public)
@@ -128,7 +138,7 @@ async def test_a_sign_in_nobody_approves_and_one_that_fails_save_nothing_and_do_
 async def test_the_list_and_forgetting_a_service(tmp_path):
     c, send, sent, restarts = make(tmp_path, FakeServer([tool("list_issues", True)]))
     await c.connect("", send)
-    assert sent[0].startswith("Connected: none.") and "Granola (granola)" in sent[0] and "/connect https://mcp.example.com/mcp" in sent[0]
+    assert sent[0].startswith("Connected: none.") and "Granola (granola)" in sent[0] and "/connect exa" in sent[0]
     await c.connect("https://mcp.linear.app/mcp", send)
     await c._task
     await c.connect("", send)
@@ -166,3 +176,60 @@ async def test_only_the_owners_typed_command_connects_and_not_in_the_middle_of_a
     await x.conv.handle(OWNER, "/disconnect linear", x.chat)
     assert calls == [("connect", "https://MCP.Linear.app/mcp Linear"), ("connect", ""), ("disconnect", "linear")]
     assert x.clients == [], "no model is involved"
+
+
+class OpenServer(FakeServer):
+    """A public server: it answers without any sign-in, so no link is shown and no token exists."""
+
+    @asynccontextmanager
+    async def __call__(self, tokens, show, url, scope, port):
+        self.opened.append((url, scope, port))
+        yield SimpleNamespace(list_tools=self._list)
+
+
+async def test_a_public_server_that_asks_for_no_sign_in_is_connected_and_survives_a_restart(tmp_path):
+    c, send, sent, restarts = make(tmp_path, OpenServer([tool("read_wiki", True), tool("ask_question", False)]))
+    c._also = ("Attio",)
+    await c.connect("https://mcp.deepwiki.example/mcp", send)
+    await c._task
+    assert len(sent) == 1 and "Deepwiki is connected (it asked for no sign-in: it is a public server): 2 tools. 1 only read" in sent[0]
+    assert json.loads((tmp_path / "services.json").read_text())["deepwiki"] == {"url": "https://mcp.deepwiki.example/mcp", "open": True}
+    mcpapp.APPS.pop("deepwiki")
+    mcpapp.load_custom(tmp_path)
+    assert [a.slug for a in mcpapp.connected(tmp_path, Journal(tmp_path / "j2.jsonl"))] == ["deepwiki"], "no token, and still loaded at the next start"
+    await c.connect("", send)
+    assert sent[-1].startswith("Connected: Attio, Deepwiki (deepwiki).")
+    await c.disconnect("deepwiki", send)
+    assert "Deepwiki is forgotten here" in sent[-1] and "deepwiki" not in mcpapp.APPS and restarts == [1, 1]
+    empty, send, sent, restarts = make(tmp_path / "e", OpenServer([]))
+    await empty.connect("https://mcp.nothing.example/mcp", send)
+    await empty._task
+    assert "offers no tools" in sent[-1] and restarts == []
+
+
+async def test_a_company_is_found_by_its_name_or_its_website_and_the_owner_is_told_which_server(tmp_path):
+    for typed, told in (("exa", "I found Exa's server in the public registry of servers, published under its own domain: https://mcp.exa.ai/mcp"),
+                        ("Exa.ai", "exa.ai is a website, not a server. The server that belongs to it is https://mcp.exa.ai/mcp"),
+                        ("https://www.exa.ai/", "www.exa.ai is a website, not a server"), ("mcp.exa.ai/mcp", None)):
+        server = OpenServer([tool("web_search_exa", True)])
+        c, send, sent, restarts = make(tmp_path / typed.replace("/", "_").replace(":", ""), server)
+        await c.connect(typed, send)
+        await c._task
+        assert server.opened[0][0] == "https://mcp.exa.ai/mcp", typed
+        if told:
+            assert told in sent[0] and sent[0].endswith("Connecting to it now."), sent[0]
+        assert "Exa is connected" in sent[-1] and restarts == [1]
+        mcpapp.APPS.pop("exa", None)
+
+
+async def test_a_website_with_no_registry_entry_is_tried_at_the_usual_addresses(tmp_path):
+    server = OpenServer([tool("list_things", True)])
+    c, send, sent, restarts = make(tmp_path, server)
+    await c.connect("https://acme.example", send)
+    await c._task
+    assert server.opened[0][0] == "https://mcp.acme.example/mcp" and "The server that belongs to it is https://mcp.acme.example/mcp" in sent[0]
+
+
+def test_a_registry_name_gives_the_domain_it_was_published_under():
+    assert _published_by("ai.exa/exa") == "exa.ai" and _published_by("app.linear/linear") == "linear.app"
+    assert _published_by("ai.smithery/exa-labs-exa-code-mcp") == "smithery.ai", "someone else's server with the word in its name is not the company's"

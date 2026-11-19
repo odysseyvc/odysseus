@@ -76,3 +76,20 @@ async def test_the_program_assembles_with_nothing_optional(tmp_path, monkeypatch
     monkeypatch.setattr(entry, "build_dispatcher", lambda bot, conversation: FakeDispatcher())
     monkeypatch.setattr(entry.AgentRunner, "start", fake_start)
     assert await entry.main() == 0
+
+
+def test_the_supervisor_starts_a_fresh_process_when_asked_to_restart_and_stops_otherwise(monkeypatch):
+    import subprocess
+
+    from odysseus import __main__ as program
+    codes, started = [program.RESTART, program.RESTART, 3], []
+
+    class Child:
+        def __init__(self, args, env=None):
+            started.append((args, env.get("ODYSSEUS_CHILD")))
+
+        def wait(self):
+            return codes.pop(0)
+    monkeypatch.setattr(subprocess, "Popen", Child)
+    assert program.supervise() == 3 and len(started) == 3
+    assert all(mark == "1" and args[-2:] == ["-m", "odysseus"] for args, mark in started), "each run is a new process, marked as the child"
