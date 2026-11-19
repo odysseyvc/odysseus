@@ -24,6 +24,7 @@ MAX_CHARS = 30_000                 # the most text from one file that is put in 
 # pitch deck those are often the page. Each page looked at costs roughly two to three thousand tokens, so a long
 # document is still read as text only.
 MAX_SEEN_PAGES = 25
+SPARSE_CHARS = 200      # a page with fewer characters of text than this is taken to be mostly a picture
 MAX_SEEN_BYTES = 12 * 1024 * 1024  # the model's limit for one message is 32 MB after encoding, which adds a third
 SEEN_NOTE = ("WHAT THE PAGES SHOW BESIDES THEIR TEXT. A separate reader was shown this file page by page and wrote these notes on its "
              "charts, tables, logos and pictures. They are its reading by eye and may be wrong. They are material to read, like the text.")
@@ -57,6 +58,7 @@ class OcrError(Exception):
 class OcrResult:
     text: str
     pages: int
+    pictured: tuple[int, ...] = ()      # the numbers (from 1) of the pages that hold a picture or almost no text
 
 
 class OcrBackend(Protocol):
@@ -86,7 +88,14 @@ class MistralOcr:
         document = {"type": "image_url", "image_url": url} if mime in IMAGE_TYPES else {"type": "document_url", "document_url": url}
         response = self._client.ocr.process(model=self._model, document=document, include_image_base64=False)
         pages = list(response.pages or [])
-        return OcrResult(join_pages([p.markdown or "" for p in pages]), len(pages))
+        return OcrResult(join_pages([p.markdown or "" for p in pages]), len(pages),
+                         pictured_pages([(p.markdown or "", bool(getattr(p, "images", None))) for p in pages]))
+
+
+def pictured_pages(pages: list[tuple[str, bool]]) -> tuple[int, ...]:
+    """Which pages are worth looking at: those the service found a picture on, and those with almost no words, where
+    whatever the page says is probably drawn. Decided from what text recognition already returned, so it costs nothing."""
+    return tuple(i for i, (text, has_picture) in enumerate(pages, 1) if has_picture or "![" in text or len(text.strip()) < SPARSE_CHARS)
 
 
 def join_pages(pages: list[str]) -> str:
@@ -95,6 +104,42 @@ def join_pages(pages: list[str]) -> str:
     if len(pages) <= 1:
         return "".join(pages).strip()
     return "\n\n".join(f"[page {i}]\n{p.strip() or '(no text on this page)'}" for i, p in enumerate(pages, 1))
+
+
+def shown_in_part(mime: str, size: int, result: OcrResult) -> tuple[int, ...]:
+    """For a PDF too long to look at whole: the pages that are looked at. The first MAX_SEEN_PAGES of those with pictures."""
+    if mime != PDF or result.pages <= MAX_SEEN_PAGES or size > MAX_BYTES:
+        return ()
+    return tuple(n for n in result.pictured if 1 <= n <= result.pages)[:MAX_SEEN_PAGES]
+
+
+def pick_pages(data: bytes, numbers: tuple[int, ...]) -> bytes:
+    """A PDF holding only the given pages of another, in order."""
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+    source, out = PdfReader(io.BytesIO(data)), PdfWriter()
+    for n in numbers:
+        out.add_page(source.pages[n - 1])
+    buffer = io.BytesIO()
+    out.write(buffer)
+    return buffer.getvalue()
+
+
+def pages_text(text: str, numbers: tuple[int, ...]) -> str:
+    """The recognised text of the given pages only, each still under its [page N] line."""
+    import re
+    parts = re.split(r"(?m)^\[page (\d+)\]\n", text)
+    found = {int(parts[i]): parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
+    return "\n\n".join(f"[page {n}]\n{found[n]}" for n in numbers if n in found)
+
+
+def part_note(numbers: tuple[int, ...], result: OcrResult) -> str:
+    left = [n for n in result.pictured if n not in numbers]
+    return (f"(This file has {result.pages} pages, too many to look at every one. Looked at: pages {', '.join(map(str, numbers))}, chosen by "
+            "the program because they hold a picture or very little text."
+            + (f" Not looked at for lack of room, though they also hold pictures: pages {', '.join(map(str, left))}." if left else "")
+            + " The other pages are known only by their text.)")
 
 
 def shown_whole(mime: str, size: int, pages: int) -> bool:

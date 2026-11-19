@@ -52,10 +52,15 @@ def make_page_reader(settings: Settings, journal: Journal, server: Any, client_f
     async def noop(text: str) -> None:
         pass
 
-    async def read(data: bytes, text: str) -> tuple[str, float]:
+    async def read(data: bytes, text: str, numbers: tuple[int, ...] = ()) -> tuple[str, float]:
         await runner.forget_session()
+        # A long file is shown in part. The reader is told which pages it holds, so that its notes use the file's own numbers.
+        part = "" if not numbers else (
+            f"You are shown only {len(numbers)} pages of a longer file. In the order you see them they are its pages "
+            f"{', '.join(map(str, numbers))}: the first page you see is page {numbers[0]} of the file, and so on. In every [page N] "
+            "use the file's own number, as the text below does.\n\n")
         try:
-            outcome = await asyncio.wait_for(runner.run(f"THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT", noop,
+            outcome = await asyncio.wait_for(runner.run(f"{part}THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT", noop,
                                                         images=[("application/pdf", data)]), PAGES_TIMEOUT_S)
         except asyncio.TimeoutError:
             outcome = Outcome("error", cost_usd=runner.estimate, detail="timeout")

@@ -14,7 +14,8 @@ import asyncio
 from typing import Any
 
 from .journal import Journal, Ledger
-from .ocr import MAX_BYTES, MAX_CHARS, OcrBackend, OcrError, file_block, resolve_type, shown_whole
+from .ocr import (MAX_BYTES, MAX_CHARS, MAX_SEEN_BYTES, OcrBackend, OcrError, file_block, pages_text, part_note, pick_pages, resolve_type,
+                  shown_in_part, shown_whole)
 
 FILE_TIMEOUT_S = 180     # how long the text-recognition service gets before the owner is told it failed
 
@@ -43,12 +44,21 @@ class Reader:
             raise OcrError("I could not read that file. The details are in the log.") from None
         # The pages of a short PDF are looked at in a run of their own, and what they show comes back as text (pages.py).
         # The file itself is never put into the conversation, where it would be carried forward with every later message.
-        sights = None
-        if self._pages is not None and shown_whole(kind, len(data), result.pages) and self._ledger.spent_today() < self._daily_usd:
+        sights, chosen = None, ()
+        if self._pages is not None and self._ledger.spent_today() < self._daily_usd:
             try:
-                sights, _ = await self._pages(data, result.text[:MAX_CHARS])
+                if shown_whole(kind, len(data), result.pages):
+                    sights, _ = await self._pages(data, result.text[:MAX_CHARS])
+                else:
+                    # A longer PDF: only the pages with pictures are looked at, picked by code from what text recognition
+                    # returned. Looking at sixty pages to find the six with a chart would cost ten times as much.
+                    chosen = shown_in_part(kind, len(data), result)
+                    part = await asyncio.to_thread(pick_pages, data, chosen) if chosen else b""
+                    if part and len(part) <= MAX_SEEN_BYTES:
+                        notes, _ = await self._pages(part, pages_text(result.text, chosen), numbers=chosen)
+                        sights = part_note(chosen, result) + "\n" + (notes or "(Nothing beyond the text on the pages looked at.)")
             except Exception as e:
                 self._journal.write("error", where="reading.pages", error=type(e).__name__)
         self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text),
-                            seen=sights is not None, sights=len(sights or ""), source=source)
+                            seen=sights is not None, sights=len(sights or ""), source=source, **({"looked_at": len(chosen)} if chosen else {}))
         return file_block(name, result, sights)
