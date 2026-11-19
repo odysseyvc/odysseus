@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 278
+    "tests": 284
   },
   "parts": [
     {
@@ -156,6 +156,13 @@
           "title": "A second reading: what the tests did not find",
           "revised": "19 November 2026",
           "summary": "Every test passed and an independent reading still found sixteen things wrong: holes in the gate, failures nobody was told about, and numbers that left something out. What each was, what closed it, what the owner then relaxed, and what is still open."
+        },
+        {
+          "n": 21,
+          "slug": "the-firms-database",
+          "title": "The firm's database: Attio",
+          "revised": "19 November 2026",
+          "summary": "The first customer is named: a venture capital firm, one assistant per partner. Attio is reached through Attio's own server, signed in to by the owner with no key copied, its 58 tools offered through two and sorted by label and name. Read from once, live; nothing changed in it yet."
         }
       ]
     }

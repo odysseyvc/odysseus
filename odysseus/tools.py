@@ -21,6 +21,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from . import apps as apps_mod
 from .apps import Apps
 from . import anyapp as anyapp_mod
+from . import attio as attio_mod
 from .anyapp import AnyApp
 from . import browser as browser_mod
 from .browser import Browser
@@ -99,7 +100,7 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
 
 def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
-              with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None) -> Gate:
+              with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None) -> Gate:
     """The gate for conversations, with a rule for every tool that exists.
 
     Pass `apps` (the object, not just with_apps) so that the calendar rules can see which events have guests,
@@ -118,6 +119,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     if anyapp is not None:
         anyapp.taint = taint
         anyapp.add_rules(gate)
+    if attio is not None:
+        attio.taint = taint
+        attio.add_rules(gate)
     if with_apps:
         from datetime import datetime
         apps_mod.add_rules(gate, now or datetime.now, apps)
@@ -219,7 +223,7 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
-                     on_watch: Any = None):
+                     on_watch: Any = None, attio: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     m = make_memory_handlers(memory, journal)
     search_handler = make_search_handler(spec, journal)
@@ -358,6 +362,11 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         if gate is not None:
             h["app_run"] = gate.guarded(anyapp_mod.APP_RUN, h["app_run"])   # lock 2
         tools += [tool(n, anyapp_mod.SCHEMAS[n][0], anyapp_mod.SCHEMAS[n][1])(h[n]) for n in anyapp_mod.SCHEMAS]
+    if attio is not None:
+        h = attio.handlers()
+        if gate is not None:
+            h["attio_run"] = gate.guarded(attio_mod.ATTIO_RUN, h["attio_run"])   # lock 2
+        tools += [tool(n, attio_mod.SCHEMAS[n][0], attio_mod.SCHEMAS[n][1])(h[n]) for n in attio_mod.SCHEMAS]
     if browser is not None:
         handler = gate.guarded(browser_mod.BROWSE_TOOL, browser.browse) if gate is not None else browser.browse   # lock 2
         tools.append(tool("browse", browser_mod.SCHEMA[0], browser_mod.SCHEMA[1])(handler))

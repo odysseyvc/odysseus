@@ -1,5 +1,6 @@
 # What the running program needs. Development tools are in requirements-dev.txt.
 claude-agent-sdk==0.2.182
+mcp==2.3.0
 aiogram==3.32.0
 exa-py==2.28.0
 composio==0.32.0

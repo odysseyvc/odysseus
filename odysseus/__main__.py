@@ -9,6 +9,7 @@ from exa_py import Exa
 
 from .agent import AgentRunner, conversation_prompt
 from .anyapp import AnyApp
+from .attio import Attio, FileTokens, McpBackend
 from .apps import Apps, ComposioBackend
 from .browser import Browser, BrowserUseBackend
 from .config import ConfigError, load, make_clock
@@ -101,6 +102,9 @@ async def main() -> int:
     connector = ComposioBackend(settings.composio_api_key, f"odysseus-{settings.owner_id}") if settings.composio_api_key else None
     apps = Apps(connector, journal, now, settings.tz) if connector else None
     anyapp = AnyApp(connector, journal) if connector else None      # every other app in the connector's catalogue
+    # Attio, the firm's customer database, through Attio's own server. It exists once the owner has signed in (scripts/connect_attio.py).
+    attio_tokens = FileTokens(settings.data_dir / "attio.json")
+    attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
@@ -114,12 +118,12 @@ async def main() -> int:
         await asyncio.to_thread(box["watcher"].start, asyncio.get_running_loop())
     gate = make_gate(journal, now, with_apps=apps is not None, browser=browser,
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
-                     taint_file=settings.data_dir / "taint.bin")
+                     taint_file=settings.data_dir / "taint.bin", attio=attio)
     runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
-                                                            anyapp=anyapp, watches=watches, on_watch=on_watch),
+                                                            anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio),
                          gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
                                                            with_files=ocr is not None, with_anyapp=anyapp is not None,
-                                                           with_watches=watches is not None), persist=True)
+                                                           with_watches=watches is not None, with_attio=attio is not None), persist=True)
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
@@ -127,7 +131,7 @@ async def main() -> int:
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
-                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches)
+                                browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio)
     bot = Bot(settings.telegram_token)
 
     # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.

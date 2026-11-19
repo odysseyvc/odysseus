@@ -127,13 +127,13 @@ You can be told when something happens, without the owner asking again. Use watc
 
 
 def conversation_prompt(with_apps: bool, with_browser: bool = False, browser_asks: bool = False, with_files: bool = False,
-                        with_anyapp: bool = False, with_watches: bool = False) -> str:
+                        with_anyapp: bool = False, with_watches: bool = False, with_attio: bool = False) -> str:
     """The conversation's instructions, with whichever of mail, calendar and browser are connected."""
     assert _NO_ACCOUNTS in SYSTEM_PROMPT
     missing = [w for w, have in (("read mail or calendars", with_apps), ("open web pages in a browser", with_browser)) if not have]
     limits = f"You cannot yet {', or '.join(missing)}." if missing else "There are still things you cannot do, and you say so plainly when asked for one."
     return SYSTEM_PROMPT.replace(_NO_ACCOUNTS, limits) + (APPS_PROMPT if with_apps else "") + (BROWSER_PROMPT.format(approval=_BROWSER_ASKS if browser_asks else _BROWSER_DOES_NOT_ASK) if with_browser else "") \
-        + (ANYAPP_PROMPT if with_anyapp else "") + (FILES_PROMPT if with_files else "") + (WATCH_PROMPT if with_watches else "")
+        + (ANYAPP_PROMPT if with_anyapp else "") + (FILES_PROMPT if with_files else "") + (WATCH_PROMPT if with_watches else "") + (_attio_prompt() if with_attio else "")
 
 
 ROUTINE_APPS_PROMPT = """
@@ -403,3 +403,8 @@ class AgentRunner:
             status = "error"
         text = (result.result or last or current) if status == "done" else (last or current)
         return Outcome(status, text=text, cost_usd=cost, turns=len(calls) or result.num_turns, detail=result.subtype)
+
+
+def _attio_prompt() -> str:
+    from .attio import PROMPT
+    return PROMPT

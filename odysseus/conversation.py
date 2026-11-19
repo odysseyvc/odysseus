@@ -59,7 +59,7 @@ class Conversation:
     def __init__(self, settings: Settings, journal: Journal, ledger: Ledger, runner: AgentRunner,
                  memory: MemoryStore | None = None, now: Callable[[], datetime] = datetime.now,
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
-                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None):
+                 ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None):
         self._s = settings
         self._journal = journal
         self._ledger = ledger
@@ -76,6 +76,7 @@ class Conversation:
         self._ocr = ocr
         self._voice = voice
         self._anyapp = anyapp
+        self._attio = attio
         self._task: asyncio.Task | None = None
         # Messages (with any pictures, and what kind of outside material they carry) that arrived while a task was running.
         self._waiting: deque[tuple[str, Chat, Any, str | None, int]] = deque()
@@ -422,6 +423,8 @@ class Conversation:
         if self._anyapp is not None:
             self._anyapp.pop_changes()
             self._anyapp.pop_links()
+        if self._attio is not None:
+            self._attio.pop_changes()
         trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",)) if self._tracing is not None else None
         traced = trace.__enter__() if trace is not None else None
         try:
@@ -466,7 +469,8 @@ class Conversation:
         changes = self._memory.pop_changes() if self._memory is not None else []
         if changes:
             body += "\n\nMemory: " + "; ".join(changes) + "."
-        acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else [])
+        acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else []) \
+            + (self._attio.pop_changes() if self._attio is not None else [])
         # A connection link is added by code, exactly as the connector gave it. The model never handles it.
         for app_name, link in (self._anyapp.pop_links() if self._anyapp is not None else []):
             body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{link}"

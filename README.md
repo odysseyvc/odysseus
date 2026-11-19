@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: early.** It was built in three days and has 278 automated tests. The parts
+**Status: early.** It was built in three days and has 284 automated tests. The parts
 that read (search, mail, calendar, public pages, files) have each run once against the
 real services. The parts that act have not: no email has been sent, no event created, no
 work done in a connected app, and no reminder has fired at its real time. Nothing has
@@ -53,6 +53,15 @@ python -m odysseus
 Message your bot in Telegram. Only the account in `OWNER_TELEGRAM_ID` gets replies.
 The commands were run on Windows; the macOS and Linux forms are the standard
 equivalents and have not been run by the author.
+
+## Connect Attio (optional)
+
+For a firm that keeps its companies, people and deals in Attio. Run
+`python scripts/connect_attio.py` on the machine whose browser you will use, open the link
+it prints, sign in to Attio and approve. No key is created; the sign-in is kept in the data
+folder. Restart the bot. Reading Attio runs at once; every change asks you first. It has
+been read from live once and never written to; it does not yet work on a remote server.
+`python scripts/live_attio.py` checks the connection without changing anything.
 
 ## Put it on a server
 
