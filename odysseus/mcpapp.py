@@ -118,6 +118,7 @@ _DATA_PROMPT = ("Use it when the owner asks who a company or a founder is, what 
                 "plainly: for a company that has not raised, that is common and means little.")
 for _slug, _title, _url, _what in (
         ("harmonic", "Harmonic", "https://mcp.api.harmonic.ai", "Harmonic's database of companies and people, strongest on startups before and just after they raise"),
+        ("tracxn", "Tracxn", "https://platform.tracxn.com/mcp", "Tracxn's database of private companies, rounds and investors, built in India and deepest there"),
         ("specter", "Specter", "https://mcp.tryspecter.com/mcp", "Specter's database of companies, people and signals such as job changes and investor interest"),
         ("crunchbase", "Crunchbase", "https://mcp.crunchbase.com", "Crunchbase's database of companies, funding rounds and investors"),
         ("crustdata", "Crustdata", "https://mcp.crustdata.com/mcp", "Crustdata's company and people data, including headcount and job changes"),

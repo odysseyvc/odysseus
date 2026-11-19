@@ -239,7 +239,7 @@ async def test_the_data_vendors_are_known_by_name_and_get_no_special_trust(tmp_p
     server = FakeServer([tool("search_companies", True), tool("save_list", False)])
     c, send, sent, restarts = make(tmp_path, server)
     await c.connect("", send)
-    for name in ("Harmonic (harmonic)", "Specter (specter)", "Crunchbase (crunchbase)", "Crustdata (crustdata)", "Evertrace (evertrace)", "Dealroom (dealroom)"):
+    for name in ("Harmonic (harmonic)", "Tracxn (tracxn)", "Specter (specter)", "Crunchbase (crunchbase)", "Crustdata (crustdata)", "Evertrace (evertrace)", "Dealroom (dealroom)"):
         assert name in sent[0]
     await c.connect("harmonic", send)
     await c._task

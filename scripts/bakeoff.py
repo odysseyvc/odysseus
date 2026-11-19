@@ -8,7 +8,7 @@ records do: look up each company the firm knows in every connected vendor, and c
     .venv/Scripts/python scripts/bakeoff.py run [--limit N]
 
 Everything it reads and writes stays in private/bakeoff/, which git ignores: the test set is the firm's own pipeline.
-Connect a vendor first, from the chat: /connect harmonic (and specter, crunchbase, crustdata, evertrace, dealroom).
+Connect a vendor first, from the chat: /connect harmonic (and tracxn, specter, crunchbase, crustdata, evertrace, dealroom).
 
 What a row of the result means, per vendor and company:
   found     the answer names the company's own website, or its exact name
@@ -38,7 +38,7 @@ from odysseus.config import load  # noqa: E402
 from odysseus.journal import Journal  # noqa: E402
 
 OUT = Path("private/bakeoff")
-VENDORS = ("harmonic", "specter", "crunchbase", "crustdata", "evertrace", "dealroom")
+VENDORS = ("harmonic", "tracxn", "specter", "crunchbase", "crustdata", "evertrace", "dealroom")
 # Which tool looks a company up, and which input takes the website or the name. Filled per vendor once its tools have
 # been seen (`tools`); until then `choose` picks by the names the tools and their inputs carry.
 LOOKUPS: dict[str, tuple[str, str]] = {}
@@ -128,7 +128,7 @@ def connected() -> list[mcpapp.McpApp]:
 async def tools() -> int:
     apps = connected()
     if not apps:
-        print("No data vendor is connected. From the chat: /connect harmonic  (or specter, crunchbase, crustdata, evertrace, dealroom).")
+        print("No data vendor is connected. From the chat: /connect harmonic  (or tracxn, specter, crunchbase, crustdata, evertrace, dealroom).")
         return 1
     for app in apps:
         cat = await app._catalogue()
