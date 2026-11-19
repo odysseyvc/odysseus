@@ -1,6 +1,6 @@
 """Compare company-data vendors on companies the firm already knows.
 
-No published benchmark says how well any of these vendors covers Indian companies before they raise. The firm's own
+No published benchmark says how well any of these vendors covers the companies a particular firm cares about, before they raise. The firm's own
 records do: look up each company the firm knows in every connected vendor, and count what comes back.
 
     .venv/Scripts/python scripts/bakeoff.py testset        # write the test set from the firm's Attio (read only)

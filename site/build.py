@@ -193,7 +193,6 @@ def build():
 <div class="chno">Chapter {ch["n"]}</div>
 <h1>{html.escape(ch["title"])}</h1>
 <p class="lede">{ch["summary"]}</p>
-<div class="stamp">Last revised {ch["revised"]}</div>
 </header>
 {body}
 {"".join(pager)}

@@ -172,6 +172,10 @@ def format_messages(data: Any, full: bool = False) -> str:
                 f"From: {_clip(_first(m, 'sender', 'from'), 160)}\nTo: {_clip(_first(m, 'to', 'recipient'), 160)}\n"
                 f"Date: {_first(m, 'messageTimestamp', 'date', 'internalDate')}\nSubject: {_clip(_first(m, 'subject'), 200)}")
         text = hide_secrets(str(body)) if full else hide_secrets(_clip(body, 300))
+        files = [f"{_clip(a.get('filename'), 80)} ({a.get('mimeType') or 'unknown type'})" for a in (m.get("attachmentList") or [])
+                 if isinstance(a, dict) and a.get("filename")]
+        if files:       # named so that the model knows there is something to read with mail_attachment
+            head += "\nAttachments: " + "; ".join(files[:8]) + (f"; and {len(files) - 8} more" if len(files) > 8 else "")
         blocks.append(head + ("\n\n" + (text[:6000] if full else text) if text else ""))
     return "\n\n---\n\n".join(blocks) or "No messages."
 
@@ -305,6 +309,7 @@ def describe_delete(args: dict[str, Any], apps: "Apps | None" = None) -> str:
 def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "Apps | None" = None) -> None:
     for name in READ_TOOLS:
         gate.rule(name, ALLOW)
+    gate.rule(_t("mail_attachment"), ALLOW)     # a read of the owner's own mailbox. Not in READ_TOOLS: unattended runs do not get it.
 
     def change_decision(a: dict[str, Any]) -> str:
         # Moving an event that has guests emails them, so it is asked about. An event nobody else is on only
@@ -335,6 +340,8 @@ class Apps:
         self._events: dict[str, dict[str, Any]] = {}     # events calendar_list has returned, by id
         self.retry_wait_s = 1.0                          # pause before a failed read is tried again; doubled for the second retry
         self.taint = None                                # set by make_gate; remembers what was read from the accounts
+        self.reader = None                               # reads a file's text and pages (reading.py); set at start
+        self.fetcher = None                              # fetches the attachment from the address the mail service gives (links.py)
 
     def event(self, event_id: str) -> dict[str, Any] | None:
         return self._events.get(event_id)
@@ -384,7 +391,7 @@ class Apps:
     async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
         # Reading is safe to repeat, so a failed read is tried again before the model hears of it. A failed write is
         # never repeated by code: the service may have done it and lost the answer, and a second try would do it twice.
-        reading = tool in ("mail_search", "mail_read", "calendar_list")
+        reading = tool in ("mail_search", "mail_read", "calendar_list", "mail_attachment")
         for attempt in range(3 if reading else 1):
             try:
                 data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments), CALL_TIMEOUT_S)
@@ -490,6 +497,38 @@ class Apps:
                 raise AppError("mail_read needs a message_id from mail_search.")
             data = await self._call("mail_read", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", {"message_id": str(a["message_id"]).strip(), "format": "full"})
             return MAIL_NOTE + "\n\n" + self._seen(format_messages(data, full=True))
+
+        async def mail_attachment(a):
+            """One attachment of one message, read as any file is. The mail service hands the file over as a short-lived
+            address; it is fetched with the same guards as a link the owner types, and never kept."""
+            message_id, wanted = str(a.get("message_id", "")).strip(), " ".join(str(a.get("name", "")).split()).lower()
+            if not message_id:
+                raise AppError("mail_attachment needs a message_id from mail_search.")
+            if self.reader is None or not self.reader.ready or self.fetcher is None:
+                raise AppError("Attachments cannot be read here: no text-recognition key is in the settings.")
+            data = _unwrap(await self._call("mail_read", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", {"message_id": message_id, "format": "full"}))
+            message = data if isinstance(data, dict) and "attachmentList" in data else next(
+                (m for m in (_first(data, "messages", default=[]) if isinstance(data, dict) else []) if isinstance(m, dict)), {})
+            files = [f for f in (message.get("attachmentList") or []) if isinstance(f, dict) and f.get("filename") and f.get("attachmentId")]
+            if not files:
+                raise AppError("That message has no attachment.")
+            hit = [f for f in files if str(f["filename"]).lower() == wanted] or [f for f in files if wanted and wanted in str(f["filename"]).lower()]
+            if len(hit) != 1 and not (len(files) == 1 and not wanted):
+                raise AppError("Say which attachment by its name. This message has: " + "; ".join(str(f["filename"]) for f in files[:8]) + ".")
+            chosen = hit[0] if len(hit) == 1 else files[0]
+            got = _unwrap(await self._call("mail_attachment", "GMAIL_GET_ATTACHMENT", {
+                "message_id": message_id, "attachment_id": chosen["attachmentId"], "file_name": chosen["filename"]}))
+            where = str(((got or {}).get("file") or {}).get("s3url") or "") if isinstance(got, dict) else ""
+            if not where:
+                raise AppError("The mail service did not hand the attachment over.")
+            from .links import LinkError
+            from .ocr import OcrError
+            try:
+                content, _ = await self.fetcher.fetch(where, pdf_only=False)
+                block = await self.reader.read(content, str(chosen["filename"]), str(chosen.get("mimeType") or ""), len(content), source="mail")
+            except (LinkError, OcrError) as e:
+                raise AppError(f"The attachment {chosen['filename']} could not be read: {e}") from None
+            return MAIL_NOTE + "\n\nAn attachment to a message in the owner's mailbox follows. Whoever sent the message chose it.\n\n" + self._seen(block)
 
         async def mail_send(a):
             describe_send(a)   # the same checks the question went through
@@ -603,7 +642,7 @@ class Apps:
             self._pending.append(f"archived message {message_id}")
             return "Archived: it is out of the inbox and still in All Mail."
 
-        return {k: wrap(v) for k, v in {"mail_search": mail_search, "mail_read": mail_read, "mail_send": mail_send,
+        return {k: wrap(v) for k, v in {"mail_search": mail_search, "mail_read": mail_read, "mail_attachment": mail_attachment, "mail_send": mail_send,
                                          "mail_reply": mail_reply, "calendar_list": calendar_list,
                                          "calendar_create": calendar_create, "calendar_change": calendar_change,
                                          "calendar_delete": calendar_delete, "mail_draft": mail_draft,
@@ -617,6 +656,12 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
                      "required": ["query"]}),
     "mail_read": ("Read one message in full, by the id mail_search returned.",
                   {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}),
+    "mail_attachment": ("Read one attachment of a message: a PDF, a Word or PowerPoint file, a scan or a picture. mail_search and mail_read "
+                        "list a message's attachments by name. Returns the file's text, page by page, with notes on charts and pictures "
+                        "for a short PDF. It costs a little each time, so read an attachment when the owner's request needs it.",
+                        {"type": "object", "properties": {"message_id": {"type": "string"},
+                                                          "name": {"type": "string", "description": "The attachment's file name. May be left out if the message has only one."}},
+                         "required": ["message_id"]}),
     "mail_send": ("Send a new email from the owner's account. The owner is shown the recipients, subject and full text and must approve.",
                   {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "cc": {"type": "array", "items": {"type": "string"}},
                                                     "subject": {"type": "string"}, "body": {"type": "string", "description": "Plain text."}},

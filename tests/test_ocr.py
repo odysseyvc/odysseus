@@ -122,7 +122,7 @@ async def test_a_short_pdfs_pages_are_looked_at_apart_and_only_notes_reach_the_c
     async def reader(data, text):
         seen.append((data, text))
         return "[page 2] A bar chart, no scale; the last bar is lower than the one before.", 0.01
-    x.conv._pages = reader
+    x.conv.reader._pages = reader
     await send(x, data=b"%PDF-1.7 a deck", name="deck.pdf", caption="Thoughts?")
     assert seen == [(b"%PDF-1.7 a deck", "[page 1]\nCorvid Freight\n\n[page 2]\nRevenue by month")]
     prompt = x.clients[0].prompts[0]
@@ -139,14 +139,14 @@ async def test_pages_are_not_looked_at_for_a_long_file_or_without_a_reader_and_a
         calls.append(1)
         raise RuntimeError("no")
     long = rig(tmp_path / "long", pages=MAX_SEEN_PAGES + 1)
-    long.conv._pages = reader
+    long.conv.reader._pages = reader
     await send(long, name="report.pdf")
     assert calls == [] and SEEN_NOTE not in long.clients[0].prompts[0]
     plain = rig(tmp_path / "plain")
     await send(plain)
     assert SEEN_NOTE not in plain.clients[0].prompts[0] and [r for r in plain.journal.read() if r["kind"] == "file"][0]["seen"] is False
     broken = rig(tmp_path / "broken")
-    broken.conv._pages = reader
+    broken.conv.reader._pages = reader
     await send(broken, caption="When is this due?")
     assert calls == [1] and "Amount due" in broken.clients[0].prompts[0] and SEEN_NOTE not in broken.clients[0].prompts[0]
     assert broken.chat.sent[-1].startswith("It is an electricity bill"), "the file is still read as text"

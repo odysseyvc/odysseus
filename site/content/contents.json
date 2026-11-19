@@ -1,7 +1,7 @@
 {
   "site": {
     "repo": "https://github.com/odysseyvc/odysseus",
-    "tests": 391
+    "tests": 396
   },
   "parts": [
     {
@@ -12,21 +12,18 @@
           "n": 1,
           "slug": "what-a-personal-agent-is",
           "title": "What a personal agent is",
-          "revised": "19 November 2026",
           "summary": "What separates a personal agent from a chatbot, the vocabulary the book uses, why a result counts only when something other than the agent checks it, what commercial agents share and how they have failed, and what a first system leaves out."
         },
         {
           "n": 2,
           "slug": "the-agent-loop",
           "title": "The agent loop: models, tools and turns",
-          "revised": "19 November 2026",
           "summary": "How single model calls and tool calls combine into a loop that answers one message, why context is finite, how code rather than the model decides what runs, and what the smallest working agent must contain."
         },
         {
           "n": 3,
           "slug": "build-or-buy",
           "title": "Deciding what to build and what to buy",
-          "revised": "19 November 2026",
           "summary": "How to split an agent into parts, buy each unless building is verifiably better, read a benchmark sceptically, settle thin evidence by measuring vendors on your own data, and order the build as thin slices."
         }
       ]
@@ -39,28 +36,24 @@
           "n": 4,
           "slug": "the-conversation",
           "title": "The conversation: a thread that answers, stops and stays in budget",
-          "revised": "19 November 2026",
           "summary": "How the control layer around an agent loop decides who may speak, queues messages behind a running task, stops in two layers, enforces limits per task and per day, and derives cost, status and interruptions from one append-only journal."
         },
         {
           "n": 5,
           "slug": "memory",
           "title": "Memory",
-          "revised": "19 November 2026",
           "summary": "Why a model forgets, how to keep lasting facts and dated notes in plain files the owner controls, when to show them to the model, how to change a fact without losing its history, and why saves after reading strangers' writing are asked about."
         },
         {
           "n": 6,
           "slug": "acting-unasked",
           "title": "Acting unasked: reminders, routines, watches and briefs",
-          "revised": "19 November 2026",
           "summary": "How an agent speaks first: four mechanisms sorted by what triggers them and who decides, why unattended runs get fewer tools, why silence must be recorded, and why code rather than the model does everything it can."
         },
         {
           "n": 7,
           "slug": "staying-up",
           "title": "Staying up: restarts, sessions and hosting",
-          "revised": "19 November 2026",
           "summary": "What an agent needs to be there tomorrow: keeping a conversation across restarts, announcing interrupted work instead of resuming it, refusing stale messages, restarting through a supervisor, and hosting with no inbound port, a pinned clock and data kept apart from code."
         }
       ]
@@ -73,21 +66,18 @@
           "n": 8,
           "slug": "the-gate",
           "title": "The gate: who decides what runs",
-          "revised": "19 November 2026",
           "summary": "Why a model's good behaviour cannot be the safety boundary, and how code decides instead: allow, ask or refuse, questions written by the program, one-use approvals, asking less without losing control, and how to test it all."
         },
         {
           "n": 9,
           "slug": "untrusted-content",
           "title": "Untrusted content: prompt injection and taint",
-          "revised": "19 November 2026",
           "summary": "Why a model cannot be trusted to ignore instructions hidden in what it reads, and the code-level defences that limit the damage: labelling material, restricting runs that have read it, plain-text taint tracking, hiding sign-in codes, and readers with no tools."
         },
         {
           "n": 10,
           "slug": "secrets-and-sign-ins",
           "title": "Secrets, sign-ins and the addresses a program opens",
-          "revised": "19 November 2026",
           "summary": "Where an agent's credentials should live, how to sign in as the owner with OAuth and the narrowest permissions, how to state an exception to a safety rule honestly, and how to open addresses other people typed without server-side request forgery."
         }
       ]
@@ -100,42 +90,36 @@
           "n": 11,
           "slug": "mail-and-calendar",
           "title": "Mail and calendar",
-          "revised": "19 November 2026",
           "summary": "How to give an agent narrow, hand-written tools for mail and calendar: what the model is shown of a message, how an approval question is built from real fields, re-reading before acting, and checking whether a timed-out write happened before retrying."
         },
         {
           "n": 12,
           "slug": "any-app",
           "title": "Any app: connectors and the two-tool pattern",
-          "revised": "19 November 2026",
           "summary": "How to give a model thousands of actions without showing it thousands of tools: one tool to find, one to run, sorting unknown actions into read or change by name and label, connecting apps from the chat, and when a service's own server is better."
         },
         {
           "n": 13,
           "slug": "services-with-their-own-server",
           "title": "Services with their own server, and connecting one from the chat",
-          "revised": "19 November 2026",
           "summary": "How an agent reaches services that run their own MCP server: choosing a route, deciding which vendor tools run unasked, making a connection read-only, describing a service to the model, and letting only the owner connect a new server by name."
         },
         {
           "n": 14,
           "slug": "the-browser",
           "title": "The browser",
-          "revised": "19 November 2026",
           "summary": "When an agent must use a browser, why the gate can only decide whether a run starts, how signed-in runs and task-writing work, and how to turn a recurring browser errand into a fixed procedure whose results code can check."
         },
         {
           "n": 15,
           "slug": "files-pictures-and-voice",
           "title": "Files, pictures, pages and voice",
-          "revised": "19 November 2026",
           "summary": "How photos, documents, recordings and links reach a model that works in text: choosing between showing and recognising, numbering pages, recovering charts with a tool-less reader paid for once, showing back what was heard, and what to record."
         },
         {
           "n": 16,
           "slug": "channels",
           "title": "Channels: Telegram, WhatsApp and what a channel must provide",
-          "revised": "19 November 2026",
           "summary": "What an agent needs from a chat platform, how to keep each platform behind a small interface, why a webhook needs a guarded door, and how to design around a platform's rules: messaging windows, link previews and late deliveries."
         }
       ]
@@ -148,28 +132,24 @@
           "n": 17,
           "slug": "testing-and-evaluation",
           "title": "Testing and evaluation",
-          "revised": "19 November 2026",
           "summary": "How tests (the program with a stand-in model) and evaluations (the real model on real errands in a resettable world) differ, and how to build checks that look at the world, invariants, a zero baseline, honest pass rates and live checks."
         },
         {
           "n": 18,
           "slug": "a-changing-world",
           "title": "A world that does not hold still",
-          "revised": "19 November 2026",
           "summary": "Why an agent judged in a frozen, hand-written world looks better than it is, and how to build an evaluation world with time, events, people and faults, check properties on every run, spot the evaluation's own failures, and learn from traces."
         },
         {
           "n": 19,
           "slug": "a-second-reading",
           "title": "A second reading: what tests do not find",
-          "revised": "19 November 2026",
           "summary": "Why a passing suite misses what nobody thought to test, and how an independent reading, use in a lived-in state and real end-to-end runs find holes in the gate, silent failures, misleading numbers and wrong assumptions about real services."
         },
         {
           "n": 20,
           "slug": "cost",
           "title": "Cost: budgets, the ledger and where the money goes",
-          "revised": "19 November 2026",
           "summary": "How to reason about what an agent costs: tokens and context length, caching, metered services, a ledger derived from the journal by one function, estimates where vendors report no price, budgets that stop work, and design changes that pay for input once."
         }
       ]
@@ -182,28 +162,24 @@
           "n": 21,
           "slug": "a-firms-database",
           "title": "A firm's database: layout, intake and plans",
-          "revised": "19 November 2026",
           "summary": "How to give an empty customer database a shape, tell the model its layout, and file a whole source as one plan the program checks and the owner approves once, with lookups, before-and-after changes and a second look at the moment of acting."
         },
         {
           "n": 22,
           "slug": "decks-and-data-rooms",
           "title": "Decks, links and data rooms",
-          "revised": "19 November 2026",
           "summary": "How to compose reading, searching, filing and replying into one errand on material written to persuade: a pitch deck read with its pictures, filed as claims, answered with a take of fixed shape, whether it arrives as a file, a link or a viewing site."
         },
         {
           "n": 23,
           "slug": "sourcing",
           "title": "Sourcing: digests, signals and choosing a data vendor",
-          "revised": "19 November 2026",
           "summary": "How to build an unattended daily digest that reads metered services safely and does not repeat itself, what public search can and cannot find, and how to choose a paid data vendor by measuring it on companies the firm already knows."
         },
         {
           "n": 24,
           "slug": "what-is-built",
           "title": "What is built, what is not, and what comes next",
-          "revised": "19 November 2026",
           "summary": "How to keep an honest status map of an agent, grading each capability by the kind of run behind it, and the map itself: what has run live, what never has, the known faults, and the open problems in order."
         }
       ]

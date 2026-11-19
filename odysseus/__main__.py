@@ -155,6 +155,8 @@ async def main() -> int:
                                 pages=pages, links=Fetcher() if ocr is not None else None,
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
+    if apps is not None:
+        apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
     bot = Bot(settings.telegram_token)

@@ -16,6 +16,7 @@ from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
 from . import deckview as deckview_mod
+from .reading import Reader
 from . import links as links_mod
 from .ocr import MAX_BYTES, MAX_CHARS, NO_MESSAGE, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
@@ -82,6 +83,7 @@ class Conversation:
         self._apps = apps
         self._browser = browser
         self._ocr = ocr
+        self.reader = Reader(ocr, pages, journal, ledger, settings.daily_usd)     # one way of reading a file, wherever it came from
         self._voice = voice
         self._anyapp = anyapp
         self._attio = attio
@@ -323,34 +325,14 @@ class Conversation:
             await self.handle(user_id, f"{PICTURE_NOTE.format(name=name)}\n\n{said}", chat, images=[(resolve_type(mime, name), data)],
                               material="a picture you sent")
             return
-        if self._ocr is None:
-            await chat.send("I can't read files yet: no text-recognition key is in my settings.")
-            return
         try:
-            kind = resolve_type(mime, name)
-            if data is None or size > MAX_BYTES or len(data) > MAX_BYTES:
-                raise OcrError("That file is too big for me to fetch. The limit is 20 MB.")
-            result = await asyncio.wait_for(asyncio.to_thread(self._ocr.read, data, kind), FILE_TIMEOUT_S)
+            block = await self.reader.read(data, name, mime, size)
         except OcrError as e:
             self._journal.write("file", name=name, ok=False, error=str(e)[:200])
             await chat.send(str(e))
             return
-        except (Exception, asyncio.TimeoutError) as e:
-            self._journal.write("file", name=name, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
-            await chat.send("I could not read that file. The details are in the log.")
-            return
-        # The pages of a short PDF are looked at in a run of their own, and what they show comes back as text (pages.py).
-        # The file itself is never put into the conversation, where it would be carried forward with every later message.
-        sights = None
-        if self._pages is not None and shown_whole(kind, len(data), result.pages) and self._ledger.spent_today() < self._s.daily_usd:
-            try:
-                sights, _ = await self._pages(data, result.text[:MAX_CHARS])
-            except Exception as e:
-                self._journal.write("error", where="conversation.pages", error=type(e).__name__)
-        self._journal.write("file", name=name, ok=True, type=kind, bytes=len(data), pages=result.pages, chars=len(result.text),
-                            seen=sights is not None, sights=len(sights or ""))
         said = (caption or "").strip() or NO_MESSAGE
-        await self.handle(user_id, f"{file_block(name, result, sights)}\n\n{said}", chat, material="a file you sent")
+        await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent")
 
     async def handle_voice(self, user_id: int, data: bytes | None, name: str, size: int, seconds: int, chat: Chat) -> None:
         """The owner sent a voice note. Turn it into text, show the owner what was heard, then treat it as a message."""

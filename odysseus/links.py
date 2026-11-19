@@ -134,14 +134,17 @@ class Fetcher:
         if not self._allow(str(literal)):
             raise LinkError("the link leads to a private address, which I do not open")
 
-    async def fetch(self, url: str) -> tuple[bytes, str]:
-        """The PDF at this address and a name for it. Raises LinkError with the reason otherwise."""
+    async def fetch(self, url: str, pdf_only: bool = True) -> tuple[bytes, str]:
+        """The PDF at this address and a name for it. Raises LinkError with the reason otherwise.
+
+        With `pdf_only` off the same guards apply and any kind of file is returned: used for an attachment the mail
+        service hands over as a short-lived address, whose kind is already known from the message."""
         try:
-            return await asyncio.wait_for(self._fetch(url), self._timeout)
+            return await asyncio.wait_for(self._fetch(url, pdf_only), self._timeout)
         except asyncio.TimeoutError:
             raise LinkError("the site did not answer in time") from None
 
-    async def _fetch(self, url: str) -> tuple[bytes, str]:
+    async def _fetch(self, url: str, pdf_only: bool = True) -> tuple[bytes, str]:
         resolver = PublicOnly(self._allow)
         connector = aiohttp.TCPConnector(resolver=resolver, use_dns_cache=False)
         try:
@@ -161,9 +164,9 @@ class Fetcher:
                             data += chunk
                             if len(data) > self._max:
                                 raise LinkError(f"the file is larger than {self._max // (1024 * 1024)} MB")
-                            if len(data) >= 1024 and b"%PDF" not in data[:1024]:
+                            if pdf_only and len(data) >= 1024 and b"%PDF" not in data[:1024]:
                                 break
-                        if b"%PDF" not in bytes(data[:1024]):
+                        if pdf_only and b"%PDF" not in bytes(data[:1024]):
                             raise LinkError("what is at that link is not a PDF but a web page; it may need a sign-in, or not be shared with anyone who has the link")
                         return bytes(data), _name(url, r.headers.get("Content-Disposition", ""))
                 raise LinkError("the link redirects too many times")
