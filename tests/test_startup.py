@@ -93,3 +93,23 @@ def test_the_supervisor_starts_a_fresh_process_when_asked_to_restart_and_stops_o
     monkeypatch.setattr(subprocess, "Popen", Child)
     assert program.supervise() == 3 and len(started) == 3
     assert all(mark == "1" and args[-2:] == ["-m", "odysseus"] for args, mark in started), "each run is a new process, marked as the child"
+
+
+def test_the_vendor_comparison_picks_a_lookup_and_judges_an_answer_by_what_the_firm_knows():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("bakeoff", Path(__file__).resolve().parent.parent / "scripts" / "bakeoff.py")
+    bake = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bake)
+    tools = {"list_saved_searches": {"inputs": {"properties": {"limit": {}}}},
+             "search_companies": {"inputs": {"properties": {"query": {}}}},
+             "enrich_company": {"inputs": {"properties": {"website_url": {}, "name": {}}}},
+             "search_people": {"inputs": {"properties": {"query": {}}}}}
+    assert bake.choose(tools) == ("enrich_company", "website_url"), "by website before by name: a name matches the wrong company"
+    assert bake.choose({"search_people": tools["search_people"]}) is None
+    known = {"name": "Corvid Freight", "domain": "corvidfreight.example", "people": "Tara Menon; Imran Sheikh"}
+    good = bake.judge('{"name": "Corvid Freight Pvt Ltd", "website": "https://corvidfreight.example", "founders": ["Tara Menon"], "last_round": "Seed, raised $1.2M"}', known)
+    assert good == {"found": True, "people": True, "funding": True, "chars": good["chars"]} and good["chars"] > 50
+    other = bake.judge('{"name": "Corvid Systems", "website": "corvid.example", "raised": "$40M"}', known)
+    assert other == {"found": False, "people": False, "funding": False, "chars": 0}, "a different company of a similar name is not a find"
+    assert bake.judge("Corvid Freight", {"name": "Corvid Freight", "domain": "", "people": ""})["people"] == ""

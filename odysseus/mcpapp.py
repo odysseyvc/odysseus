@@ -106,6 +106,26 @@ APPS["docsend"] = {
 }
 
 
+# Vendors of data about companies and people, for a venture firm. Each runs a server of its own and needs the firm's
+# own account with it; several have a free tier of about a hundred reads a day. Nobody here has yet read their tools,
+# so they are sorted by the vendor's own labels like any other server. They are listed so that the owner can connect
+# one by name; which one the firm should pay for is decided by trying them on companies it knows (scripts/bakeoff.py).
+_DATA_PROMPT = ("Use it when the owner asks who a company or a founder is, what a company has raised and from whom, who has just left a job "
+                "to start something, or for companies like one they name. Look a company up by its website when you have it, by name "
+                "otherwise. Reads are metered, often about a hundred a day on a free plan, so make the one lookup the question needs and "
+                "do not page through lists. What it returns is that vendor's record: say it came from them, give its date if it has one, "
+                "and say so when it disagrees with the firm's own database or with a deck. If it has no record of a company, say that "
+                "plainly: for a company that has not raised, that is common and means little.")
+for _slug, _title, _url, _what in (
+        ("harmonic", "Harmonic", "https://mcp.api.harmonic.ai", "Harmonic's database of companies and people, strongest on startups before and just after they raise"),
+        ("specter", "Specter", "https://mcp.tryspecter.com/mcp", "Specter's database of companies, people and signals such as job changes and investor interest"),
+        ("crunchbase", "Crunchbase", "https://mcp.crunchbase.com", "Crunchbase's database of companies, funding rounds and investors"),
+        ("crustdata", "Crustdata", "https://mcp.crustdata.com/mcp", "Crustdata's company and people data, including headcount and job changes"),
+        ("evertrace", "Evertrace", "https://mcp.evertrace.ai/mcp", "Evertrace's signals on people who have recently left a job or started a company"),
+        ("dealroom", "Dealroom", "https://mcp.dealroom.co/mcp", "Dealroom's database of startups, rounds and investors")):
+    APPS[_slug] = {"title": _title, "url": _url, "scope": None, "hide": (), "what": _what, "prompt": _DATA_PROMPT, "unattended_calls": 6}
+
+
 CUSTOM_FILE = "services.json"
 
 

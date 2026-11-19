@@ -233,3 +233,16 @@ async def test_a_website_with_no_registry_entry_is_tried_at_the_usual_addresses(
 def test_a_registry_name_gives_the_domain_it_was_published_under():
     assert _published_by("ai.exa/exa") == "exa.ai" and _published_by("app.linear/linear") == "linear.app"
     assert _published_by("ai.smithery/exa-labs-exa-code-mcp") == "smithery.ai", "someone else's server with the word in its name is not the company's"
+
+
+async def test_the_data_vendors_are_known_by_name_and_get_no_special_trust(tmp_path):
+    server = FakeServer([tool("search_companies", True), tool("save_list", False)])
+    c, send, sent, restarts = make(tmp_path, server)
+    await c.connect("", send)
+    for name in ("Harmonic (harmonic)", "Specter (specter)", "Crunchbase (crunchbase)", "Crustdata (crustdata)", "Evertrace (evertrace)", "Dealroom (dealroom)"):
+        assert name in sent[0]
+    await c.connect("harmonic", send)
+    await c._task
+    assert server.opened[0][:2] == ("https://mcp.api.harmonic.ai", None)
+    assert "Harmonic is connected: 2 tools. 1 only read" in sent[-1], "a tool that saves still asks, whoever the vendor is"
+    assert not mcpapp.APPS["harmonic"].get("read_only_connection") and "metered" in mcpapp.APPS["harmonic"]["prompt"]
