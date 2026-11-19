@@ -99,3 +99,18 @@ async def test_a_searchs_results_are_cut_to_a_size_worth_carrying(tmp_path):
     out = await make_search_handler(Spec(), Journal(tmp_path / "j.jsonl"))({"query": "q", "objective": "o"})
     text = out["content"][0]["text"]
     assert text.count("x") == MAX_RESULT_CHARS and f"[Cut: {MAX_RESULT_CHARS + 9000} characters came back." in text
+
+
+async def test_after_a_restart_the_pause_is_measured_from_the_last_task_the_journal_holds(tmp_path):
+    import json
+    import time
+
+    def started_after(folder, hours_ago):       # the program starting with a journal whose last task ended that long ago
+        folder.mkdir()
+        (folder / "j.jsonl").write_text(json.dumps({"ts": time.time() - hours_ago * 3600, "kind": "task_end", "status": "done", "cost_usd": 0.01}) + chr(10),
+                                        encoding="utf-8")
+        x = rig(folder)
+        x.runner.session_id = "saved-before-the-restart"
+        return x
+    assert started_after(tmp_path / "long", 3).conv._fresh_reason() == "pause"
+    assert started_after(tmp_path / "short", 0.1).conv._fresh_reason() == "", "a restart soon after the last task carries on with the same conversation"

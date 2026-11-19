@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Protocol
 
 from .agent import AgentRunner, Outcome
@@ -86,6 +86,11 @@ class Conversation:
         # again. So after a long pause a new one is begun, with the last few exchanges written out by code (below).
         self._recent: deque[tuple[str, str]] = deque(maxlen=RECAP_EXCHANGES)
         self._last_end: datetime | None = None
+        # After a restart the saved conversation is picked up again, so the pause must be measured from before the
+        # restart too: the time of the last task the journal holds. Without this the rule never fires after a restart.
+        last = next((r.get("ts") for r in reversed(journal.read()) if r.get("kind") == "task_end" and "routine" not in r and "brief" not in r), None)
+        if last:
+            self._last_end = self._now() - timedelta(seconds=max(0.0, time.time() - float(last)))
         self._carry = ""
         self._gate = gate
         self._apps = apps
