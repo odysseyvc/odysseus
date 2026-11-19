@@ -108,7 +108,7 @@ class OwnerChat:
         asyncio.get_running_loop().create_task(tap())
 
 
-OWN_FILES = ("Save this to what I remember about you?", "Write this in my dated notes?", "Set this reminder?")
+OWN_FILES = ("Save this to what I remember about you?", "Write this in my dated notes?")
 
 
 async def claims_done(settings, say: str, reply: str, action: str) -> bool:

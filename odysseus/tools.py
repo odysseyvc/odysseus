@@ -68,19 +68,6 @@ def describe_memory(args: dict[str, Any], taint: Taint, what: str = "Save this t
             "which other people wrote. What I remember is shown to me in every later conversation.")
 
 
-def describe_reminder(args: dict[str, Any], taint: Taint, now=None) -> str:
-    from datetime import datetime
-    when = parse_when(args.get("when", ""), (now or datetime.now)())
-    repeat = (args.get("repeat") or "once").strip().lower()
-    if repeat not in REPEATS:
-        raise ScheduleError("unknown repeat")
-    text = " ".join(str(args.get("text", "")).split())
-    if not text:
-        raise ScheduleError("There is nothing to schedule.")
-    return (f"Set this reminder?\n\n{when:%a %d %b %Y at %H:%M}" + ("" if repeat == "once" else f", repeating {repeat}")
-            + f"\n{text}\n\nI am asking because during this task I read {_list(_after_reading(taint, text))}, which other people wrote.")
-
-
 def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False) -> str:
     """The question shown to the owner. Built from the tool's real inputs; the model does not write it."""
     from datetime import datetime
@@ -149,14 +136,13 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
 
     def schedule_decision(a: dict[str, Any]) -> str:
         # A routine commits the owner to repeated unattended runs that cost money: always asked. A reminder is a fixed
-        # message to the owner: allowed, unless the task has read something other people wrote, for the same reason as memory.
-        routine = str(a.get("kind", "")).strip().lower() == "routine"
-        return ASK if routine or _after_reading(taint, str(a.get("text", ""))) else ALLOW
+        # message to the owner and to nobody else: allowed, and reported by code in the same reply. For one day it was
+        # asked about once the task had read anything other people wrote, as memory still is. The owner withdrew that:
+        # most reminders follow a look at the calendar, and unlike memory a reminder is not shown to the model again.
+        return ASK if str(a.get("kind", "")).strip().lower() == "routine" else ALLOW
 
     def schedule_question(a: dict[str, Any]) -> str:
-        if str(a.get("kind", "")).strip().lower() == "routine":
-            return describe_routine(a, now, with_apps)
-        return describe_reminder(a, taint, now)
+        return describe_routine(a, now, with_apps)
     gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
