@@ -21,7 +21,7 @@
 <dt>Memory</dt><dd>Anything kept outside the context and put back into it later by the program.</dd>
 </dl></div>
 <p>Two events end what the model knows about its owner. The first is a new conversation: after a restart that cannot pick up the old conversation, or after the owner asks for a fresh start, the context begins empty. ({{ch:staying-up}} explains how a conversation can survive a restart, and why that alone is not enough.) The second is compaction. In a conversation that runs for days, the agent library eventually condenses the beginning, and a preference stated in passing on Monday is exactly the kind of detail a summary drops. {{ch:the-agent-loop}} covers why a conversation has to be condensed at all; here the point is only that it will be.</p>
-<p>Memory is therefore two decisions: <em>what to write down</em>, and <em>when to put it back in front of the model</em>. Neither needs anything exotic.</p>
+<p>Memory is therefore two decisions: <em>what to write down</em>, and <em>when to put it back in front of the model</em>.</p>
 
 <h2 id="kinds">Three kinds of thing worth remembering</h2>
 <p>Not everything the owner says deserves the same treatment. It helps to separate three kinds.</p>
@@ -116,7 +116,7 @@ self._write_profile(entries)</code></pre>
 <p>Three details matter. An unknown identifier changes nothing, rather than silently adding the new fact as a second entry. The old text is written to the change history by <code>_record</code> <em>before</em> the profile file is rewritten. And each change is also added to a list of pending changes, which the conversation reads after the task (below).</p>
 <p>The order is the reason the history exists. The profile file is rewritten in full on every change, which is only safe because every change has first been appended to a file that is never rewritten. Another builder reported the failure this guards against: a tool that was assumed to add to a file in fact overwrote it, losing days of notes without any error (<a href="https://techsambad.substack.com/p/building-an-ai-assistant-3-mistakes">write-up</a>). <span class="g s">Secondary</span> Notes are protected differently: <code>note</code> opens the day's file in append mode, so there is no code path that rewrites one.</p>
 <h3>When the model is shown its memory</h3>
-<p>The simplest design attaches the profile to every message. Odysseus does not, and the reason is arithmetic. The whole conversation is sent to the model on every turn. A block attached to every message would be sent again once for each copy on every later turn, so its cost grows with the square of the conversation's length. Shown once, it stays in the conversation and is paid for as part of it. ({{ch:cost}} covers what that kind of repetition does to a bill.)</p>
+<p>The simplest design attaches the profile to every message. Odysseus does not. The whole conversation is sent to the model on every turn. A block attached to every message would be sent again once for each copy on every later turn, so its cost grows with the square of the conversation's length. Shown once, it stays in the conversation and is paid for as part of it. ({{ch:cost}} covers what that kind of repetition does to a bill.)</p>
 <p>So the profile is shown only when the model might not have it. The conversation builds the block in <code>odysseus/conversation.py</code>:</p>
 <pre><code>def _preamble(self, blank: bool) -> str:
     """The memory block, shown when the model has no context or the profile has changed since it last saw it."""
@@ -145,7 +145,7 @@ self._write_profile(entries)</code></pre>
 changes = self._memory.pop_changes() if self._memory is not None else []
 if changes:
     body += "\n\nMemory: " + "; ".join(changes) + "."</code></pre>
-<p>The model does not write this line and cannot suppress it. That is the point. A model that has been misled into saving something can as easily be misled into not mentioning it; a report built from the store's own record of what changed does not depend on the model's cooperation. Before the task starts, the pending list is emptied, so a change from elsewhere is never attributed to this task.</p>
+<p>The model does not write this line and cannot suppress it. A model that has been misled into saving something can as easily be misled into not mentioning it; a report built from the store's own record of what changed does not depend on the model's cooperation. Before the task starts, the pending list is emptied, so a change from elsewhere is never attributed to this task.</p>
 
 <h2 id="example">Worked example: a fact that changes</h2>
 <div class="box example"><div class="label">Worked example: from the live run</div>
@@ -220,7 +220,7 @@ gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text"
 <li><strong>A summary.</strong> One paragraph on what was being done, what was decided and what is still open. It goes at the head of the new conversation under a heading that says a small model wrote it, that it may be wrong, and that it is a record and not an instruction.</li>
 <li><strong>Proposals.</strong> At most three lasting facts the owner stated about themselves that are not already saved. Each is put to the owner with two buttons. Nothing is saved without the tap.</li>
 </ul>
-<p>The tap is the point. A conversation holds what other people wrote, quoted in the assistant's own replies, so a fact saved from it unasked would let a stranger's email write to memory by way of a summary. The model is told to take facts only from the owner's own lines; code does not rely on its having done so. Code also reads the reply: anything outside the two headings is dropped, as is a proposal that is already saved, too long, or looks like a code or a sign-in link.</p>
+<p>The tap is needed because a conversation holds what other people wrote, quoted in the assistant's own replies, so a fact saved from it unasked would let a stranger's email write to memory by way of a summary. The model is told to take facts only from the owner's own lines; code does not rely on its having done so. Code also reads the reply: anything outside the two headings is dropped, as is a proposal that is already saved, too long, or looks like a code or a sign-in link.</p>
 <pre><code>    for line in m.group(2).splitlines():
         fact = " ".join(line.strip()[2:].split()) if line.strip().startswith("- ") else ""
         key = fact.lower().rstrip(".")
@@ -245,7 +245,7 @@ gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text"
 <p>When the rule about asking after reading was introduced, the model's instructions explained it in one sentence: saving and setting a reminder are not asked about unless the model has read something other people wrote in the same task. In an evaluation scenario where a colleague moved a meeting and the owner then asked for a reminder before it, the right behaviour was to read the calendar again. The model reasoned that reading would cause a question, set the reminder from the old time it already knew, and the scenario fell from passing to failing in six runs of seven. <span class="g v">Verified</span></p>
 <p>The sentence was rewritten to say that the question is the program's decision and a small cost, and that a check must never be skipped to avoid it. Run again, the scenario passed five times in seven, where it had stood before; the two failures were the reworded form of the request, which had failed before too. <span class="g v">Verified</span>, seven runs.</p></div>
 <p>The instructions in <code>odysseus/agent.py</code> say, of that question: "Never skip a check to avoid it." The lesson generalises: enforce a rule in code, and tell the model as little about its trigger as it needs. A model that knows what sets off a question will, reasonably, try not to set it off.</p>
-<h3>The secrets pattern is a pattern</h3>
+<h3>The secrets pattern is limited</h3>
 <p>It catches a card number written with spaces and a key with a recognisable prefix. It will not catch a password, a short account number, or a secret spelled out in words.</p>
 
 <h2 id="testing">How to test memory</h2>

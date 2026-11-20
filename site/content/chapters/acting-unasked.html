@@ -9,7 +9,7 @@
 </ul></div>
 
 <h2 id="problem">Speaking first</h2>
-<p>In a conversation, everything starts with a message from the owner. The owner asks; the agent answers. That is the behaviour of a good search box. What makes an assistant feel like one is that it sometimes speaks first.</p>
+<p>In a conversation, everything starts with a message from the owner. The owner asks; the agent answers. That is also how a search box behaves. An assistant differs in that it sometimes speaks first.</p>
 <p>Picture a weekday. At 07:30 the owner's phone shows "Reminder: take the blue folder". At 08:00 a message lists two companies that launched overnight in an area the owner follows. At 11:12, minutes after an email arrives, a message says a contact has confirmed Friday's lunch. At 14:35 a note covers the 15:00 meeting: who the founder is, what was discussed last time, three questions worth asking. The owner asked for none of these that day.</p>
 <p>Four mechanisms sent those messages. They differ in what makes each start and who decides what to do then, and that fixes what each costs, what can go wrong, and how much a hostile page or email could make it do.</p>
 <div class="box definition"><div class="label">Definitions</div>
@@ -78,7 +78,7 @@
 </svg>
 <figcaption>The four mechanisms, left to right. Notice how little of each is the model: code starts the work, decides whether a model is needed at all, and handles the result. Only the reminder has no model step.</figcaption>
 </figure>
-<p>This is the chapter's main idea. The model is the expensive, slow and persuadable part of an agent. Wherever code can decide (is it time? is anyone watching for this? is this meeting with an outsider?), code decides, and the model is called only for judgement or writing.</p>
+<p>The model is the expensive, slow and persuadable part of an agent. Wherever code can decide (is it time? is anyone watching for this? is this meeting with an outsider?), code decides, and the model is called only for judgement or writing.</p>
 
 <h2 id="reminders">Reminders and routines: the list and the tick</h2>
 <p>Reminders and routines share one small SQLite table, one row per job: an id, the kind, the text (the reminder's words or the routine's instructions), the next run time, and how it repeats (once, hourly, daily, weekdays or weekly). The model creates rows with a tool called <code>schedule</code>.</p>
@@ -117,7 +117,7 @@ def next_occurrence(after: datetime, repeat: str, now: datetime) -&gt; datetime 
 <tr><th>Time limit</th><td>Until stopped or out of budget</td><td>300 seconds, then recorded as failed</td></tr>
 </tbody>
 </table></div>
-<p>The first row is the one that matters. A routine reads web pages, and a model can be steered by instructions planted in what it reads ({{ch:untrusted-content}}). If a misled routine could save to memory, it could poison every later conversation ({{ch:memory}}). If it could set schedules, it could create routines that create routines. With read-only tools, the worst a misled routine can do is send the owner one strange message.</p>
+<p>A routine reads web pages, and a model can be steered by instructions planted in what it reads ({{ch:untrusted-content}}). If a misled routine could save to memory, it could poison every later conversation ({{ch:memory}}). If it could set schedules, it could create routines that create routines. With read-only tools, the worst a misled routine can do is send the owner one strange message.</p>
 <p>The restriction is enforced twice: the routine's tool server is built without the writing tools, and its permission policy refuses any tool not on this list.</p>
 <pre><code># odysseus/tools.py
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})
@@ -202,7 +202,7 @@ await self._send(f"{text}\n\n(Scheduled routine [{job.id}]){suffix}")
 self._on_delivered(text)
 self._remember_sent(job.id, text)
 return "delivered", "", cost</code></pre>
-<p>Every path out names an outcome. The budget check comes first, so nothing is spent once the day's limit is reached ({{ch:cost}}). Empty text is failure, not quiet: quiet must be a decision, not an absence. The marker match tolerates the full stops, quotes and lower case models add. The caller records the outcome and announces a failure; the loop survives any exception, and a test checks that a crashing routine is announced while a reminder due at the same moment still arrives.</p>
+<p>Every path out names an outcome. The budget check comes first, so nothing is spent once the day's limit is reached ({{ch:cost}}). Empty text is recorded as failure, because quiet has to be a decision. The marker match tolerates the full stops, quotes and lower case models add. The caller records the outcome and announces a failure; the loop survives any exception, and a test checks that a crashing routine is announced while a reminder due at the same moment still arrives.</p>
 
 <h3>Not repeating yesterday's digest</h3>
 <p>A routine that remembers nothing sends the same finds every day. So the scheduler keeps the last three messages each routine actually delivered and shows them to the next run:</p>
@@ -312,7 +312,7 @@ def search_for(guest: dict[str, str]) -&gt; str | None:
 <pre><code># odysseus/brief.py (Briefer._brief)
 if self._taint is not None:     # from here on, a search by the model that carries any of this is refused
     self._taint.add(f"{event}\n{people}", "your calendar")</code></pre>
-<p>From then on, a search by the model carrying the invitation's text or the guest's address is refused. A search company learns a name and a company, which the owner asked to have looked up, and nothing an invitation says can make it learn more. This is the chapter's pattern in miniature: the one outward action is made deterministic, and the model only reads and writes. The database and meeting notes are own stores, so rule 4 lets the model look the guest up there.</p>
+<p>From then on, a search by the model carrying the invitation's text or the guest's address is refused. A search company learns a name and a company, which the owner asked to have looked up, and nothing an invitation says can make it learn more. The one outward action is made deterministic, and the model only reads and writes. The database and meeting notes are own stores, so rule 4 lets the model look the guest up there.</p>
 
 <h2 id="example">Worked example: one brief, end to end</h2>
 <p>This follows <code>tests/test_brief.py</code>, with its invented people and a stand-in model and search. It shows what the code does, not what a real model would write.</p>
@@ -327,7 +327,7 @@ if self._taint is not None:     # from here on, a search by the model that carri
 
 Who: Priya Nair, founder of Lumen Grid.</code></pre>
 <p>The $0.04 is counted in the day's spending. The next tick, and a freshly restarted briefer, do nothing; moved to 15:10, the meeting is briefed again as new. Had the model replied <code>NO_REPLY</code>, the brief would be recorded as quiet; had it failed, the owner would get one line, "I could not prepare a brief for your 15:00 meeting...", with no retry.</p>
-<p>Note the ordering. The briefer marks a meeting done <em>before</em> the work, so a crash cannot produce a second brief. A reminder does the opposite, because a missing reminder is worse than a duplicate; for a paid, model-written convenience, the duplicate is worse.</p>
+<p>The briefer marks a meeting done <em>before</em> the work, so a crash cannot produce a second brief. A reminder does the opposite, because a missing reminder is worse than a duplicate; for a paid, model-written convenience, the duplicate is worse.</p>
 
 <h2 id="control">What the owner sees and controls</h2>
 <ul>
@@ -349,14 +349,14 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 <tr><th>If misled</th><td>Whatever tools it was given, unwatched</td><td>Read-only; the watch agent has three tools</td></tr>
 </tbody>
 </table></div>
-<p>The decisive reason is simpler: a check needs something to check. Looking only at the public web and its own memory, it would pay forty-eight times a day to find nothing. As arithmetic, not a measurement: at the roughly $0.0015 each of two measured small-model routine runs cost, that is about seven cents a day for nothing.</p>
+<p>The decisive reason is that, looking only at the public web and its own memory, it would pay forty-eight times a day to find nothing. As arithmetic, not a measurement: at the roughly $0.0015 each of two measured small-model routine runs cost, that is about seven cents a day for nothing.</p>
 <p>Its parts all exist: a repeating routine is the timer, <code>NO_REPLY</code> is "speak only if it matters", and mail and calendar give it something to read. A routine of that kind was run once on the real mailbox and stayed quiet; it is not on by default. What it would add to the four mechanisms is a model's open-ended, unwatched judgement of what deserves attention, which is the hardest thing here to test.</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>Ambiguous silence.</strong> The failure the three outcomes exist to prevent. Any unattended process needs a positive record of having run and found nothing.</p>
 <p><strong>Approval followed by refusal.</strong> Scheduling the sourcing digest, the model wrote 972 characters of instructions; the schedule accepts 600. The owner approved, the schedule then refused, and the owner was asked again, which teaches that approving does not mean it happened. So the limit is checked while the question is built. The same question also understated what the run could read; so that list is generated from the one the run is built from.</p>
 <p><strong>Allowances spent on mistakes.</strong> In a live digest run, two of four database reads failed on badly formed inputs, each using one of the twelve; the run also offered to run again later, which a routine cannot do.</p>
-<p><strong>A fallback that is only a sentence.</strong> When X refuses for lack of credit, the digest is told in its instructions to fall back to web search. In the one live run with that instruction, the model followed it: one observation, not a mechanism ({{ch:sourcing}}).</p>
+<p><strong>A fallback written only as an instruction.</strong> When X refuses for lack of credit, the digest is told in its instructions to fall back to web search. In the one live run with that instruction, the model followed it: one observation, not a mechanism ({{ch:sourcing}}).</p>
 <p><strong>A listener dead from the start.</strong> If the connection that brings events fails at start-up and is never retried, a watch can be set, confirmed and dead. The code had that fault. The listener retries every minute, tells the owner after three failures, and says when it works again.</p>
 <p><strong>A failed triage must be said.</strong> A triage run that errored was once logged and not announced, and a test asserted this. It was a gap in "silence never means failure": an owner who never hears that an awaited reply arrived cannot tell without reading the journal. The owner is told, at most once an hour, that some new mail or a calendar change could not be checked and to look themselves this once. The message says nothing from the event itself, which a stranger wrote.</p>
 <p><strong>Brief quality.</strong> The one live brief added its own heading (which its instructions forbid) and ran past 180 words, and reported no notes on a company that had one on file; whether the search or the model missed it was not established.</p>

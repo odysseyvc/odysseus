@@ -29,7 +29,7 @@
 <h2 id="design">How to keep the map</h2>
 <p>Three rules keep a status map accurate.</p>
 <p><strong>Grade by the strongest evidence, and say which kind.</strong> "Mail works" is not a row. "Mail is read on the real account: one live run" and "Mail is sent: never, on any real account" are two rows. A capability is split wherever its parts have different evidence, and reading and acting almost always do.</p>
-<p><strong>Never upgrade.</strong> A claim made once stays a claim made once. A repair that passes its unit tests is not thereby shown to work against the real service. When a later fact supersedes an earlier note, the note is corrected, not left beside it.</p>
+<p><strong>Do not upgrade a claim.</strong> A repair that passes its unit tests is not thereby shown to work against the real service. When a later fact supersedes an earlier note, the note is corrected, not left beside it.</p>
 <p><strong>Count, and name the sample.</strong> "Seven good runs of eight" and "it works" are different statements, and runs on invented examples are marked as such.</p>
 <figure>
 <svg viewBox="0 0 720 330" width="100%" role="img" aria-label="A ladder of evidence with capabilities placed on its rungs.">
@@ -48,11 +48,11 @@
 <text x="270" y="301" fill="var(--ink-2)">company-data lookups, a viewing site other than one</text>
 </g>
 </svg>
-<figcaption>The ladder of evidence, with examples from the map below placed on their highest rung. Notice that the top rung is empty: no capability of Odysseus has been used for weeks. Notice also where the acts sit compared with the reads: reading has reached live runs, while most acting has reached only the simulated world.</figcaption>
+<figcaption>The ladder of evidence, with examples from the map below placed on their highest rung. The top rung is empty: no capability of Odysseus has been used for weeks. Reading has reached live runs, while most acting has reached only the simulated world.</figcaption>
 </figure>
 
 <h3>Why a status map is a design tool</h3>
-<p>A status map is usually treated as a report. Its more useful role is as a plan. Read down the "never run" column: a reminder has never fired at its real time, WhatsApp has never received a message, a sign-in cannot complete from a phone, events that arrive while the program is down are missed. All four have one cause: the program runs on a laptop, not on a machine that is always on and reachable. No single chapter shows that; the rows side by side do, and they say what the home must provide. Odysseus builds that home deliberately last, so that everything else is built and proven on one machine first; the map is where the price of that choice is recorded.</p>
+<p>A status map can serve as a plan as well as a report. Read down the "never run" column: a reminder has never fired at its real time, WhatsApp has never received a message, a sign-in cannot complete from a phone, events that arrive while the program is down are missed. All four have one cause: the program runs on a laptop, not on a machine that is always on and reachable. No single chapter shows that; the rows side by side do, and they say what the home must provide. Odysseus builds that home deliberately last, so that everything else is built and proven on one machine first; the map is where the price of that choice is recorded.</p>
 
 <h2 id="mechanism">The mechanism: where the evidence comes from</h2>
 <p>Each kind of evidence has a source in the repository: the unit tests in <code>tests/</code>; live runs by scripts in <code>scripts/live_*.py</code>, which cost money; and the simulated world in <code>evals/</code>, whose runner states what each condition means:</p>
@@ -70,7 +70,7 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 <p>The same runner has a baseline that does nothing:</p>
 <pre><code># evals/run.py
     .venv/Scripts/python -m evals.run --agent nothing         a baseline that does nothing at all</code></pre>
-<p>It checks the checks. An agent that does nothing must score zero; if it does not, some check passes for a reason other than the agent's work. The do-nothing agent scored 0 of 81 on the suite as it stood before its last additions, and passed none of the fourteen partner errands. <span class="g v">Verified</span>. Even so, a row can be green because a check is blind in a way the baseline does not reveal, which happened (see "What goes wrong").</p>
+<p>It tests the checks themselves. An agent that does nothing must score zero; if it does not, some check passes for a reason other than the agent's work. The do-nothing agent scored 0 of 81 on the suite as it stood before its last additions, and passed none of the fourteen partner errands. <span class="g v">Verified</span>. Even so, a row can be green because a check is blind in a way the baseline does not reveal, which happened (see "What goes wrong").</p>
 
 <h2 id="worked">A worked example: grading one claim</h2>
 <p>Take the claim "Odysseus sends an email the owner approved", and walk it up the ladder.</p>
@@ -149,9 +149,9 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 
 <h2 id="wrong">What goes wrong when keeping a map</h2>
 <p><strong>A green row that measured nothing.</strong> In the first run of the partner errands, every run passed, including five of five approved runs of one filing errand in which the program created a second copy of a company already in the database. Its lookup compared exact names, and so did the check; they agreed, and the row was green. It was found only by reading a transcript of a passing run.</p>
-<p><strong>A repair that disarmed a test.</strong> A repair made the program retry a failed read twice. The simulated faults never lasted that long, so the "faults" condition silently stopped testing the agent and tested the retry loop. A map must record what each check would take to fail, not only that it passed.</p>
-<p><strong>Status written before the facts.</strong> Several status notes were overtaken by events: the firm's database "has only been read from" before real records were filed; the chat's buttons "have not been tapped" before a plan was approved there. A status note is true of the moment it was written, and must be corrected when it is overtaken, not left beside the new fact.</p>
-<p><strong>A check at thirty seconds.</strong> The cloud machine was checked half a minute after launch and found running; the host stopped it at five minutes, after the laptop copy had been switched off, and nothing said so. A check at thirty seconds is evidence about thirty seconds.</p>
+<p><strong>A repair that disarmed a test.</strong> A repair made the program retry a failed read twice. The simulated faults never lasted that long, so the "faults" condition silently stopped testing the agent and tested the retry loop. The map therefore records what each check would take to fail as well as that it passed.</p>
+<p><strong>Status written before the facts.</strong> Several status notes were overtaken by events: the firm's database "has only been read from" before real records were filed; the chat's buttons "have not been tapped" before a plan was approved there.</p>
+<p><strong>A check at thirty seconds.</strong> The cloud machine was checked half a minute after launch and found running; the host stopped it at five minutes, after the laptop copy had been switched off, and nothing said so.</p>
 
 <h2 id="testing">How to test the map itself</h2>
 <p>A map is tested by trying to falsify its rows. For each "Verified" cell, ask what run produced it and whether it was of the kind the cell implies. For each "never run" cell, look for evidence that it has since run (a real deck sent through Telegram appears to have exercised the fetching of a file from Telegram, which an earlier note said had never run). For each green evaluation row, read a passing transcript and confirm the do-nothing baseline still scores zero. For each count, check the denominator: 16 chances is not 84.</p>

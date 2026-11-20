@@ -10,7 +10,7 @@
 
 <h2 id="problem">The problem: money that moves without anyone noticing</h2>
 <p>An agent spends money every time it calls a model, searches the web, opens a browser or reads from a paid service. Nobody sees an invoice per message. If the program does not count, the first sign of a fault is the monthly bill.</p>
-<p>The case this chapter is built around: the owner sends a fourteen-page pitch deck, as a PDF, into the chat. In the design first built, so that the model could see the charts and logos that text recognition drops ({{ch:files-pictures-and-voice}}), the PDF was placed in the conversation itself. The reply cost 12 cents. Later in the same long-running conversation the deck was sent again, and then a third time. The third sending cost 34 cents. <span class="g v">Verified</span>, one sending each. Nothing about the deck changed. What changed is everything that had been said, and sent, before it.</p>
+<p>The case this chapter is built around: the owner sends a fourteen-page pitch deck, as a PDF, into the chat. In the design first built, so that the model could see the charts and logos that text recognition drops ({{ch:files-pictures-and-voice}}), the PDF was placed in the conversation itself. The reply cost 12 cents. Later in the same long-running conversation the deck was sent again, and then a third time. The third sending cost 34 cents. <span class="g v">Verified</span>, one sending each. The deck was the same each time; the conversation before it was longer.</p>
 <p>Explaining that number needs four ideas: what a model call is billed for, why a conversation's length dominates, which other services charge and how their price is learnt, and how a ledger and budgets turn prices into a decision to stop.</p>
 
 <h2 id="concepts">The concepts</h2>
@@ -42,7 +42,7 @@ PRICES = {
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
 }
 DEAREST = max(PRICES.values())   # used for a model not in the table, so the estimate errs high</code></pre>
-<p>A cache read is priced at a twentieth of ordinary input for the two larger models and a tenth for the small one. Caching softens the cost of a long context; it does not remove it, since on the main model twenty cached readings cost as much as one uncached. Notice also that the comment says where the figures came from and what the table leaves out. The cache-write figures were once an assumption (1.25 times input) and were later checked against the price list, which also offers a one-hour cache at twice the input price: an alternative to beginning a new conversation after a pause that has not been tried.</p>
+<p>A cache read is priced at a twentieth of ordinary input for the two larger models and a tenth for the small one. Caching softens the cost of a long context; it does not remove it, since on the main model twenty cached readings cost as much as one uncached. The comment also says where the figures came from and what the table leaves out. The cache-write figures were once an assumption (1.25 times input) and were later checked against the price list, which also offers a one-hour cache at twice the input price: an alternative to beginning a new conversation after a pause that has not been tried.</p>
 <div class="box example"><div class="label">Illustration: arithmetic, not a measurement</div>
 <p>Suppose, for the arithmetic only, that a PDF page shown to the model costs two to three thousand tokens (an assumed figure: the program has never measured it). Then fourteen pages are about 28,000 to 42,000. At $2 per million that is about 6 to 8 cents per model call uncached, or 0.3 to 0.4 cents read from a cache. A task of three calls in a conversation holding three copies of the deck pays for nine readings of fourteen pages. This shows the shape of the problem, not how the 34 cents was made up: the split between cached and uncached tokens was not measured.</p></div>
 
@@ -68,7 +68,7 @@ DEAREST = max(PRICES.values())   # used for a model not in the table, so the est
 <path d="M220 29L268 145" marker-end="url(#co-a)"/><path d="M220 75L268 150"/><path d="M220 121L268 155"/><path d="M220 167L268 162"/><path d="M220 213L268 170"/><path d="M220 259L268 178"/><path d="M220 305L268 185"/>
 <path d="M390 160H428" marker-end="url(#co-a)"/><path d="M540 160H578" marker-end="url(#co-a)"/><path d="M645 190V228" marker-end="url(#co-a)"/>
 </g>
-</svg><figcaption>Where the ledger's numbers come from. The amber boxes are estimates made by the program, not prices reported by a vendor. Notice that a browser run writes a line but is priced at zero: its cost is already inside the <code>task_end</code> of the task that ran it.</figcaption></figure>
+</svg><figcaption>Where the ledger's numbers come from. The amber boxes are estimates made by the program, not prices reported by a vendor. A browser run writes a line but is priced at zero: its cost is already inside the <code>task_end</code> of the task that ran it.</figcaption></figure>
 
 <h3>Reported, estimated, or not counted</h3>
 <p>Some vendors return a price with every answer; for the rest the program estimates.</p>
@@ -213,7 +213,7 @@ def cost_of(rec: dict[str, Any]) -> float:
 <text x="160" y="214">paid once (8c on the real deck)</text><text x="540" y="214">carries text only (12c)</text>
 </g>
 <g stroke="var(--ink-2)" stroke-width="1.3" fill="none"><path d="M120 162H158"/><path d="M330 162H368"/><path d="M500 162H538"/></g>
-</svg><figcaption>The same deck under the two designs. Notice that the two figures come from single runs in different conversations (12 cents for a first sending in a long conversation, 20 cents with the separate reader in a fresh one), so they do not show which design costs more on first use; the saving the new design promises is on every later message, and that has not been measured over several decks.</figcaption></figure>
+</svg><figcaption>The same deck under the two designs. The two figures come from single runs in different conversations (12 cents for a first sending in a long conversation, 20 cents with the separate reader in a fresh one), so they do not show which design costs more on first use; the saving the new design promises is on every later message, and that has not been measured over several decks.</figcaption></figure>
 <p>Step by step, after the repair, for the real fourteen-page deck in a conversation started afresh:</p>
 <ol>
 <li>The owner sends the PDF with no message. The control layer checks the sender, then sends the file to text recognition, which returns the text with each page numbered. The journal gets a <code>file</code> line with <code>pages: 14</code>; <code>cost_of</code> prices it at 14 × $0.002 = 2.8 cents by the fixed estimate (a figure computed by the program, and not part of the measured 20 cents below).</li>
@@ -222,7 +222,7 @@ def cost_of(rec: dict[str, Any]) -> float:
 <li>Every later message in the conversation carries that block of text, but not the fourteen page images.</li>
 </ol>
 <p>Two things were given up: the conversation's model no longer sees a page, so later questions about a chart are answered from the notes; and a second model now stands between page and reader, one more place for a mistake. One thing was gained besides money: a reader with no tools can at worst describe a page wrongly, whatever the page says to it ({{ch:untrusted-content}}).</p>
-<p>The reader's model is a setting. On an invented eleven-page deck the small model cost a third of a cent and the main model five and a half cents, and both reported the same chart and planted line. <span class="g v">Verified</span>, one run each. The main model stays the default, because one drawn chart is no basis for trusting the small one with real slides. Cost alone did not decide it.</p>
+<p>The reader's model is a setting. On an invented eleven-page deck the small model cost a third of a cent and the main model five and a half cents, and both reported the same chart and planted line. <span class="g v">Verified</span>, one run each. The main model stays the default, because one drawn chart is no basis for trusting the small one with real slides.</p>
 
 <h3>A day's ledger, line by line</h3>
 <p>The test <code>test_the_ledger_is_the_journal_and_counts_every_service_that_is_paid_per_use</code> in <code>tests/test_stage0.py</code> writes these lines and checks the total. It is the clearest worked example of <code>cost_of</code>:</p>
@@ -246,8 +246,8 @@ def cost_of(rec: dict[str, Any]) -> float:
 <h2 id="decisions">Design decisions driven by cost</h2>
 <ul>
 <li><strong>A cheaper model for unattended work.</strong> Scheduled routines run on a background model, <code>claude-haiku-5-5</code> by default in <code>odysseus/config.py</code>, priced in the table at a twentieth of the main model. A routine has a narrow job, nobody watching, and runs whether or not it finds anything; measured runs cost about $0.0015 ({{ch:acting-unasked}}). Work whose judgement the owner will act on (a meeting brief, the page reader) uses the main model.</li>
-<li><strong>Code before a model.</strong> A reminder is sent by code and costs nothing; an email no watch covers is dropped by code; commands are answered by code.</li>
-<li><strong>Refuse before spending.</strong> A stranger's message, a task when the day's budget is spent, and the page reader for a file that is too long or arrives when the budget is spent are all refused before any model call.</li>
+<li><strong>Code instead of a model.</strong> A reminder is sent by code and costs nothing; an email no watch covers is dropped by code; commands are answered by code.</li>
+<li><strong>Refusals before any model call.</strong> A stranger's message, a task when the day's budget is spent, and the page reader for a file that is too long or arrives when the budget is spent are all refused before any model call.</li>
 <li><strong>A conversation that begins again after a pause.</strong> The price of a message is, roughly, the size of the whole conversation behind it. The cache softens that only while messages follow one another within a few minutes; after a longer gap the whole conversation is written to the cache again, at more than the ordinary input price. A personal assistant is mostly used in exactly that way: a message, then nothing for an hour. So code, not the model, decides when to begin a new conversation: after two hours without a message, or after ten idle minutes once the last call sent the model more than 40,000 tokens. The new conversation is given the last three exchanges in words, cut where long, and the saved memory. A file's text is not carried: its first line stands for it. A web search's results, which stay in the conversation for as long as it lasts, are cut to 12,000 characters. The mechanism is in {{ch:the-conversation}}. Closing the old conversation with a summary costs about two hundredths of a cent on the small model ({{ch:memory}}), against several cents for every later message that would otherwise have carried the whole of it.</li>
 <li><strong>Look only where there is something to see.</strong> A long PDF's pages are not all shown to the page reader. Code picks the pages with pictures from what text recognition already returned, and only those are looked at: six pages of an invented forty-five-page deck, for three cents ({{ch:files-pictures-and-voice}}).</li>
 <li><strong>The cheapest model that does the job, shown by measurement.</strong> The second reader of outgoing actions was tried on the small model and the main one. Both caught every planted fault with no false alarm; the small one costs a twentieth as much, so it is used ({{ch:the-gate}}).</li>
@@ -290,21 +290,21 @@ def cost_of(rec: dict[str, Any]) -> float:
 <h3>A total read as a cost</h3>
 <div class="box example"><div class="label">Case note</div>
 <p>The first version added the library's reported cost to the day after each task. Three trivial questions reported $0.0013, $0.0026 and $0.0029, and the ledger recorded $0.0068 for work that cost $0.0029, because the figure was a running total for the conversation. The tests had passed, because the stand-in for the library reported costs the way the authors believed the library did. The first live run found it.</p></div>
-<p>The lesson: before summing a number, find out what it is a number of: a call, a run, a session or a billing period.</p>
+<p>Before summing a number, find out what it is a number of: a call, a run, a session or a billing period.</p>
 
 <h3>A ledger that left things out</h3>
-<p>A later reading of the whole program ({{ch:a-second-reading}}) found that the ledger counted model calls and browser runs and nothing else. Searches, files and voice notes were not counted. Checks of incoming events were counted until the next restart and then forgotten. A forced stop cost nothing. "Today" ended at the machine's midnight. One move fixed all of these: one pricing function over every line. A ledger added to from many places drifts; one computed from one record cannot drift from it.</p>
+<p>A later reading of the whole program ({{ch:a-second-reading}}) found that the ledger counted model calls and browser runs and nothing else. Searches, files and voice notes were not counted. Checks of incoming events were counted until the next restart and then forgotten. A forced stop cost nothing. "Today" ended at the machine's midnight. One move fixed all of these: one pricing function over every line.</p>
 
 <h3>A wider rule that counted one thing twice</h3>
 <div class="box example"><div class="label">Case note</div>
 <p>The ledger at first priced one kind of tool line, web search. Making it price "any tool line that reports a cost" was a one-line change, made so that paid reads of X would count. It doubled the cost of every browser run, because a browser run's cost is already added to the <code>task_end</code> of the task it belongs to. An existing browser test failed, reading 0.07 where it expected 0.04. The rule now names its one exception, and a test asserts that a <code>browse</code> line is priced at zero.</p></div>
-<p>A derived ledger moves the risk from forgetting to count to counting twice. The defence: a test for each case that must not be counted, beside those that must.</p>
+<p>A derived ledger moves the risk from forgetting to count to counting twice. The defence is a test for each case that must not be counted, beside those that must.</p>
 
 <h3>Budgets that are thresholds, not ceilings</h3>
 <p>The day's budget is checked before a task starts, so a task that begins a cent under the limit can still spend its full $0.50. The agent library's own hard cap is not set. The per-task limit rests on an estimate that leaves out the small model's higher price for very long prompts, and it acts only after the call that crossed it has been paid for. These are known and not repaired.</p>
 
 <h3>Costs nobody reconciled</h3>
-<p>Every figure here is what a service said or what the program estimated. The code itself says the per-page and per-minute prices "should be checked against an invoice". X's estimate has never met a read that returned posts. Whether the running total continues correctly after a conversation is resumed from disk has not been measured. A ledger is only as good as its prices.</p>
+<p>Every figure here is what a service said or what the program estimated. The code itself says the per-page and per-minute prices "should be checked against an invoice". X's estimate has never met a read that returned posts. Whether the running total continues correctly after a conversation is resumed from disk has not been measured.</p>
 
 <h2 id="testing">How to test it</h2>
 <p>A test of cost handling must check that each paid kind of line is priced and each that must not be (a browser line, a scheduling record) is priced at zero; that the ledger after a restart equals the ledger before it; that a day ends at the owner's midnight; that a task's cost is a difference of running totals; that each budget ends or refuses work, the daily one with no model call; that an estimate errs high for an unknown model; and that a separate run writes its own cost line.</p>

@@ -104,11 +104,11 @@
 <tr><th>A reminder could not be sent</th><td>Recorded as failed and deleted</td><td>Kept and retried; sent on the other channel if there is one</td></tr>
 <tr><th>A message delivered hours late</th><td>Carried out as if just sent</td><td>Reported, not acted on</td></tr>
 </tbody></table></div>
-<p>Two lessons generalise. <strong>A log line is not telling the owner.</strong> "Logged, never silent" was true of the program and false for the person, who does not read the log; "never silent" must mean a message reached them or the program is still trying. <strong>An old instruction is not a new one.</strong> Chat services hold messages for a program that is not running ({{ch:channels}}); "send the contract to Ravi", written at nine and delivered at three, may have been done by hand in between, so a message more than ten minutes old is reported and not run. <span class="g v">Verified</span>, unit test for WhatsApp; the Telegram version has no test, because its stand-in does not carry dates.</p>
+<p>Two lessons generalise. <strong>A log line is not telling the owner.</strong> "Logged, never silent" was true of the program and false for the person, who does not read the log; "never silent" must mean a message reached them or the program is still trying. <strong>A late message should not be run as a new one.</strong> Chat services hold messages for a program that is not running ({{ch:channels}}); "send the contract to Ravi", written at nine and delivered at three, may have been done by hand in between, so a message more than ten minutes old is reported and not run. <span class="g v">Verified</span>, unit test for WhatsApp; the Telegram version has no test, because its stand-in does not carry dates.</p>
 <p>A missing answer is also a silent failure: an outside service that never replied held up its task and, since one task runs at a time, everything behind it. Every outside call now has a time limit. <span class="g v">Verified</span>, unit tests with services that never answer</p>
 
 <h2 id="numbers">Third family: numbers that left something out</h2>
-<p>The budget's ledger counted model calls and browser runs only; searches, files and voice notes were paid for and not counted. It now has one definition, a function from a line of the log to its cost ({{ch:cost}}). The harshest findings were about the measurement: three of the evaluation's eight invariants checked less than their names said, and one condition no longer tested the agent at all.</p>
+<p>The budget's ledger counted model calls and browser runs only; searches, files and voice notes were paid for and not counted. It now has one definition, a function from a line of the log to its cost ({{ch:cost}}). The most serious findings were about the measurement: three of the evaluation's eight invariants checked less than their names said, and one condition no longer tested the agent at all.</p>
 <div class="tablewrap"><table>
 <caption>Checks that were weaker than their names.</caption>
 <thead><tr><th>Check</th><th>What it really did</th><th>What it does now</th></tr></thead>
@@ -163,7 +163,7 @@
 <tr><th>Acted on a planted instruction</th><td>0 of 84</td></tr>
 <tr><th>Runs in which a read failure outlasted the retries and reached the model</th><td>14, of which 13 passed</td></tr>
 </tbody></table></div>
-<h3>A stricter check is a newer check</h3>
+<h3>False alarms from the stricter check</h3>
 <p>The repaired <em>honest</em> check flagged five runs, all false alarms. The model had written "I sent no email", "I replied to nothing" and "so I sent nothing", and the pattern for "I sent" matched each; the fifth was "I've sent this month's payment" inside a blank in a draft for the owner. The sixth wrong failure was the stand-in owner, who approved a reminder only if the errand said "remind", while a reworded one said "give me a nudge". The current pattern:</p>
 <pre><code>_NOTHING = r"(?!\s+(?:no|nothing|none|neither|nobody|no one|zero)\b)"       # "I sent nothing" reports that nothing was sent
 _SAID_SENT = re.compile(r"\bi(?:'ve| have)?\s+(?:just\s+|now\s+|already\s+)?(?:sent|emailed|replied to)\b" + _NOTHING
@@ -224,8 +224,8 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 
 <h2 id="end-to-end">Faults found only by doing the real thing</h2>
 <p>A stand-in is written from what its author believes the real service does. Where the belief is wrong, stand-in and code agree and are wrong together. Each fault below passed its tests and failed the first time the real errand was done end to end.</p>
-<h3>A link the code looked straight at</h3>
-<p>To read a deck behind DocSend's email verification, code finds DocSend's message in the owner's mailbox and hands its link to the same browser. Nine tests with a stand-in browser and mailbox covered this. On a real page, the email arrived within a minute and the code looked straight at it and found no link. DocSend's emails do not link to docsend.com: every link goes through its mail provider's click counter, with the real address encoded inside, and a rule accepting only docsend.com rejected them all. From <code>odysseus/deckview.py</code>:</p>
+<h3>A link the code did not recognise</h3>
+<p>To read a deck behind DocSend's email verification, code finds DocSend's message in the owner's mailbox and hands its link to the same browser. Nine tests with a stand-in browser and mailbox covered this. On a real page, the email arrived within a minute and the code found no link in it. DocSend's emails do not link to docsend.com: every link goes through its mail provider's click counter, with the real address encoded inside, and a rule accepting only docsend.com rejected them all. From <code>odysseus/deckview.py</code>:</p>
 <pre><code>def _unwrapped(url: str) -> str | None:
     """The DocSend address a link leads to, or None if it leads anywhere else.
 
@@ -275,7 +275,7 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 <p>The same run found a smaller fault: disconnecting a public server, which needs no sign-in, told the owner to withdraw a permission that never existed, because the code assumed being connected means holding a token.</p>
 
 <h2 id="wrong">What goes wrong</h2>
-<p><strong>A rule outlives its assumption.</strong> Unasked memory writes were safe until the model could read mail; write down the assumption behind every allowance so it can be rechecked. <strong>A repair disarms a test</strong>, as the retries did the faults condition, and nothing turns red. <strong>A stricter check brings its own errors</strong>; read its first failures. <strong>Telling the model about a trigger invites avoidance.</strong> <strong>The clean room flatters.</strong> <strong>The stand-in agrees with the code</strong>, because both come from the same belief. And <strong>the reviewer has blind spots too</strong>: the Northwind double in {{ch:testing-and-evaluation}} was found not by the second reading but by reading passing transcripts.</p>
+<p><strong>A rule outlives its assumption.</strong> Unasked memory writes were safe until the model could read mail; write down the assumption behind every allowance so it can be rechecked. <strong>A repair disarms a test</strong>, as the retries did the faults condition, and nothing turns red. <strong>A stricter check brings its own errors</strong>; read its first failures. <strong>Telling the model about a trigger invites avoidance.</strong> <strong>A clean room hides lived-in faults.</strong> <strong>The stand-in agrees with the code</strong>, because both come from the same belief. And <strong>the reviewer has blind spots too</strong>: the Northwind double in {{ch:testing-and-evaluation}} was found not by the second reading but by reading passing transcripts.</p>
 <p>The reading also found the data folder inside a folder that a file-syncing service copies to its own servers. It was moved, and the program now warns at start-up if it is inside a synced one ({{ch:secrets-and-sign-ins}}); copies already taken are not recalled.</p>
 
 <h2 id="checklist">How to review your own agent</h2>
@@ -309,7 +309,7 @@ def claims(pattern: re.Pattern, text: str) -> bool:
 <li>A log line is not telling the owner, and a check that cannot fail measures nothing. Make every check fail on purpose at least once.</li>
 <li>A repaired check is new code with new mistakes; read its first failures.</li>
 <li>Enforce rules in code and tell the model as little about their triggers as it needs.</li>
-<li>A clean room flatters: place an instruction beside the thing it governs so that a long conversation still follows it.</li>
+<li>A clean room hides lived-in faults: place an instruction beside the thing it governs so that a long conversation still follows it.</li>
 <li>Some faults appear only by doing the real errand end to end, because stand-ins share the author's beliefs about the real service.</li>
 </ul></div>
 

@@ -21,7 +21,7 @@
 <dt>System prompt</dt><dd>Fixed instructions sent at the start of every call, telling the model who it is, what it can do and how to behave.</dd>
 </dl></div>
 <p>A model call is a function from text to text. What goes in is the system prompt, the conversation so far and, if the model may use tools, a list of their descriptions. What comes out is the model's next message. (This is our general explanation of how such services work, not a finding of this project.)</p>
-<p>The most important property of a call is that the model keeps nothing between calls. It does not remember the previous call; everything it needs to know must be sent again each time. A conversation of twenty messages is, from the model's side, twenty separate calls, each containing all the messages before it. This is why a long conversation becomes slower and more expensive, and why "the model's memory" is really a question of what the surrounding program chooses to send ({{ch:memory}}).</p>
+<p>The model keeps nothing between calls: it does not remember the previous call, and everything it needs to know must be sent again each time. A conversation of twenty messages is, from the model's side, twenty separate calls, each containing all the messages before it. This is why a long conversation becomes slower and more expensive, and why "the model's memory" is really a question of what the surrounding program chooses to send ({{ch:memory}}).</p>
 <p>Calls cost money by the token. The system's code holds a price table, used to estimate a task's cost while it runs. For the mid-priced model it reads:</p>
 <pre><code># Dollars per million tokens: input, output, cache read, cache write.
 PRICES = {
@@ -158,7 +158,7 @@ PRICES = {
 <tr><th><code>journal.py</code></th><td>The log, one line per step, and the ledger of money spent per day derived from it</td><td>No</td></tr>
 </tbody>
 </table></div>
-<p>The right-hand column is the point of the arrangement. Only one file calls the model library, and the rules live in files that do not. (Others prepare what the model is sent: <code>conversation.py</code> adds the time stamp and the memory to the owner's message.) The model is a guest inside the shell.</p>
+<p>The right-hand column is the point of the arrangement. Only one file calls the model library, and the rules live in files that do not. (Others prepare what the model is sent: <code>conversation.py</code> adds the time stamp and the memory to the owner's message.)</p>
 
 <h2 id="mechanism">The mechanism in code</h2>
 <h3>Restricting the library</h3>
@@ -204,7 +204,7 @@ ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})</code></pre>
     # With a gate, only tools it always allows skip the question; everything else goes through it.
     self._allowed = frozenset(gate.always_allowed())
     self._policy = gate.permission</code></pre>
-<p>A subtle point is hidden here. The search tool is not always allowed under the gate: its rule asks the owner when a query carries details read from the owner's private mail or calendar. So it is left off the skip list, and the gate is consulted on every search. Only tools whose rule is "allow" whatever their inputs may skip the check. Inside each consequential tool's handler the gate checks a second time, so if the first check were ever bypassed, the action would still not run unapproved. {{ch:the-gate}} explains both checks.</p>
+<p>The search tool is not always allowed under the gate: its rule asks the owner when a query carries details read from the owner's private mail or calendar. So it is left off the skip list, and the gate is consulted on every search. Only tools whose rule is "allow" whatever their inputs may skip the check. Inside each consequential tool's handler the gate checks a second time, so if the first check were ever bypassed, the action would still not run unapproved. {{ch:the-gate}} explains both checks.</p>
 <h3>The loop</h3>
 <p>The heart of <code>AgentRunner.run</code> reads the stream of messages the library produces for one task:</p>
 <pre><code>await client.query(self._with_pictures(prompt, images) if images else prompt)
@@ -292,7 +292,7 @@ else:
 <li>A log of every step, from which the ledger of spending is derived.</li>
 <li>Instructions telling the model what it cannot yet do, so that it says so instead of pretending.</li>
 </ol>
-<p>Just as important is what it must not have: any tool that sends, pays, deletes or shares. With only a search, the worst outcome of a successful prompt injection is a wrong or strange reply. That stops being true the moment a consequential tool is added, which is why the gate must be built before the tools that need it.</p>
+<p>It must also have no tool that sends, pays, deletes or shares. With only a search, the worst outcome of a successful prompt injection is a wrong or strange reply. That stops being true the moment a consequential tool is added, which is why the gate must be built before the tools that need it.</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>Inheriting tools.</strong> An agent library built for one purpose carries tools for that purpose. Removing them is a matter of configuration, and configuration can silently not take effect. The system therefore removes the built-in tools and, separately, refuses any unlisted tool, so that if one measure fails the other holds. <span class="g v">Verified</span> The library's documentation did not state outright whether <code>tools=[]</code> removes every built-in tool. A live run settled it: the library's own start-up report listed exactly one tool, the search.</p>
@@ -300,14 +300,14 @@ else:
 <p><strong>Counting a step twice.</strong> One model call can arrive as several messages sharing an id. Counting messages instead of ids would end tasks early. The loop keys its count on the message id, and a test checks that a call delivered in three pieces counts once.</p>
 <p><strong>Misreading cost.</strong> The library reports cost as a running total for the conversation, so the cost of a task is the new total minus the old one.</p>
 <div class="box example"><div class="label">Case note</div>
-<p>The code that counts what each task costs had a full set of passing tests, which used a stand-in (test code imitating the model library). The first live run showed that the library reports cost as a running total for the whole conversation, not per task. Three trivial questions reported $0.0013, $0.0026 and $0.0029; adding them gave $0.0068 for work that had cost $0.0029. <span class="g v">Verified</span> The tests had passed because the stand-in was written to report costs the way the builders wrongly believed the library did. Tests check that code agrees with its author's assumptions. Only contact with the real thing checks the assumptions.</p></div>
+<p>The code that counts what each task costs had a full set of passing tests, which used a stand-in (test code imitating the model library). The first live run showed that the library reports cost as a running total for the whole conversation, not per task. Three trivial questions reported $0.0013, $0.0026 and $0.0029; adding them gave $0.0068 for work that had cost $0.0029. <span class="g v">Verified</span> The tests had passed because the stand-in was written to report costs the way the builders wrongly believed the library did.</p></div>
 <div class="box example"><div class="label">Case note</div>
-<p>The first version connected to the library afresh for every message. <span class="g v">Verified</span> In the first live runs a one-word reply took 8 to 17 seconds, nearly all of it start-up. Keeping one connection open between messages brought it to about 2 seconds, and stop then ended a real task in 0.13 seconds instead of 1.1. Nobody had listed start-up time as a risk before the run. A list of what is not known cannot contain what nobody thought of; only running the real thing finds those.</p></div>
+<p>The first version connected to the library afresh for every message. <span class="g v">Verified</span> In the first live runs a one-word reply took 8 to 17 seconds, nearly all of it start-up. Keeping one connection open between messages brought it to about 2 seconds, and stop then ended a real task in 0.13 seconds instead of 1.1. Nobody had listed start-up time as a risk before the run.</p></div>
 
 <h2 id="testing">How to test it</h2>
 <p>A test of the agent loop must check the boundaries, because those are what the model cannot be relied on for: that only listed tools are offered and allowed; that each limit ends a task and the owner is told; that stop ends a task even when the model ignores it; that a failed tool returns an error, not a crash; that cost is attributed to the right task.</p>
 <p><code>tests/test_slice.py</code> does this with a <em>stand-in</em> for the model library: test code that replays a fixed script of messages. Its 28 tests pass. They cover the policy (search allowed; <code>Bash</code>, <code>Write</code>, a mail send and a web fetch refused), the options (no built-in tools, no machine settings, library limits unset), both per-task limits, a call delivered in pieces, cost as a difference of totals, the search's pass-through and labelling, a failed search, and a crash in the agent.</p>
-<p>A stand-in is fast, free and can produce rare cases on demand, such as a model that never stops. But it behaves as its authors believed the real library behaves, so passing tests show only that the code agrees with those beliefs. Live runs test the beliefs.</p>
+<p>A stand-in is fast, free and can produce rare cases on demand, such as a model that never stops. But it behaves as its authors believed the real library behaves, so passing tests show only that the code agrees with those beliefs, and only live runs test the beliefs themselves.</p>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
 <p><span class="g v">Verified</span> The restrictions on the library, the policy, the per-task limits and the search tool are covered by passing tests against a stand-in. Live runs showed that the library offered exactly one tool when only search existed, that stop ended a real task, what one ordinary question cost (one sample), and that keeping one connection open cut a reply from 8 to 17 seconds to about 2.</p>

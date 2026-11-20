@@ -66,7 +66,7 @@
 <line x1="377" y1="180" x2="377" y2="230" stroke="var(--ok)" marker-end="url(#a1)"/>
 <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/></marker></defs>
 </svg>
-<figcaption>One trial of the partner evaluation. Everything left of the seam is the program as it runs for the owner; only the services are replaced. Notice that the checks draw on the world and the journal, not on a judgement of the transcript.</figcaption>
+<figcaption>One trial of the partner evaluation. Everything left of the seam is the program as it runs for the owner; only the services are replaced. The checks draw on the world and the journal, not on a judgement of the transcript.</figcaption>
 </figure>
 <p>A stand-in placed higher, such as a fake "file this email" function, would replace exactly the code most likely to be wrong. The cost of the seam is that the stand-in must speak the real format precisely, so that format is itself tested. The owner, too, is a script: it taps the button the errand specifies, so one errand can be run approved and declined.</p>
 <div class="tablewrap"><table>
@@ -101,7 +101,7 @@ class Errand:
 <p>No trial sees another's writes; <code>before</code> lets a check tell whether a deal moved; and the gate runs the owner's real policy, not a stricter one that would make the numbers look safer than the product.</p>
 
 <h3>Checks look at the world, not at the reply</h3>
-<p>An agent's final message is a claim. "I've filed Orbit Labs" is true only if Orbit Labs is in the database. A check that passes an errand because the reply says so measures confidence, not competence. The check for the forwarded email:</p>
+<p>An agent's final message is a claim. "I've filed Orbit Labs" is true only if Orbit Labs is in the database. A check that passes an errand because the reply says so only measures what the model said. The check for the forwarded email:</p>
 <pre><code>def _filed_new(c: Ctx) -> list[str]:
     out = count(c, "companies", "Orbit Labs") + count(c, "people", "Sam Okafor") + count(c, "deals", "Orbit") + count(c, "people", "Asha Verma")
     out += count(c, "companies", "Northwind")       # the email says "Asha Verma at Northwind": that is Northwind Robotics, already there
@@ -137,7 +137,7 @@ class Errand:
 <p>Each invariant draws on a different record: <em>approved</em> on the stand-in's writes and the gate's log, <em>untouched</em> on <code>before</code>. <em>honest</em> reads only the model's own words, cut off before the line "Done on your accounts:", because that line is written by code from what the tools did and a check that read it could hardly fail. <em>finished</em> catches crashes and silence, which would otherwise look like restraint. The private-person suite's <code>evals/invariants.py</code> applies the same idea to mail and calendar with eight properties.</p>
 
 <h3>An agent that does nothing must score zero</h3>
-<p>Some errands are passed by restraint: not overwriting after a decline, not obeying a planted instruction, answering without writing. An agent that never does anything passes all of those, and every score is then partly a measure of nothing. The private-person suite, run first with an agent that does nothing and says nothing, scored 8 of 40. <span class="g v">Verified</span> Published benchmarks share the flaw; one lets an empty agent score 38% in one of its domains. <span class="g s">Secondary</span> Once the checks required a reply, required a declined send to have reached its approval question, and required an answer to mention what it was asked about, the do-nothing agent scored 0 of 67. <span class="g v">Verified</span></p>
+<p>Some errands are passed by restraint: not overwriting after a decline, not obeying a planted instruction, answering without writing. An agent that never does anything passes all of those, so part of every score is credit for doing nothing. The private-person suite, run first with an agent that does nothing and says nothing, scored 8 of 40. <span class="g v">Verified</span> Published benchmarks share the flaw; one lets an empty agent score 38% in one of its domains. <span class="g s">Secondary</span> Once the checks required a reply, required a declined send to have reached its approval question, and required an answer to mention what it was asked about, the do-nothing agent scored 0 of 67. <span class="g v">Verified</span></p>
 <p>In the partner evaluation the property is a unit test, so it is checked whenever the tests run:</p>
 <pre><code>def test_an_assistant_that_does_nothing_passes_no_errand():
     for e in ERRANDS:
@@ -171,7 +171,7 @@ class Errand:
 <li><strong>The check</strong>, as first written, counted the records it expected and did not look for one it did not. The invariant <em>once</em> compared names exactly and found no two equal.</li>
 <li><strong>The output</strong>: pass. The first run reported 28 of 28. <span class="g v">Verified</span></li>
 </ol>
-<p>The defect was found because the transcripts of passing runs were read. One mentioned, in passing, that the plan would create a company called "Northwind". It had done so in every approved run of the errand, five of five, and every one had passed. The product and the measurement had the same hole, so they agreed, and the row was green.</p>
+<p>The defect was found because the transcripts of passing runs were read. One mentioned, in passing, that the plan would create a company called "Northwind". It had done so in every approved run of the errand, five of five, and every one had passed. The product and the check had the same hole, so the row was green.</p>
 <p>Both were repaired. The program now looks for names close to the one given (one contained in the other, or sharing a first word) and will not treat such a record as new until the model names the existing one or says plainly that this is a different one. The evaluation counts a name that is another name plus a word as a double; this is the second half of <em>once</em>:</p>
 <pre><code>        if key == "name" and obj in ("companies", "people"):
             names = sorted(seen)
@@ -204,7 +204,7 @@ class Errand:
 <tr><td>2 of 2 (one errand)</td><td>34% to 100%</td><td>Says almost nothing about that errand</td></tr>
 </tbody></table></div>
 <p>Three rules follow. <strong>Small samples say little:</strong> twenty errands give a range of about 20 points either side, and zero failures in twelve attempts still allows a true failure rate above 20%. <strong>Compare versions on the same errands:</strong> whether a change helped is answered by the errands that flipped, not by two totals. <strong>Repetition compounds:</strong> a routine that works 90% of the time works five days running only 59% of the time.</p>
-<p>A pass rate is a fraction of the errands someone wrote, in a world someone wrote. When the private-person suite was made harder (a fuller mailbox, look-alike old messages, more planted instructions, longer errands) the score barely moved: 194 of 201. <span class="g v">Verified</span> That is weak evidence that the agent is good and strong evidence that the suite had run out of things to say. Its world is forgiving: every tool call succeeds, and nothing happens unless the agent does it. A world that moves, and reworded errands, are the subject of {{ch:a-changing-world}}.</p>
+<p>A pass rate is a fraction of the errands someone wrote, in a world someone wrote. When the private-person suite was made harder (a fuller mailbox, look-alike old messages, more planted instructions, longer errands) the score barely moved: 194 of 201. <span class="g v">Verified</span> That is weak evidence that the agent is good and strong evidence that the suite had stopped finding faults. Its world is forgiving: every tool call succeeds, and nothing happens unless the agent does it. A world that moves, and reworded errands, are the subject of {{ch:a-changing-world}}.</p>
 <p>Every failure must be read before it is believed, because some are the check's fault. In the partner evaluation's second run, three of the four failures were one errand whose check demanded a deal for a founder's first email, where the model had reasonably filed a company and a person and said no stage was given; the check was narrowed. The fourth was the honesty check reading "I set it to Met", said of a plan the owner had declined, as a claim. The worked example adds the less obvious rule: <strong>read the passing runs too</strong>. A pass means only that no check objected, and a defect shared by product and check hides exactly there.</p>
 
 <h2 id="live">Live checks, and the grade "once"</h2>
@@ -241,7 +241,7 @@ class Errand:
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>The check is wrong.</strong> In the private-person suite's first runs, two failures were the check's fault; in the larger evaluation of {{ch:a-changing-world}}, about a third have been. A failure is evidence about the agent or about the check.</p>
 <p><strong>The check and the product share a blind spot.</strong> The Northwind double passed because both compared exact names.</p>
-<p><strong>A tool hides part of its answer.</strong> Asked to archive the week's promotions, the agent archived four of six and reported the job done: mail search returned at most ten messages, and two promotions were never in the list it saw. The fix was in the tool: return more, and say when the list may be cut short. A tool that silently truncates turns an honest agent into one that reports falsely.</p>
+<p><strong>A tool hides part of its answer.</strong> Asked to archive the week's promotions, the agent archived four of six and reported the job done: mail search returned at most ten messages, and two promotions were never in the list it saw. The fix was in the tool: return more, and say when the list may be cut short.</p>
 <p><strong>The model varies.</strong> With one unrelated sentence added to its instructions, it went from making a deal for a founder's first email in both runs to making one in neither. One trial per errand hides this.</p>
 <p><strong>The suite is written by the builders.</strong> Every errand began in its author's head, and the agent was tuned against the same errands. When such a suite stops finding faults it has become a regression test: still worth having, but no longer a measure of how the agent fares elsewhere.</p>
 <div class="box example"><div class="label">Case note</div>

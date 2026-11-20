@@ -78,7 +78,7 @@
 <line x1="620" y1="220" x2="360" y2="260" stroke="var(--ink-2)"/>
 <line x1="620" y1="220" x2="600" y2="260" stroke="var(--ink-2)"/>
 <text x="360" y="326" font-family="var(--sans)" font-size="12" fill="var(--ok)" text-anchor="middle">all three checked by the invariants, in plain code</text>
-</svg><figcaption>The kernel wraps the old world, and the real program still reaches it through the seam it uses for the real connector. Notice that the invariants read three records the agent cannot edit, not the agent's own account of what it did.</figcaption></figure>
+</svg><figcaption>The kernel wraps the old world, and the real program still reaches it through the seam it uses for the real connector. The invariants read three records the agent cannot edit, not the agent's own account of what it did.</figcaption></figure>
 <p>The kernel adds a clock the suite owns, so a scenario can say "a day later"; scheduled events ("at ten, a new email arrives"); conditional events ("two hours after she is written to, Priya replies"); other people performing the agent's own operations ("Sam moves the meeting"); a seeded plan of faults; and a restart on the same files. The program's real scheduler ({{ch:acting-unasked}}) runs inside it, so when a scenario waits an hour, reminders fall due and a routine runs on the real small model.</p>
 <p>The alternatives were a finished platform, which tests a program reshaped to fit its world, or a mock per tool per test, which loses the shared world in which one person's action shows up in the agent's next read. The kernel keeps one world and the real code.</p>
 
@@ -108,7 +108,7 @@
     if fault == "empty":
         return {"messages": []} if slug.startswith("GMAIL") else {"items": []}
     return result</code></pre>
-<p>Notice where each failure is raised. An error or a rate limit comes <em>before</em> the world changes: nothing happened. A lost acknowledgement comes <em>after</em>: the email went, and the caller is told it timed out. To the agent they look the same. In the scenario <code>dyn_lost_ack</code> the first email to Ravi is lost this way; trying again is natural, the owner approves because it shows the same email, and Ravi receives two.</p>
+<p>An error or a rate limit comes <em>before</em> the world changes: nothing happened. A lost acknowledgement comes <em>after</em>: the email went, and the caller is told it timed out. To the agent they look the same. In the scenario <code>dyn_lost_ack</code> the first email to Ravi is lost this way; trying again is natural, the owner approves because it shows the same email, and Ravi receives two.</p>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Lost acknowledgement</dt><dd>A write that succeeds at the service while the caller receives a failure, usually a timeout. Retrying it does the thing twice.</dd></dl></div>
 <p>A silently empty answer is only ever planned by name, never drawn at random: no agent can know that a plausible answer was wrong. Random faults never strike one tool twice running, so every errand stays possible. A three-call outage was added once an audit noticed that single read failures never reach the model, because the program retries reads (below).</p>
@@ -243,10 +243,10 @@ for attempt in range(3 if reading else 1):
 </tbody></table></div>
 <p>The last row got worse by design. A failed send is not retried and its approval is used up, so if the model tries again the owner is asked again: safe when a failure might be a lost acknowledgement, and a real cost on a bad day.</p>
 <p>These gains were measured on the errands that prompted the changes, which is weak evidence, so the sealed set was run with new seeds and unseen rewordings. <span class="g v">Verified</span>: 6 of 567 failed, against 11 on the development set; tool failures caused none; nothing was done twice or said done when it was not. All six came under rewording, in three errands: a missed upcoming payment, giving up on the dentist's address after one search, and a stale meeting time. The sealed set is weak: it varies wording and seed over the same situations the program was developed against.</p>
-<p>An instruction is not a guarantee. A later reading of the code ({{ch:a-second-reading}}) added a repair in code, which was not part of the runs above: before changing a calendar event, <code>apps.py</code> reads it again, and if it is not as it was listed, nothing is done and the model is told to look again. That chapter tells why this matters for safety as well as accuracy.</p>
+<p>A later reading of the code ({{ch:a-second-reading}}) added a repair in code, which was not part of the runs above: before changing a calendar event, <code>apps.py</code> reads it again, and if it is not as it was listed, nothing is done and the model is told to look again. That chapter tells why this matters for safety as well as accuracy.</p>
 
 <h2 id="traces">Learning from real use: traces</h2>
-<p>Everything above widens what the builders thought of. The research was plain that real use is the only source of situations nobody imagined, and that the method is unglamorous: keep a readable record of every real task, read a batch regularly, name each kind of failure, and turn each into a test.</p>
+<p>Everything above widens what the builders thought of. The research found that real use is the only source of situations nobody imagined, and that the method is to keep a readable record of every real task, read a batch regularly, name each kind of failure, and turn each into a test.</p>
 <div class="box definition"><div class="label">Definitions</div>
 <dl class="terms">
 <dt>Trace</dt><dd>The record of one task from the owner's message to the reply, with every model call and tool call in between and how long each took.</dd>
@@ -263,7 +263,7 @@ for attempt in range(3 if reading else 1):
     ascii_once = json.dumps(text)[1:-1]
     self._private.append((f"[{len(text)} characters read from the owner's accounts; not recorded]",
                           *dict.fromkeys((text, once, twice, ascii_once, json.dumps(ascii_once)[1:-1]))))</code></pre>
-<p>Why five forms of one text? Instrumentation sends span attributes that are JSON strings, sometimes holding message lists that are themselves JSON, and an email with a quotation mark or line break looks different at each level of escaping. A redaction that looked only for the raw text would miss them all. <code>hide</code> is called from the hook that fingerprints account content for the gate ({{ch:untrusted-content}}). The owner's messages, the replies and the memory block ({{ch:memory}}) are sent, because reading them is the point; a reply that quotes an email carries that much of it.</p>
+<p>Five forms of one text are hidden because instrumentation sends span attributes that are JSON strings, sometimes holding message lists that are themselves JSON, and an email with a quotation mark or line break looks different at each level of escaping. A redaction that looked only for the raw text would miss them all. <code>hide</code> is called from the hook that fingerprints account content for the gate ({{ch:untrusted-content}}). The owner's messages, the replies and the memory block ({{ch:memory}}) are sent, because reading them is the point; a reply that quotes an email carries that much of it.</p>
 <div class="box example"><div class="label">Worked example: checking a trace by reading it back</div>
 <p>One task was run against the test world: "Read Priya's latest email about lunch. Reply with only the two days she offers." The trace was fetched back from the store through its own interface and searched. <span class="g v">Verified</span>, once: it held four steps (the task, the agent's turn, and the mail search with its inputs) and five scores; no settings key appeared anywhere; no sentence of Priya's email appeared, only one note of its length. The claim "secrets are removed" was tested by looking in what arrived, not by trusting the code that removes them.</p></div>
 
@@ -271,7 +271,7 @@ for attempt in range(3 if reading else 1):
 <ul>
 <li><strong>Clean success hides fragility</strong>: 201 of 201 and 61 of 67 describe the same errands.</li>
 <li><strong>Goal checks miss side effects</strong>: a duplicate calendar entry passed its own check.</li>
-<li><strong>The program, not the model, may be at fault</strong>: a model is only as careful as what it is told.</li>
+<li><strong>The program, not the model, may be at fault</strong>: the program had been passing the model only the class name of an error.</li>
 <li><strong>A safety fix costs elsewhere</strong>: never retrying writes took needless approvals from 2 runs to 8.</li>
 <li><strong>A change to the instructions is a change to the program</strong>: the sentence that fixed stale reads also changed how the agent read "promises".</li>
 </ul>
@@ -287,7 +287,7 @@ for attempt in range(3 if reading else 1):
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>
-<li>A suite of hand-written tasks in a still world measures its author; published audits show the effect is large and common.</li>
+<li>A suite of hand-written tasks in a still world reflects only what its author thought of; published audits show the effect is large and common.</li>
 <li>Write properties and kinds of disturbance, not only situations and answers. One invariant covers every run.</li>
 <li>A moving world needs a clock, events, other people, a fault plan drawn from named streams of one seed, and a restart, wrapped around the seam where the real program attaches.</li>
 <li>Report by condition, and report a property never broken as a count with a ceiling of about 3 divided by the number of runs.</li>

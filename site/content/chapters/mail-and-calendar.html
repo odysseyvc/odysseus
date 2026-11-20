@@ -9,14 +9,14 @@
 </ul></div>
 
 <h2 id="problem">The problem: an agent with a mailbox</h2>
-<p>Most of what a person wants from an assistant happens inside accounts that belong to them: reply to this, what is on tomorrow, move my one o'clock. This chapter gives an agent its first hands on such accounts, starting with the most dangerous one most people have.</p>
+<p>Most of what a person wants from an assistant happens inside accounts that belong to them: reply to this, what is on tomorrow, move my one o'clock. This chapter gives an agent access to such accounts, starting with the most dangerous one most people have.</p>
 <p>Consider one request, typed into a chat on a phone: <em>"Tell Priya Wednesday at 12:30 works."</em> The agent must find Priya's message, read it, write a reply, and send it from the owner's address. Three things make this harder than it looks.</p>
 <ul>
 <li><strong>Sending cannot be taken back.</strong> The agent must not send anything the owner has not seen.</li>
 <li><strong>Everything in a mailbox was written by someone else</strong>, and anyone can email the owner text written to mislead the agent.</li>
-<li><strong>The world moves.</strong> Priya may have written again; a meeting read at ten may have moved by ten thirty.</li>
+<li><strong>The account changes while the agent works.</strong> Priya may have written again; a meeting read at ten may have moved by ten thirty.</li>
 </ul>
-<p>The design answers each of these with code. The model's instructions matter, but the parts that must hold are parts the model cannot argue with.</p>
+<p>The design answers each of these in code, since the model can argue with its instructions and cannot argue with code.</p>
 
 <h2 id="connector">A connector service, and what it costs</h2>
 <div class="box definition"><div class="label">Definitions</div>
@@ -73,7 +73,7 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
     gate.rule(MAIL_SEND, ASK, describe_send)
     gate.rule(MAIL_REPLY, ASK, describe_reply)
     gate.rule(CALENDAR_CREATE, lambda a: ASK if a.get("attendees") else ALLOW, lambda a: describe_event(a, now))</code></pre>
-<p>Each rule pairs a decision with a function that writes the question. Notice that <code>change_decision</code> learns about guests from <code>apps.event(...)</code>, the program's own record of what the calendar returned, never from the model. A misled model could describe a harmless event while naming the id of an important one; because the question is written from the record, the owner sees the event that will actually change. An id never listed is refused before anyone is asked.</p>
+<p>Each rule pairs a decision with a function that writes the question. The function <code>change_decision</code> learns about guests from <code>apps.event(...)</code>, the program's own record of what the calendar returned, never from the model. A misled model could describe a harmless event while naming the id of an important one; because the question is written from the record, the owner sees the event that will actually change. An id never listed is refused before anyone is asked.</p>
 
 <figure>
 <svg viewBox="0 0 680 330" width="100%" role="img" aria-label="Layers between the model and the owner's Google account">
@@ -123,9 +123,9 @@ def hide_secrets(text: str) -> str:
     for line in str(text).splitlines():
         out.append(HIDDEN if _CODE_LINE.search(line) or _ACCOUNT_LINK.search(line) else line)
     return "\n".join(out)</code></pre>
-<p>Why hide codes when reading is harmless? Because a sequence made only of reads can take over an account. A planted instruction says: on this site choose "forgot password", then read the reset link from the inbox and open it. Each step reads, so a gate that asks only about sends stops none of them. Removing the link removes the last step. The model's instructions say codes are removed and not to try to recover them.</p>
+<p>Reading is harmless on its own, but a sequence made only of reads can take over an account. A planted instruction says: on this site choose "forgot password", then read the reset link from the inbox and open it. Each step reads, so a gate that asks only about sends stops none of them. Removing the link removes the last step. The model's instructions say codes are removed and not to try to recover them.</p>
 <p>The line is the unit that is hidden. A search extract is squeezed onto one line before filtering, so a message reading "Hello, / Your verification code is 482913. / It expires in 10 minutes." appears in a search as one hidden line; read in full, only the middle line is hidden.</p>
-<p>The filter is a net with holes: a code phrased in a way it does not expect will pass. A test confirms the other half of its job, that ordinary numbers ("See you at 12:30 on the 18th.", "Invoice 20261117 attached.") are left alone.</p>
+<p>The filter has holes: a code phrased in a way it does not expect will pass. A test confirms the other half of its job, that ordinary numbers ("See you at 12:30 on the 18th.", "Invoice 20261117 attached.") are left alone.</p>
 <p>Finally, a search returns at most 25 messages and, when it returns as many as asked for, says that there may be more and how to narrow the query. "What goes wrong" explains why.</p>
 
 <h2 id="attachments">Reading an attachment</h2>
@@ -191,7 +191,7 @@ async def mail_send(a):
     self._pending.append(f"sent to {', '.join(to)}: {_clip(a.get('subject', '') or '(no subject)', 80)}")
     return "Sent."</code></pre>
 <p>The line added to <code>_pending</code> becomes "Done on your accounts: ..." at the end of the reply, written by code from what the tool did, so a model that claims otherwise can be caught out.</p>
-<p>Why two checks? Lock 1 ({{ch:the-gate}}) is made by the agent library before it runs a tool; lock 2 inside the tool. If anything ever let a call skip the first, the second still refuses. And an approval is used up by the call it allows: a test asserts that a second identical send after an approved one is refused.</p>
+<p>There are two checks because lock 1 ({{ch:the-gate}}) is made by the agent library before it runs a tool, and lock 2 inside the tool. If anything ever let a call skip the first, the second still refuses. And an approval is used up by the call it allows: a test asserts that a second identical send after an approved one is refused.</p>
 <p>The instructions add a sentence no code can enforce: "Never send anything the owner did not ask for in this conversation." The gate is what holds if the model ignores it.</p>
 
 <figure>
@@ -252,7 +252,7 @@ if (sorted(now["guests"]), now["start"], now["end"]) != (sorted(before["guests"]
 return now</code></pre>
 <p>If the event is not as it was, nothing is done, the record is updated, and the model is told to look again. Its next request is judged from what is true now: the rule sees a guest, and the owner is shown "Change this event and email the change to its guests? Guests: sam@example.org". Deletion calls the same function: what the owner approved must still be what is there. (All-day events are the exception: <code>_fresh</code> returns the record unread for them, so their deletion is approved from what was listed. Changing one is refused.)</p>
 <p>Code can only re-read what code acts on. The model also acts on what it read, such as a time for a reminder or the newest message in a thread. For that the instructions say: "Before you act on a time, a date or the latest message in a thread, read it again." This is weaker than code, because it depends on the model obeying.</p>
-<p>How much weaker was measured ({{ch:a-changing-world}}). In a scenario where a simulated colleague moved a meeting after the agent had read the calendar, and the agent was then asked for a reminder before it, the agent passed 0 of 7 runs before the instruction (each time using the old time) and 5 of 7 after it and the other repairs in this chapter <span class="g v">Verified</span>. Better, not solved: on a sealed set (rewordings and seeds kept unseen while the program was changed), a stale meeting time was still one of three remaining causes of failure.</p>
+<p>How much weaker was measured ({{ch:a-changing-world}}). In a scenario where a simulated colleague moved a meeting after the agent had read the calendar, and the agent was then asked for a reminder before it, the agent passed 0 of 7 runs before the instruction (each time using the old time) and 5 of 7 after it and the other repairs in this chapter <span class="g v">Verified</span>. This is better but not solved: on a sealed set (rewordings and seeds kept unseen while the program was changed), a stale meeting time was still one of three remaining causes of failure.</p>
 
 <h2 id="maybe">"It may have happened": timeouts and retries</h2>
 <p>A call can fail without telling the caller the outcome: the service did the work and the answer was lost on the way back.</p>
@@ -281,7 +281,7 @@ async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
         self._journal.write("tool", name=tool, ok=True)
         return data</code></pre>
 <p>Three decisions are in these lines. A read is tried three times, with a growing pause, before the model hears of a failure. A write is tried once. And the model is given the service's own words, cleaned of codes and cut to 300 characters, because "Rate limit exceeded, try again shortly" is something a model can act on and the name of an error class is not. A failed write also carries the warning: it may have happened; check first. The instructions say the same from the model's side.</p>
-<p>The cost is real. A failed send has used up its approval, so if the model checks, finds nothing sent and tries again, the owner is asked again. In the evaluation, runs in which the owner was asked more often than necessary rose from 2 to 8 of 567 after these changes <span class="g v">Verified</span>. That is the right trade: an owner asked twice is annoyed; a recipient sent the email twice sees the assistant misbehave in public.</p>
+<p>A failed send has used up its approval, so if the model checks, finds nothing sent and tries again, the owner is asked again. In the evaluation, runs in which the owner was asked more often than necessary rose from 2 to 8 of 567 after these changes <span class="g v">Verified</span>. The trade is intended: asking the owner twice is better than sending the recipient the email twice.</p>
 
 <h2 id="drafts">Drafts, replies and archive</h2>
 <p><strong>A reply</strong> needs a thread id and an address, which the model must carry correctly from an earlier search. Its question shows the address, the thread and the body; a test checks the exact fields sent to the connector (<code>message_body</code>, not <code>body</code>).</p>
@@ -307,7 +307,7 @@ async def messages_for_code(self, query: str, limit: int = 5) -> list[dict[str, 
     items = data if isinstance(data, list) else _first(data, "messages", default=[]) if isinstance(data, dict) else []
     return [m for m in items if isinstance(m, dict)]</code></pre>
 <p>This is a deliberate exception to the removal of account links, safe only because of who reads the result. A document-viewing site sends a verification link that must be opened in the browser that asked for it. Code takes that one link under four checked conditions: the sender is the site, the link points at the site, the message arrived after this run began, and the owner began the run by typing a link to that site. The link goes to the browsing agent only; the conversation's model never sees it and it is not logged.</p>
-<p>The principle generalises: a model that can be misled must never decide whether a secret is used. When a feature needs a secret from the mailbox, write narrow code that fetches exactly that secret under conditions it can check.</p>
+<p>In general, a model that can be misled must not decide whether a secret is used. When a feature needs a secret from the mailbox, write narrow code that fetches exactly that secret under conditions it can check.</p>
 
 <h2 id="worked">Worked example: "Tell Priya Wednesday at 12:30 works"</h2>
 <p>This traces the code with the stand-in mailbox of <code>tests/test_apps.py</code>. Each step is exercised by a unit test; the sequence has not been run on a real account.</p>
@@ -335,7 +335,7 @@ and, for the bank's message, its header followed by the hidden-line notice in pl
 <p><strong>A missing tool.</strong> An errand asked the agent to move a meeting and it could not: no tool changed events. Narrow tools must be grown when an evaluation shows a gap; four of the eleven came from this.</p>
 <p><strong>The unattended reader.</strong> A scheduled routine may read (mail, calendar, the web, its own notes and any connected service) and change nothing; it is not given attachments. The worst a planted instruction can do through it is shape one message to the owner, but "your bank needs you to call this number", arriving from one's own assistant, carries borrowed trust. {{ch:acting-unasked}} records this as an open risk.</p>
 <div class="box example"><div class="label">Case note: checking the shape before trusting the stand-in</div>
-<p>The code that reads the connector's replies was written from its documentation, and the tests use a stand-in shaped the same way. A stand-in that matches one's beliefs proves only that the code agrees with itself. So the first thing done with the real account was to look at the <em>shape</em> of what came back, without printing its contents. The fields were where the code expected them <span class="g v">Verified</span>. The parser still accepts several shapes, because the next change by the vendor will not be announced.</p></div>
+<p>The code that reads the connector's replies was written from its documentation, and the tests use a stand-in shaped the same way. A stand-in written from the same beliefs as the code will agree with the code whether or not the beliefs are right. So the first thing done with the real account was to look at the <em>shape</em> of what came back, without printing its contents. The fields were where the code expected them <span class="g v">Verified</span>. The parser still accepts several shapes, because the next change by the vendor will not be announced.</p></div>
 
 <h2 id="testing">How to test it</h2>
 <p>A test of this part must check what happens at the account, not what the model says. The tests replace the connector with a stand-in that records every call, and assert on that record, in four groups.</p>

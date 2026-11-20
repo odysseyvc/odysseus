@@ -56,7 +56,7 @@
 <dt>Routine</dt><dd>A task the agent runs by itself on a schedule, with nobody watching, such as a morning summary. A <em>reminder</em> is simpler: a fixed message sent at a set time.</dd>
 <dt>Shell</dt><dd>The ordinary, predictable program wrapped around the model. It receives messages, runs the loop, holds the gate and keeps the log. (This has nothing to do with a command-line shell.)</dd>
 </dl></div>
-<p>The definition of a tool call holds the most useful fact in the book. Because the model only <em>asks</em> and code acts, there is always a moment between the asking and the doing where a rule can be enforced. Most of the safety measures in later chapters live there.</p>
+<p>The definition of a tool call matters most for safety. Because the model only <em>asks</em> and code acts, there is always a moment between the asking and the doing where a rule can be enforced. Most of the safety measures in later chapters live there.</p>
 
 <h2 id="design">The design space</h2>
 <p>The clearest way to see what a personal agent must contain is to look at products that already exist. This book measures itself against three commercial products, Instinct, Muse and Grok Bot, as they stood at the time of writing, from documentation, press and the makers' own writing, not from testing them side by side. Each claim carries a grade saying how it is known (explained under "What counts as working", below).</p>
@@ -92,7 +92,7 @@
 </tbody>
 </table></div>
 <p>None of these is the model being too unintelligent for the task. Each is a boundary that should have held whatever the model decided, and did not. The design response is the principle this book rests on: <strong>the model proposes, code grants</strong>. The model may request any action; whether the action happens is decided by code the model cannot alter. {{ch:the-agent-loop}} states it in full.</p>
-<p>OpenInstinct, an independent open-source imitation of Instinct by a different company, shows the opposite arrangement. <span class="g v">Verified</span> Its approvals are enforced by written instructions to the model; no code stops the send or the purchase (<a href="https://github.com/Merit-Systems/OpenInstinct#readme">repository</a>). An instruction can be argued away by a page the model reads. Code cannot.</p>
+<p>OpenInstinct, an independent open-source imitation of Instinct by a different company, shows the opposite arrangement. <span class="g v">Verified</span> Its approvals are enforced by written instructions to the model; no code stops the send or the purchase (<a href="https://github.com/Merit-Systems/OpenInstinct#readme">repository</a>). An instruction can be argued away by a page the model reads; code cannot be.</p>
 
 <h3>Why this design and not the obvious alternatives</h3>
 <p>Three simpler designs suggest themselves. A chatbot that explains the steps is safe because it does nothing, and useless for the same reason. An agent told in its instructions never to send without asking (the OpenInstinct arrangement) works until the model reads something that persuades it otherwise. An agent that asks about every action is safe on paper, but an owner asked twenty times a day learns to tap Yes without reading; Muse's users complained of exactly this.</p>
@@ -148,7 +148,7 @@ The model can request anything. It cannot grant anything.</code></pre>
 <p>The third is from <code>odysseus/tools.py</code>, and concerns speaking first:</p>
 <pre><code>ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})</code></pre>
-<p>A conversation may search, use its memory and schedule things. A routine, with nobody watching, may search the web and its saved notes (and, once accounts are connected, read mail, calendar and other services, with each call checked to be a read) and write nothing. Work nobody can approve is restricted to work that needs no approval.</p>
+<p>A conversation may search, use its memory and schedule things. A routine, with nobody watching, may search the web and its saved notes (and, once accounts are connected, read mail, calendar and other services, with each call checked to be a read) and write nothing.</p>
 <p>The fourth is a sentence from the model's standing instructions in <code>odysseus/agent.py</code>:</p>
 <pre><code>If asked for one of those, say plainly that it is not built yet. Do not
 pretend, and do not describe steps as done that you have not done.</code></pre>
@@ -163,7 +163,7 @@ pretend, and do not describe steps as done that you have not done.</code></pre>
 <li>The owner taps Approve. Code creates the event with exactly the inputs that were shown and returns the result. The model writes: <em>"Done: lunch with Sam, Wednesday 12:30 to 13:30, invitation sent."</em></li>
 </ol>
 <p>The reply in step 4 is the agent's belief, not a measurement. To score the errand, something other than the agent checks the end state: is there one event on Wednesday at 12:30, is Sam its only guest, was it created only after the question was shown, and was nothing else changed?</p>
-<p>Now score a small invented suite of 20 errands. Checked afterwards, 17 reached the right end state, but in 3 of those the agent sent something without the question being shown. Task completion is 17 of 20 (85%); trusted completion is 14 of 20 (70%). Both terms are defined in the next section. An assistant that gets the errand right but emails without asking has not done what was wanted.</p>
+<p>Now score a small invented suite of 20 errands. Checked afterwards, 17 reached the right end state, but in 3 of those the agent sent something without the question being shown. Task completion is 17 of 20 (85%); trusted completion is 14 of 20 (70%). Both terms are defined in the next section.</p>
 
 <h2 id="working">What counts as working</h2>
 <p>An agent that finishes a task says so. An agent that fails a task quite often says so too, in the same confident words. The model's own report is therefore not a measurement.</p>
@@ -201,8 +201,8 @@ pretend, and do not describe steps as done that you have not done.</code></pre>
 
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>Believing the agent's report.</strong> Counting a task as done because the agent said so. Every check must look at the world (the calendar, the sent mail, the gate's log), never at the reply.</p>
-<p><strong>Believing a test the builder wrote.</strong> A check written by the same person who wrote the code shares that person's assumptions. The evaluation in {{ch:testing-and-evaluation}} found that an agent that does nothing at all and replies with nothing scored 8 out of 40 on the first version of its checks. <span class="g v">Verified</span> After the checks were tightened (a reply is required; a declined send must first have reached the approval question) the do-nothing agent scores 0, and that run is repeated whenever errands are added. A scoring method that gives credit for doing nothing is measuring something other than the agent.</p>
-<p>The same holds for tests with a stand-in. {{ch:the-agent-loop}} tells how a full set of passing tests hid a wrong belief about how the model library reports cost: tests check that code agrees with its author's assumptions, and only contact with the real thing checks the assumptions.</p>
+<p><strong>Believing a test the builder wrote.</strong> A check written by the same person who wrote the code shares that person's assumptions. The evaluation in {{ch:testing-and-evaluation}} found that an agent that does nothing at all and replies with nothing scored 8 out of 40 on the first version of its checks. <span class="g v">Verified</span> After the checks were tightened (a reply is required; a declined send must first have reached the approval question) the do-nothing agent scores 0, and that run is repeated whenever errands are added.</p>
+<p>The same holds for tests with a stand-in. {{ch:the-agent-loop}} tells how a full set of passing tests hid a wrong belief about how the model library reports cost, a belief that only a run against the real library revealed.</p>
 <p><strong>Forgetting the cost.</strong> A system for one person escapes the problem of scale but should still count its own spending from the first day, and stop when a limit is reached ({{ch:cost}}).</p>
 
 <h2 id="testing">How to test it</h2>

@@ -66,7 +66,7 @@
 <line x1="550" y1="90" x2="550" y2="128" stroke="var(--ink-2)" marker-end="url(#ca)"/>
 <line x1="360" y1="174" x2="360" y2="212" stroke="var(--ink-2)" marker-end="url(#ca)"/>
 </svg>
-<figcaption>Layers of a channel. Everything platform-specific sits above the interface. Notice that the decisions (the gate, the queue, who may speak) sit below it and exist once, so a second platform inherits them without being able to weaken them.</figcaption></figure>
+<figcaption>Layers of a channel. Everything platform-specific sits above the interface. The decisions (the gate, the queue, who may speak) sit below it and exist once, so a second platform inherits them without being able to weaken them.</figcaption></figure>
 <p>The obvious alternative is to write the bot inside the platform's library and let handlers decide as they go. But a rule implemented in a handler is implemented once per platform, and a second platform is a chance to forget it. With the decisions below the interface, a WhatsApp message reaches the same check of the sender, the same queue, the same "stop" and the same gate as a Telegram one. The first line of <code>telegram.py</code> states the rule: "All decisions are made in conversation.py; this only carries messages."</p>
 <p>A channel that lacks a capability implements the method as nothing. WhatsApp has no drafts, so <code>WhatsAppChat.draft</code> is a single <code>pass</code>; the conversation already treats a failed draft as harmless, which makes a missing one safe.</p>
 
@@ -144,7 +144,7 @@
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)
         return 200</code></pre>
-<p>Two lessons sit here. A public door turns even logging into an attack surface: a line per post would let a stranger fill the disk, so bad posts are counted. And Meta expects an answer at once and retries when it gets none, while a task can take minutes, so the delivery is acknowledged immediately and handled in the background. That creates a duty, met in <code>_handle</code>: a retry can bring the same message twice, so the last 500 message ids are remembered and each is handled once.</p>
+<p>Two things follow. A public door turns even logging into an attack surface: a line per post would let a stranger fill the disk, so bad posts are counted. And Meta expects an answer at once and retries when it gets none, while a task can take minutes, so the delivery is acknowledged immediately and handled in the background. That creates a duty, met in <code>_handle</code>: a retry can bring the same message twice, so the last 500 message ids are remembered and each is handled once.</p>
 <pre><code>            if m.get("id") in self._seen:
                 return
             self._seen.append(m.get("id"))
@@ -170,7 +170,7 @@
 <h3>Previews that make the platform fetch a link</h3>
 <p>To show a preview of a link, a platform's servers fetch it before the owner does. That is not harmless for a link meant to be opened once, by one person, such as the sign-in link the program sends when the owner connects a service ({{ch:services-with-their-own-server}}). Both adapters turn previews off on every message: <code>link_preview_options=NO_PREVIEW</code> on Telegram, <code>"preview_url": False</code> on WhatsApp.</p>
 <div class="box example"><div class="label">Case note</div>
-<p>No test found this. Running the connect-a-service errand end to end in the owner's real chat showed Telegram making a preview of the sign-in link the program had just sent, so Telegram's servers had fetched it. A stand-in for a platform does only what its author thought of.</p></div>
+<p>No test found this. Running the connect-a-service errand end to end in the owner's real chat showed Telegram making a preview of the sign-in link the program had just sent, so Telegram's servers had fetched it.</p></div>
 <h3>Messages delivered late, after the program was down</h3>
 <p>Both platforms hold messages for a program that is not running and hand them over when it returns: Telegram for a day, WhatsApp, which retries, for a day and a half. "Send the contract to Ravi", written at nine and delivered at three, may have been done by hand in between. Carrying it out as if it had just been sent is wrong. So a message more than ten minutes old when it arrives (<code>STALE_AFTER_S = 600</code> in both adapters) is not acted on. The owner is told, at most once a minute however many arrive together: "Something you sent earlier has only just reached me, because I was not running at the time. I have not acted on it. Send it again if you still want it." (On WhatsApp the reason reads "because I could not be reached at the time".) <span class="g v">Verified</span>, unit test for WhatsApp; the same rule for Telegram is written and has no test, because the stand-in for Telegram does not carry dates.</p>
 <p>This sits beside the other half of restarts: a task that was running when the program stopped is announced on start, not resumed, because the program cannot know how far it got. {{ch:staying-up}} covers that.</p>
@@ -229,7 +229,7 @@
 
 <h2 id="joining">Several people on one running copy</h2>
 <p>One assistant each could mean each partner running the program themselves: a bot of their own, four keys, a machine that stays on. Nobody outside the person who built it will do that. The commercial assistants are easy to start because someone else runs them, and a new person only opens a chat and signs in. The same is possible here if one person, the <em>host</em>, runs the program and holds the keys, and everyone else arrives by a link.</p>
-<p>The design that keeps "nothing is shared" true is the plainest one. The start-up code that used to build one assistant is now a function, and it is called once per person with that person's settings: their Telegram id as the owner, and a folder of their own inside the host's.</p>
+<p>To keep "nothing is shared" true, the start-up code that used to build one assistant is now a function, and it is called once per person with that person's settings: their Telegram id as the owner, and a folder of their own inside the host's.</p>
 <pre><code>def member_settings(settings: Settings, user_id: int) -> Settings:
     return replace(settings, owner_id=user_id, data_dir=settings.data_dir / "people" / str(user_id),
                    daily_usd=settings.member_daily_usd or settings.daily_usd, notify_on="telegram",
