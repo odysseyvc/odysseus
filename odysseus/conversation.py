@@ -71,7 +71,7 @@ class Conversation:
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
                  services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None,
-                 decisions: Any = None, worker: Any = None):
+                 decisions: Any = None, worker: Any = None, checkins: Any = None):
         self._s = settings
         # More agents, each for one job at a time in the background (see _run): a deck sent with no message, a document read
         # from a link, a filing the owner approved from a question. The owner's conversation stays free meanwhile. How
@@ -110,6 +110,7 @@ class Conversation:
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
+        self._checkins = checkins          # people to keep in touch with: checkins.py
         self._offers: dict[str, Any] = {}       # what the program has put to the owner, by the id on its buttons: a fact to save, or work to run
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
@@ -148,6 +149,18 @@ class Conversation:
         if not text:
             return
         command = text.lower()
+
+        # The owner tapped Done on a check-in a moment ago and was asked what came of it. Whether this message is the
+        # answer is for the model to judge; code says only that the question is open, and says it once.
+        if self._checkins is not None and material is None and not images and not command.startswith("/") and command not in STOP_WORDS:
+            open_one = self._checkins.awaiting(self._now())
+            if open_one is not None:
+                open_one["await_until"] = ""
+                self._checkins.save()
+                text += (f"\n\n[From the program: a few minutes ago the owner tapped Done on their check-in with {open_one['name']} "
+                         f"(id {open_one['id']}) and was asked what came of it. If this message says what came of it, record it with "
+                         "checkin_done, and file anyone it names who is worth keeping, as you normally would. If the message is about "
+                         "something else, ignore this note.]")
 
         # A link to a file, typed or pasted by the owner, is fetched by code and then read as a file they sent.
         # Only the owner's own message is looked at, never a file's text or a picture's, and not while a task is running.
@@ -252,6 +265,7 @@ class Conversation:
             await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /new starts a fresh conversation. /status shows today's "
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
+                            "/checkins shows the people I remind you to keep in touch with. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
@@ -263,6 +277,9 @@ class Conversation:
             entry_id = command[len("/forget"):].strip()
             old = self._memory.forget(entry_id, by="owner") if entry_id else None
             await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
+            return
+        if command == "/checkins":
+            await chat.send(("People to keep in touch with:\n" + self._checkins.listing()) if self._checkins is not None else "No list is kept here.")
             return
         if command == "/decisions":
             await chat.send(self._decisions.table() if self._decisions is not None else "Decisions are not being kept here.")
@@ -687,6 +704,11 @@ class Conversation:
         if user_id != self._s.owner_id:
             self._journal.write("dropped", user_id=user_id, what="choice tap")
             return ""
+        from .checkins import is_offer
+        if self._checkins is not None and is_offer(offer_id):
+            line = self._checkins.tap(offer_id, index, self._now())
+            self._journal.write("checkin_tap", choice=index)
+            return line
         offer = self._offers.get(offer_id)
         if not isinstance(offer, dict):
             return "This question is no longer open."
@@ -802,6 +824,8 @@ class Conversation:
                 self._schedule.pop_changes()
             if self._watches is not None:
                 self._watches.pop_changes()
+            if self._checkins is not None:
+                self._checkins.pop_changes()
             if self._apps is not None:
                 self._apps.pop_changes()
             if self._browser is not None:
@@ -912,6 +936,9 @@ class Conversation:
         watching = self._watches.pop_changes() if self._watches is not None else []
         if watching:
             body += "\n\nWatching: " + "; ".join(t.rstrip(".") for t in watching) + "."
+        kept = self._checkins.pop_changes() if self._checkins is not None else []
+        if kept:
+            body += "\n\nKeeping in touch: " + "; ".join(kept) + "."
         # Whether the reply actually left is recorded. Before this, a task could be logged as done and its
         # reply lost without a trace, which is exactly what could not be ruled out on the first day on a server.
         parts = split_message(body)

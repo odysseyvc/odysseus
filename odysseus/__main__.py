@@ -52,6 +52,7 @@ from .browser import Browser, BrowserUseBackend
 from .capture import MATERIAL as CAPTURE_MATERIAL
 from .capture import Capture
 from .closing import make_closer
+from .checkins import CheckinLoop, Checkins
 from .decisions import Decisions, PassWatch
 from .config import ConfigError, load, make_clock
 from .conversation import Conversation
@@ -185,6 +186,7 @@ async def main() -> int:
                      make_escalator(journal, second_call, settings.review_model or settings.background_model))
     history = History(settings.data_dir / "history.jsonl")
     decisions = Decisions(settings.data_dir / "decisions.jsonl")       # the owner's verdict beside each take on a deck
+    checkins = Checkins(settings.data_dir / "checkins.json", today=lambda: now().date())      # people to keep in touch with
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
         gate.set_second_reader(make_second_reader(journal, second_call,
@@ -196,7 +198,7 @@ async def main() -> int:
 
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
-                                on_watch=on_watch, attio=attio, services=services, history=history)
+                                on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -218,7 +220,7 @@ async def main() -> int:
     marks["pages"] = round(time.monotonic() - _BEGAN, 1)
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
-                                pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions, worker=workers,
+                                pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions, worker=workers, checkins=checkins,
                                 closer=make_closer(journal, second_call, settings.background_model),
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
@@ -304,6 +306,22 @@ async def main() -> int:
     passwatch = PassWatch(decisions, watch_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
                           state_file=settings.data_dir / "passwatch.json", on_delivered=conversation.record_delivery)
     watching_passes = asyncio.create_task(passwatch.run_forever())
+    # Each working day: the check-ins that are due (checkins.py). Code only. The buttons need Telegram.
+    checking = None
+    if re.fullmatch(r"\d\d:\d\d", settings.checkins_at):
+        async def note_on_person(item: dict, text: str) -> bool:
+            if attio is None or not item.get("email"):
+                return False
+            rid = (await attio.intake._existing("people", {"email_addresses": [item["email"]]}))[0]
+            if rid is None:
+                return False
+            await attio._call(attio._b.call("create-note", {"parent_object": "people", "parent_record_id": rid,
+                                                           "title": f"Check-in, {now().strftime('%d %b %Y')}", "content": text}))
+            return True
+        checking = asyncio.create_task(CheckinLoop(checkins, telegram, journal, now=now, at=settings.checkins_at,
+                                                   send_mail=apps.send_for_code if apps is not None else None,
+                                                   messages=apps.messages_for_code if apps is not None else None, note=note_on_person,
+                                                   on_delivered=conversation.record_delivery).run_forever())
     # Each morning: who the owner met or heard from that is not in the firm's database (capture.py). Code only, reads only.
     capturing = None
     if apps is not None and attio is not None and re.fullmatch(r"\d\d:\d\d", settings.capture_at):
@@ -334,6 +352,8 @@ async def main() -> int:
             await brief_runner.runner.close()
         if capturing is not None:
             capturing.cancel()
+        if checking is not None:
+            checking.cancel()
         watching_passes.cancel()
         await watch_runner.runner.close()
         if watching is not None:

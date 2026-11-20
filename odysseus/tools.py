@@ -35,6 +35,7 @@ from .schedule import REPEATS, ScheduleError, ScheduleStore, parse_when
 from .search import SERVER, SearchSpec, make_search_handler
 from .taint import Taint
 from .watch import WatchError, WatchStore, describe_watch
+from . import checkins as checkins_mod
 
 
 def _name(n: str) -> str:
@@ -48,6 +49,7 @@ ALLOWED_TOOLS = frozenset({SEARCH_TOOL, *MEMORY_TOOLS, *SCHEDULE_TOOLS})
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})
 SCHEDULE_TOOL = _name("schedule")
 WATCH_TOOL = _name("watch")
+CHECKIN_ADD, CHECKIN_DONE = _name("checkin_add"), _name("checkin_done")
 
 
 def _after_reading(taint: Taint, text: str) -> list[str]:
@@ -202,6 +204,20 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     def schedule_question(a: dict[str, Any]) -> str:
         return describe_routine(a, now, with_apps, [s.title for s in services] + (["Attio"] if attio is not None else []))
     gate.rule(SCHEDULE_TOOL, schedule_decision, schedule_question)
+    # People to keep in touch with (checkins.py). An entry that is the owner's own job only ever sends the owner a
+    # message, as a reminder does: allowed. One that is a colleague's job sends that colleague email from the owner's
+    # mailbox for as long as it stays on the list: asked once, with the email itself in the question.
+    def checkin_question(a: dict[str, Any]) -> str:
+        from datetime import datetime
+        try:
+            return checkins_mod.describe_add(a, (now or datetime.now)().date())
+        except checkins_mod.CheckinError as e:
+            return f"Set up a check-in that emails {a.get('assignee_email')}?\n\n(As written it will be refused: {e})"
+    gate.rule(CHECKIN_ADD, lambda a: ASK if str(a.get("assignee_email") or "").strip() else ALLOW, checkin_question)
+    gate.rule(CHECKIN_DONE, lambda a: ASK if _after_reading(taint, str(a.get("result", ""))) else ALLOW,
+              lambda a: describe_memory({"text": a.get("result", "")}, taint, f"Record this against the check-in with {a.get('who', '')}?"))
+    gate.rule(_name("checkin_list"), ALLOW)
+    gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
         gate.rule(WATCH_TOOL, lambda a: ALLOW if auto_small and not _after_reading(taint, str(a.get("text", ""))) else ASK, describe_watch)
@@ -285,7 +301,8 @@ def make_schedule_handlers(schedule: ScheduleStore, journal: Journal) -> dict[st
 def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, schedule: ScheduleStore | None = None,
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
-                     on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None):
+                     on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
+                     checkins: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -397,6 +414,70 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                  {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(s["cancel_schedule"]),
         ]
     tools += list(app_tools.values())
+    if checkins is not None:
+        async def checkin_add(args: dict[str, Any]) -> dict[str, Any]:
+            try:
+                item = checkins.add(args)
+            except checkins_mod.CheckinError as e:
+                journal.write("tool", name="checkin_add", ok=False, error=str(e))
+                return _err(str(e))
+            journal.write("tool", name="checkin_add", ok=True, id=item["id"], every=item["every"], colleague=bool(item["assignee_email"]))
+            return _ok("On the list: " + checkins.line(item))
+
+        async def checkin_list(args: dict[str, Any]) -> dict[str, Any]:
+            journal.write("tool", name="checkin_list", ok=True)
+            return _ok(checkins.listing())
+
+        async def checkin_remove(args: dict[str, Any]) -> dict[str, Any]:
+            item = checkins.remove(str(args.get("who", "")))
+            journal.write("tool", name="checkin_remove", ok=item is not None)
+            return _ok(f"Removed the check-in with {item['name']}.") if item else _err("No one entry on the list fits that. Use checkin_list to see the ids.")
+
+        async def checkin_done(args: dict[str, Any]) -> dict[str, Any]:
+            item = checkins.get(str(args.get("who", "")))
+            if item is None:
+                journal.write("tool", name="checkin_done", ok=False)
+                return _err("No one entry on the list fits that. Use checkin_list to see the ids.")
+            already = item.get("done") == checkins._today().isoformat()
+            if already:
+                checkins.result(item, str(args.get("result", "")), by="the owner")      # the owner tapped Done a moment ago: only what came of it is new
+            else:
+                checkins.done(item, str(args.get("result", "")), by="the owner")
+            journal.write("tool", name="checkin_done", ok=True, id=item["id"], with_result=bool(str(args.get("result", "")).strip()))
+            return _ok(f"Recorded. The next check-in with {item['name']} is due {item['due']}. If {item['name']} has a record in the firm's "
+                       "database and something came of the conversation, add it there as a note on that record.")
+
+        if gate is not None:
+            checkin_add = gate.guarded(CHECKIN_ADD, checkin_add)       # lock 2
+            checkin_done = gate.guarded(CHECKIN_DONE, checkin_done)
+        tools += [
+            tool("checkin_add",
+                 "Put a person on the list of people to keep in touch with: someone the owner, or a named colleague, should speak to every so "
+                 "often. Use it when the owner asks to be reminded to speak to someone regularly, or to have a colleague reminded until they "
+                 "have done it. When it is due the owner gets a message with buttons; if it is a colleague's job (give assignee and "
+                 "assignee_email), the colleague is emailed from the owner's mailbox every few days until they reply, their reply is recorded, "
+                 "and the owner is told. The owner must approve a colleague's entry. Not for a one-off reminder: use schedule for that.",
+                 {"type": "object",
+                  "properties": {"name": {"type": "string", "description": "Who the check-in is with."},
+                                 "email": {"type": "string", "description": "That person's own address, if known. Used to find their record."},
+                                 "every_days": {"type": "integer", "description": "Days between check-ins, 7 to 365. Monthly is 30. Default 60."},
+                                 "about": {"type": "string", "description": "The question to put to them, as the question itself, like: Who is the best founder you have met lately? Optional."},
+                                 "assignee": {"type": "string", "description": "The colleague whose job it is. Leave out if it is the owner's."},
+                                 "assignee_email": {"type": "string", "description": "That colleague's address. Leave out if it is the owner's job."},
+                                 "first_due": {"type": "string", "description": "Date of the first one, like 2026-12-01. Default: one interval from today."}},
+                  "required": ["name"]})(checkin_add),
+            tool("checkin_list", "List the people to keep in touch with: ids, how often, whose job, when next, and what came of the last one.",
+                 {"type": "object", "properties": {}})(checkin_list),
+            tool("checkin_done",
+                 "Record that a check-in happened, with what came of it in the owner's words. Use it when the owner says they have spoken to "
+                 "someone on the list. The next one is then due a full interval from today.",
+                 {"type": "object",
+                  "properties": {"who": {"type": "string", "description": "The entry's id, or the person's name."},
+                                 "result": {"type": "string", "description": "What came of it, as the owner told it. Empty if they did not say."}},
+                  "required": ["who"]})(checkin_done),
+            tool("checkin_remove", "Take a person off the list of people to keep in touch with, by id or name.",
+                 {"type": "object", "properties": {"who": {"type": "string"}}, "required": ["who"]})(checkin_remove),
+        ]
     if watches is not None:
         async def watch(args: dict[str, Any]) -> dict[str, Any]:
             try:

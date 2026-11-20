@@ -459,6 +459,11 @@ class Apps:
         items = data if isinstance(data, list) else _first(data, "messages", default=[]) if isinstance(data, dict) else []
         return [m for m in items if isinstance(m, dict)]
 
+    async def send_for_code(self, to: str, subject: str, body: str) -> None:
+        """Send one email whose every word the program wrote. For code only (checkins.py: a reminder the owner approved
+        once, when it was set up). Never repeated on failure, like every write."""
+        await self._call("mail_send_by_code", "GMAIL_SEND_EMAIL", {"recipient_email": to, "subject": subject, "body": body, "is_html": False})
+
     async def events_between(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
         """The calendar's events in a stretch of time, as the service gives them. For code (brief.py), not for the model."""
         data = await self._call("calendar_list", "GOOGLECALENDAR_EVENTS_LIST", {

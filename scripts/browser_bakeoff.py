@@ -2,6 +2,8 @@
 
     python scripts/browser_bakeoff.py status                    which vendors have a key, which have a saved sign-in
     python scripts/browser_bakeoff.py signin <vendor>           opens that vendor's browser; you sign in by hand; press Enter when done
+    python scripts/browser_bakeoff.py open <vendor>             the same in two steps: opens it with the sign-in pages loaded and prints the link
+    python scripts/browser_bakeoff.py close <vendor>            ...and saves the sign-ins once you have finished
     python scripts/browser_bakeoff.py check [vendor ...]        opens each site in each vendor's saved browser and records what it sees
     python scripts/browser_bakeoff.py report                    the table so far
 
@@ -208,6 +210,40 @@ def signin(vendor: str) -> None:
     print("Saved. Now run: python scripts/browser_bakeoff.py check", vendor)
 
 
+SIGN_IN_PAGES = {"docsend": "https://docsend.com/login", "attio": "https://app.attio.com/", "linkedin": "https://www.linkedin.com/login"}
+
+
+async def _load(cdp: str) -> None:
+    """Put each site's sign-in page in a tab of its own, so that all that is left for the owner is to sign in."""
+    from playwright.async_api import async_playwright
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp(cdp, timeout=60000)
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        for i, site in enumerate(sites()):
+            page = context.pages[0] if i == 0 and context.pages else await context.new_page()
+            try:
+                await page.goto(SIGN_IN_PAGES.get(site, sites()[site][0]), wait_until="domcontentloaded", timeout=45000)
+            except Exception:
+                pass
+
+
+def open_for_sign_in(vendor: str) -> str:
+    v = VENDORS[vendor]()
+    browser_id, cdp, live = v.open()
+    remember(vendor, open_browser=browser_id)
+    asyncio.run(_load(cdp))
+    return live
+
+
+def close_after_sign_in(vendor: str) -> bool:
+    browser_id = state().get(vendor, {}).get("open_browser")
+    if not browser_id:
+        return False
+    VENDORS[vendor]().close(browser_id)
+    remember(vendor, open_browser=None, signed_in_at=round(time.time()))
+    return True
+
+
 def report() -> None:
     rows = [json.loads(line) for line in OUT.read_text(encoding="utf-8").splitlines()] if OUT.exists() else []
     if not rows:
@@ -234,6 +270,10 @@ def main() -> int:
         print("sites:", ", ".join(sites()))
     elif args[0] == "signin" and len(args) == 2 and args[1] in VENDORS:
         signin(args[1])
+    elif args[0] == "open" and len(args) == 2 and args[1] in VENDORS:
+        print(open_for_sign_in(args[1]))
+    elif args[0] == "close" and len(args) == 2 and args[1] in VENDORS:
+        print("Saved." if close_after_sign_in(args[1]) else "No browser was open for sign-in.")
     elif args[0] == "check":
         for vendor in (args[1:] or [v for v in VENDORS if ready(v) and state().get(v, {}).get("signed_in_at")]):
             check(vendor)
