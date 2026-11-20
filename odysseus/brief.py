@@ -15,6 +15,9 @@ What is decided by code, because nobody is watching:
                     to have looked up; the invitation's text and the firm's notes cannot leave that way.
   how often         once per meeting (its id and start time), kept in a file so a restart does not repeat a brief.
   the cost          counted in the day's budget like any routine; when the budget is spent, no brief is made.
+  who to ask about  after a brief is written, up to three people the first named guest has built or invested with
+                    (leads.py), from a search given the guest's name and company and nothing else. Found once a
+                    month for a guest and reused in between. If it fails or finds nobody, the brief goes without it.
 
 The invitation was written by whoever sent it. It reaches the model marked as material, like everything else it reads.
 """
@@ -28,6 +31,7 @@ from typing import Any, Awaitable, Callable
 
 from .journal import Journal, Ledger
 
+SUGGEST_AGAIN_DAYS = 30             # how long the people to ask a guest about are reused before a new search
 LEAD = timedelta(minutes=30)        # how long before a meeting its brief is made
 CHECK_EVERY_S = 300.0
 MAX_GUESTS = 3                      # outside guests looked up for one meeting
@@ -110,10 +114,12 @@ class Briefer:
                  run: Callable[[str], Awaitable[tuple[str, str, float]]], send: Callable[[str], Awaitable[None]], journal: Journal,
                  ledger: Ledger, daily_usd: float, now: Callable[[], datetime] = datetime.now, state_file: Path | None = None,
                  search: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None = None, taint: Any = None,
-                 on_delivered: Callable[[str], None] | None = None, lead: timedelta = LEAD):
+                 on_delivered: Callable[[str], None] | None = None, lead: timedelta = LEAD,
+                 suggest: Callable[[str, str], Awaitable[list[dict[str, str]]]] | None = None):
         self._events, self._run, self._send, self._journal, self._ledger = events_between, run, send, journal, ledger
         self._daily_usd, self._now, self._file, self._search, self._taint = daily_usd, now, state_file, search, taint
         self._on_delivered, self._lead = on_delivered or (lambda text: None), lead
+        self._suggest = suggest
         self._done: dict[str, str] = {}
         if state_file is not None:
             try:
@@ -196,11 +202,24 @@ class Briefer:
             self._journal.write("brief", event=m["id"], outcome="quiet", guests=len(guests))
             return 0
         body = f"Before your {m['start']:%H:%M} meeting, \"{m['title'][:80]}\":\n\n{text}"
+        named = next((g for g in guests if g["name"] and "@" not in g["name"]), None)
+        asked_about = 0
+        if self._suggest is not None and named is not None:
+            domain = _domain(named["email"])
+            try:
+                names = await self._suggest(named["name"], "" if domain in PUBLIC_MAIL else domain)
+            except Exception as e:
+                self._journal.write("error", where="brief.suggest", error=type(e).__name__)
+                names = []
+            if names:
+                from .leads import lines
+                asked_about = len(names)
+                body += f"\n\nWorth asking {named['name'].split(' ')[0]} about (each may or may not know them):\n" + lines(names)
         try:
             await self._send(body)
         except Exception as e:
             self._journal.write("brief", event=m["id"], outcome="unsent", error=type(e).__name__)
             return 0
         self._on_delivered(body)
-        self._journal.write("brief", event=m["id"], outcome="delivered", guests=len(guests), searches=len(found), chars=len(text))
+        self._journal.write("brief", event=m["id"], outcome="delivered", guests=len(guests), searches=len(found), chars=len(text), asked_about=asked_about)
         return 1

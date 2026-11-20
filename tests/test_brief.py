@@ -125,3 +125,24 @@ async def test_a_calendar_that_cannot_be_read_does_not_stop_the_loop(tmp_path):
     assert not task.done(), "the loop is still running"
     task.cancel()
     assert any(r["kind"] == "error" and r["where"] == "brief.tick" for r in x.journal.read())
+
+
+async def test_a_brief_names_who_to_ask_the_guest_about_and_goes_out_without_them_if_that_fails(tmp_path):
+    x = Rig(tmp_path, [event()])
+    asked = []
+
+    async def suggest(name, company):
+        asked.append((name, company))
+        if len(asked) == 2:
+            raise RuntimeError("the search fell over")
+        return [{"name": "Dev Malhotra", "does": "Runs Kestrel Bio", "link": "Priya invested in Kestrel Bio", "page": "https://example.org/round"}]
+    x.briefer._suggest = suggest
+    assert await x.briefer.tick() == 1 and asked == [("Priya Nair", "lumengrid.example")]
+    assert x.sent[0].startswith('Before your 15:00 meeting') and x.sent[0].endswith(
+        "Worth asking Priya about (each may or may not know them):\n- Dev Malhotra: Runs Kestrel Bio. Priya invested in Kestrel Bio. https://example.org/round")
+    assert "Dev Malhotra" not in x.prompts[0], "found after the brief is written, by a search that sees none of it"
+    x.events = [event(start="2026-11-20T15:10:00+05:30")]
+    assert await x.briefer.tick() == 1 and "Worth asking" not in x.sent[1], "a failed search does not hold the brief back"
+    x.reply = ("done", "NO_REPLY", 0.01)
+    x.events = [event(start="2026-11-20T15:20:00+05:30")]
+    assert await x.briefer.tick() == 0 and len(asked) == 2, "no brief, no search"

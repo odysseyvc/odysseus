@@ -12,6 +12,9 @@ before the conversation happens.
   the filter     code removes the contact themselves, anyone suggested for this contact before, and (when a lookup is
                  given) anyone already in the firm's database. The model does not see the database.
   the limit      three names. The day's budget applies, and one run happens at a time.
+  the reuse      what was found for a contact is kept in a file. Asked again within a set number of days (the brief
+                 before a second meeting in the same month), the same names are given back and nothing is paid for.
+                 After that, a new search is told the earlier names so that it finds others.
 
 What comes out is a question to put to a person, not a fact about them. A public connection between two people is
 evidence that one may know the other, and the owner finds out by asking. Nothing here reads who follows whom: that is
@@ -21,7 +24,10 @@ profile page is what gets an account restricted.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+import time
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from .journal import Journal, Ledger
@@ -80,16 +86,42 @@ def lines(found: list[dict[str, str]]) -> str:
 
 class Leads:
     def __init__(self, run: Callable[[str], Awaitable[tuple[str, str, float]]], journal: Journal, ledger: Ledger, daily_usd: float,
-                 known: Callable[[str], Awaitable[bool]] | None = None):
+                 known: Callable[[str], Awaitable[bool]] | None = None, state_file: Path | None = None, clock: Callable[[], float] = time.time):
         self._run, self._journal, self._ledger, self._daily, self._known = run, journal, ledger, daily_usd, known
         self._one = asyncio.Lock()
+        self._file, self._clock = state_file, clock
+        self._kept: dict[str, dict[str, Any]] = {}       # by contact: when last searched, what was found then, and every name given so far
+        if state_file is not None:
+            try:
+                self._kept = {k: v for k, v in json.loads(state_file.read_text(encoding="utf-8")).items() if isinstance(v, dict)}
+            except (OSError, ValueError):
+                pass
 
-    async def find(self, name: str, company: str = "", exclude: Any = ()) -> list[dict[str, str]]:
+    def _remember(self, key: str, found: list[dict[str, str]]) -> None:
+        before = self._kept.get(key, {}).get("names") or []
+        self._kept[key] = {"at": round(self._clock()), "found": found, "names": (before + [f["name"] for f in found])[-30:]}
+        if len(self._kept) > 500:
+            for old in sorted(self._kept, key=lambda k: self._kept[k].get("at", 0))[:len(self._kept) - 500]:
+                del self._kept[old]
+        if self._file is not None:
+            try:
+                self._file.parent.mkdir(parents=True, exist_ok=True)
+                self._file.write_text(json.dumps(self._kept, ensure_ascii=False), encoding="utf-8")
+            except OSError as e:
+                self._journal.write("error", where="leads.state", error=type(e).__name__)
+
+    async def find(self, name: str, company: str = "", exclude: Any = (), reuse_days: int = 0) -> list[dict[str, str]]:
         """Up to three people to ask `name` about. Empty when there is nobody, no budget, or the run failed: a
         suggestion is an extra, and its absence never holds up what it would have been added to."""
         name, company = " ".join(str(name or "").split())[:80], " ".join(str(company or "").split())[:80]
         if not name:
             return []
+        key = _norm(f"{name} {company}")
+        earlier = self._kept.get(key) or {}
+        if reuse_days and earlier.get("found") and self._clock() - earlier.get("at", 0) < reuse_days * 86400:
+            self._journal.write("leads", outcome="reused", kept=len(earlier["found"]))
+            return list(earlier["found"])
+        exclude = list(dict.fromkeys([*exclude, *(earlier.get("names") or [])]))
         if self._ledger.spent_today() >= self._daily:
             self._journal.write("leads", outcome="skipped", reason="budget")
             return []
@@ -114,4 +146,6 @@ class Leads:
                 self._journal.write("error", where="leads.known", error=type(e).__name__)
             kept.append(f)
         self._journal.write("leads", outcome="found" if kept else "quiet", found=len(found), kept=len(kept), cost_usd=round(cost, 4))     # counts only
+        if kept:
+            self._remember(key, kept)
         return kept

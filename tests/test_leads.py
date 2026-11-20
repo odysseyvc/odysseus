@@ -111,3 +111,22 @@ def test_the_search_is_asked_about_only_when_it_would_carry_what_was_read_from_t
     gate.taint.add("Board pack for Project Halcyon-7781, confidential, from zed@secretco.example", "your mail")
     assert gate.decide(LEADS_TOOL, {"name": "Tara Menon", "company": "Corvid Freight"}) == ALLOW
     assert gate.decide(LEADS_TOOL, {"name": "Tara Menon zed@secretco.example", "company": "Halcyon-7781"}) == ASK
+
+
+async def test_found_once_is_reused_for_a_while_and_a_later_search_is_told_the_earlier_names(tmp_path):
+    journal = Journal(tmp_path / "j.jsonl")
+    clock, prompts = SimpleNamespace(t=1_000_000.0), []
+
+    async def run(prompt):
+        prompts.append(prompt)
+        return "done", REPLY if len(prompts) == 1 else "Late Comer | Builder | Worked with Tara | https://example.org/late", 0.04
+    make = lambda: Leads(run, journal, Ledger(journal), 5.0, state_file=tmp_path / "leads.json", clock=lambda: clock.t)
+    leads = make()
+    first = await leads.find("Tara Menon", "corvidfreight.example", reuse_days=30)
+    clock.t += 10 * 86400
+    assert await make().find("tara menon", "corvidfreight.example", reuse_days=30) == first and len(prompts) == 1, "kept across a restart, and not paid for twice"
+    assert len(await leads.find("Tara Menon", "elsewhere.example", reuse_days=30)) == 1 and len(prompts) == 2, "another person of the same name is another search"
+    clock.t += 25 * 86400
+    later = await make().find("Tara Menon", "corvidfreight.example", reuse_days=30)
+    assert [f["name"] for f in later] == ["Late Comer"] and "Do not suggest: Tara Menon, Priya Nair, Dev Malhotra, Sam Rivera." in prompts[2]
+    assert [r.get("outcome") for r in journal.read() if r["kind"] == "leads"] == ["found", "reused", "found", "found"]

@@ -212,7 +212,7 @@ async def main() -> int:
         # early founders the person had backed, which is the answer wanted, for about seven cents against under one.
         leads_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True), memory, now, program_tasks=True,
                                            model=settings.model)
-        leads = Leads(leads_runner, journal, ledger, settings.daily_usd, known=already_known)
+        leads = Leads(leads_runner, journal, ledger, settings.daily_usd, known=already_known, state_file=settings.data_dir / "leads.json")
 
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
@@ -272,7 +272,7 @@ async def main() -> int:
     # read-only agent of its own, so that it never waits behind a routine and is worth reading.
     briefer = briefing = brief_runner = None
     if apps is not None and settings.meeting_briefs:
-        from .brief import Briefer
+        from .brief import SUGGEST_AGAIN_DAYS, Briefer
         from .search import make_search_handler
         brief_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
                                                                                 services=services),
@@ -280,7 +280,8 @@ async def main() -> int:
                                            program_tasks=True)
         briefer = Briefer(apps.events_between, brief_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
                           state_file=settings.data_dir / "briefed.json", search=make_search_handler(search, journal), taint=gate.taint,
-                          on_delivered=conversation.record_delivery)
+                          on_delivered=conversation.record_delivery,
+                          suggest=(lambda name, company: leads.find(name, company, reuse_days=SUGGEST_AGAIN_DAYS)) if leads is not None else None)
 
     marks["jobs"] = round(time.monotonic() - _BEGAN, 1)
     watcher = triage = watching = None
