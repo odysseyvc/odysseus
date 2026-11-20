@@ -375,6 +375,11 @@ class Apps:
         out, self._pending = self._pending, []
         return out
 
+    def connect_links(self) -> list[tuple[str, str]]:
+        """(what to call it, the sign-in address) for each of mail and calendar that is not connected yet."""
+        state = self._b.connected()
+        return [(f"Connect {label}", self._b.connect_link(kit)) for kit, label in ((GMAIL, "Gmail"), (CALENDAR, "Google Calendar")) if not state.get(kit)]
+
     def status(self) -> str:
         try:
             state = self._b.connected()

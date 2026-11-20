@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 483 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 492 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -50,7 +50,12 @@ Copy-Item .env.example .env    # then fill it in
 python -m odysseus
 ```
 
-Message your bot in Telegram. Only the account in `OWNER_TELEGRAM_ID` gets replies.
+Message your bot in Telegram. Only the account in `OWNER_TELEGRAM_ID` gets replies, until you invite someone.
+
+To let a colleague in, send `/invite` to the bot and pass on the link it gives you. They open it, tap Start, and sign in
+to their own mail and calendar from two buttons. Each person gets a folder, memory, sign-ins and daily limit of their
+own; you hold the keys, pay for everyone, and could read what is stored. `/people` lists who is here and `/remove`
+stops someone's assistant. For now only you can connect Attio and other services with a server of their own.
 The commands were run on Windows; the macOS and Linux forms are the standard
 equivalents and have not been run by the author.
 

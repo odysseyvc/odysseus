@@ -192,7 +192,7 @@ def test_agents_said_to_have_no_tools_are_given_servers_without_them():
     from odysseus.__main__ import unfinished
     import inspect
     from odysseus import __main__ as program
-    source = inspect.getsource(program.main)
+    source = inspect.getsource(program.assemble)
     assert "make_page_reader(settings, journal, empty_server()" in source and "mail_only=True" in source
 
 

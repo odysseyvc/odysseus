@@ -58,6 +58,8 @@ class Settings:
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
+    people_max: int = 10         # how many people this copy serves at most, the host included (people.py)
+    member_daily_usd: float = 0.0   # the daily spending limit of each invited person. 0: the same as daily_usd
 
 
 def make_clock(tz: str = ""):
@@ -144,4 +146,6 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),
+        people_max=max(1, min(50, int(merged.get("ODYSSEUS_PEOPLE_MAX", "") or 10))),
+        member_daily_usd=float(merged.get("ODYSSEUS_MEMBER_DAILY_USD", "") or 0.0),
     )

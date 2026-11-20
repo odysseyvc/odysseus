@@ -22,9 +22,15 @@ NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 class TelegramChat:
-    def __init__(self, bot: Bot, chat_id: int):
+    def __init__(self, bot: Bot, chat_id: int, who: str = ""):
         self._bot = bot
         self._chat_id = chat_id
+        self.who = who          # the sender's name as Telegram gives it; used only when someone joins (people.py)
+
+    async def links(self, text: str, links: list[tuple[str, str]]) -> None:
+        """A message with one button per address. Each button opens its address in the person's own browser."""
+        rows = [[InlineKeyboardButton(text=label[:40], url=url)] for label, url in links[:6]]
+        await self._bot.send_message(self._chat_id, text, parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
     async def send(self, text: str) -> None:
         # Plain text: no parse mode, so nothing the model writes is read as markup.
@@ -88,7 +94,7 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
         if await late(message):
             return
         user_id = message.from_user.id if message.from_user else 0
-        await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id))
+        await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, who=message.from_user.full_name if message.from_user else ""))
 
     # Photos and documents. The file is fetched only for the owner; conversation.py decides everything else.
     @dp.message(F.chat.type == "private", F.photo | F.document)

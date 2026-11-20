@@ -55,7 +55,10 @@ from .closing import make_closer
 from .checkins import CheckinLoop, Checkins
 from .decisions import Decisions, PassWatch
 from .leads import Leads
-from .config import ConfigError, load, make_clock
+from dataclasses import replace
+from types import SimpleNamespace
+
+from .config import ConfigError, Settings, load, make_clock
 from .conversation import Conversation
 from .history import History
 from .journal import Journal, Ledger
@@ -64,6 +67,7 @@ from .deckview import DeckViewer
 from .links import Fetcher
 from .ocr import MistralOcr
 from .pages import make_page_reader
+from .people import House, People
 from .review import OUTGOING, anthropic_call, make_escalator, make_second_reader
 from .routines import make_routine_runner, make_triage_runner
 from .schedule import Scheduler, ScheduleStore
@@ -138,35 +142,58 @@ def restart_notice(task: dict, resumed: bool) -> str:
     return text + ("" if resumed else " I also no longer have our earlier conversation, only what I remember about you.")
 
 
-async def main() -> int:
-    marks = {"imports": round(time.monotonic() - _BEGAN, 1)}      # seconds since the process began, at each stage of start-up
-    try:
-        settings = load()
-    except ConfigError as e:
-        print(e, file=sys.stderr)
-        return 2
+class Assistant:
+    """Everything one person has: a conversation, its agents, its gate and budget, and the jobs that run for them unasked.
+    The host has one. Each person the host invited has one of their own, built from a folder of their own (people.py)."""
+
+    def __init__(self) -> None:
+        self.conversation = self.journal = self.ledger = self.apps = self.notify = None
+        self.tasks: list = []
+        self.closers: list = []          # called in order when this assistant stops
+
+    async def close(self) -> None:
+        for t in self.tasks:
+            t.cancel()
+        if self.conversation is not None:
+            await self.conversation.wait()
+        for c in self.closers:
+            try:
+                out = c()
+                if asyncio.iscoroutine(out):
+                    await out
+            except Exception as e:
+                self.journal.write("error", where="assistant.close", error=type(e).__name__)
+
+
+async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, marks: dict | None = None) -> Assistant:
+    """Build and start one person's assistant from their settings: `owner_id` is who they are and `data_dir` is their
+    folder. `shared` holds what there is one of in the process: the bot, the tracing client, the keys' clients.
+
+    The host's agents are connected at once, so the first message is not slow. An invited person's are connected by
+    their first message: each connected agent is a process of its own, and most people are not talking at any moment.
+    """
+    def mark(name: str) -> None:
+        if marks is not None:
+            marks[name] = round(time.monotonic() - _BEGAN, 1)
+    me = Assistant()
+    bot, tracing, second_call, search = shared.bot, shared.tracing, shared.second_call, shared.search
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
     now = make_clock(settings.tz)     # one clock for message stamps, memory dates and the schedule
-    journal = Journal(settings.data_dir / "journal.jsonl", echo=True)   # a summary line per step also goes to the machine's log
-    ledger = Ledger(journal, tz=settings.tz)      # "today" ends at the owner's midnight
-    service = synced_folder(settings.data_dir)
-    if service:
-        journal.write("warning", where="data_dir", note=f"inside a {service} folder")
-        print(f"Warning: the data folder {settings.data_dir.resolve()} is inside a {service} folder, so your mail text and "
-              "conversation are being copied to that service. Set ODYSSEUS_DATA_DIR to a folder that is not synced.", file=sys.stderr)
+    journal = me.journal = Journal(settings.data_dir / "journal.jsonl", echo=host)   # the host's summary lines also go to the machine's log
+    ledger = me.ledger = Ledger(journal, tz=settings.tz)      # "today" ends at the person's midnight
     memory = MemoryStore(settings.data_dir / "memory", now=now)
     schedule = ScheduleStore(settings.data_dir / "schedule.db", now=now)
-    search = Exa(api_key=settings.exa_api_key).tools.web_search()
 
     # Mail and calendar exist only if a connector key is set. The owner's Telegram id names their connections.
     connector = ComposioBackend(settings.composio_api_key, f"odysseus-{settings.owner_id}") if settings.composio_api_key else None
-    apps = Apps(connector, journal, now, settings.tz) if connector else None
+    apps = me.apps = Apps(connector, journal, now, settings.tz) if connector else None
     anyapp = AnyApp(connector, journal) if connector else None      # every other app in the connector's catalogue
     # Attio, the firm's customer database, through Attio's own server. It exists once the owner has signed in (scripts/connect_attio.py).
     attio_tokens = FileTokens(settings.data_dir / "attio.json")
     attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
     load_custom_services(settings.data_dir)                          # servers the owner connected from the chat, by address
     services = connected_services(settings.data_dir, journal)       # other services with a server of their own, once signed in to
-    marks["services"] = round(time.monotonic() - _BEGAN, 1)
+    mark("services")
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
         if settings.browser_use_api_key else None
     ocr = MistralOcr(settings.mistral_api_key) if settings.mistral_api_key else None
@@ -178,7 +205,6 @@ async def main() -> int:
     async def on_watch():
         await asyncio.to_thread(box["watcher"].activate)
         await asyncio.to_thread(box["watcher"].start, asyncio.get_running_loop())
-    second_call = anthropic_call(settings.anthropic_api_key)      # one plain call to the small model: the second reader, and closing a conversation
     gate = make_gate(journal, now, with_apps=apps is not None, browser=browser,
                      browser_ask_signed_in=settings.browser_ask_signed_in, anyapp=anyapp, apps=apps, with_watches=watches is not None,
                      taint_file=settings.data_dir / "taint.bin", attio=attio, services=services,
@@ -192,7 +218,7 @@ async def main() -> int:
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
         gate.set_second_reader(make_second_reader(journal, second_call,
                                                   settings.review_model or settings.background_model, gate.taint), OUTGOING)
-    marks["gate"] = round(time.monotonic() - _BEGAN, 1)
+    mark("gate")
     instructions = conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
                                        with_files=ocr is not None, with_anyapp=anyapp is not None,
                                        with_watches=watches is not None, with_attio=attio is not None) + "".join(s.prompt() for s in services)
@@ -221,13 +247,7 @@ async def main() -> int:
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
     workers = [AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions) for _ in range(settings.background_jobs)]
-    marks["runner"] = round(time.monotonic() - _BEGAN, 1)
-    # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
-    tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
-                      secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
-                               settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
-                               settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
-    marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
+    mark("runner")
     gate.taint.listeners.append(tracing.hide)      # what is read from mail, calendar and apps is kept out of the traces
     async def viewer_address() -> str:
         # The address given to a site that asks who is viewing: the one in the settings, or the connected mailbox's own.
@@ -235,30 +255,29 @@ async def main() -> int:
     # A short PDF's pages are looked at in a run of their own, with no tools; only its notes reach the conversation.
     pages = make_page_reader(settings, journal, empty_server(),
                              model=settings.pages_model or None) if ocr is not None else None
-    marks["pages"] = round(time.monotonic() - _BEGAN, 1)
-    conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
+    mark("pages")
+    conversation = me.conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
                                 pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions, worker=workers, checkins=checkins,
                                 closer=make_closer(journal, second_call, settings.background_model),
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
-    marks["conversation"] = round(time.monotonic() - _BEGAN, 1)
+    mark("conversation")
     if apps is not None:
         apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
-    bot = Bot(settings.telegram_token)
 
     # Optional: WhatsApp as a second channel. It needs a door (a port Meta can reach), which Telegram does not.
-    whatsapp = close_http = door = None
-    if settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp:
+    whatsapp = None
+    if host and settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp:
         http, close_http = make_http(settings.whatsapp_token)
         whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
                             app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id)
     # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
     telegram = TelegramChat(bot, settings.owner_id)
     on_whatsapp = whatsapp is not None and settings.notify_on == "whatsapp"
-    notify = whatsapp.chat() if on_whatsapp else telegram
+    notify = me.notify = whatsapp.chat() if on_whatsapp else telegram
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
     run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
@@ -270,7 +289,7 @@ async def main() -> int:
 
     # A brief before each meeting with someone outside the firm (brief.py). It is written by the main model on a
     # read-only agent of its own, so that it never waits behind a routine and is worth reading.
-    briefer = briefing = brief_runner = None
+    briefer = brief_runner = None
     if apps is not None and settings.meeting_briefs:
         from .brief import SUGGEST_AGAIN_DAYS, Briefer
         from .search import make_search_handler
@@ -283,8 +302,8 @@ async def main() -> int:
                           on_delivered=conversation.record_delivery,
                           suggest=(lambda name, company: leads.find(name, company, reuse_days=SUGGEST_AGAIN_DAYS)) if leads is not None else None)
 
-    marks["jobs"] = round(time.monotonic() - _BEGAN, 1)
-    watcher = triage = watching = None
+    mark("jobs")
+    watcher = triage = None
     if watches is not None:
         # Its own read-only agent, so that a check of an incoming email never waits behind a routine or the conversation.
         triage = make_triage_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, mail_only=True), now)
@@ -293,13 +312,14 @@ async def main() -> int:
                                            on_read=lambda text: (gate.taint.add(text), tracing.hide(text)))
         # While anything is being watched, keep the stream of events open: try again every minute if it cannot be
         # opened, and tell the owner if it stays closed.
-        watching = asyncio.create_task(watcher.keep_listening(asyncio.get_running_loop()))
+        me.tasks.append(asyncio.create_task(watcher.keep_listening(asyncio.get_running_loop())))
 
     interrupted = unfinished(journal)      # read before this run of the program writes anything
-    marks["built"] = round(time.monotonic() - _BEGAN, 1)
+    mark("built")
     # Connect the agent loops now, so the first message, and the first job in the background, are not slow.
-    await asyncio.gather(runner.start(), *(w.start() for w in workers))
-    marks["loop"] = round(time.monotonic() - _BEGAN, 1)
+    if host:
+        await asyncio.gather(runner.start(), *(w.start() for w in workers))
+    mark("loop")
     if interrupted is not None:
         # A task was running when the program last stopped. Say so: before this, it vanished without a word.
         try:
@@ -312,21 +332,20 @@ async def main() -> int:
             await notify.send(LOST_CONVERSATION)
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
-    asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, boot=marks)
+                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, host=host, boot=marks or {})
     if whatsapp is not None:
         door = await serve(whatsapp, settings.whatsapp_port)
-    ticking = asyncio.create_task(scheduler.run_forever())
+        me.closers += [door.cleanup, close_http]
+    me.tasks.append(asyncio.create_task(scheduler.run_forever()))
     if briefer is not None:
-        briefing = asyncio.create_task(briefer.run_forever())
+        me.tasks.append(asyncio.create_task(briefer.run_forever()))
     # Once a week: has anything happened to the companies the owner passed on (decisions.py). A read-only run on the small model.
     watch_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True), memory, now, program_tasks=True)
     passwatch = PassWatch(decisions, watch_runner, notify.send, journal, ledger, settings.daily_usd, now=now,
                           state_file=settings.data_dir / "passwatch.json", on_delivered=conversation.record_delivery)
-    watching_passes = asyncio.create_task(passwatch.run_forever())
+    me.tasks.append(asyncio.create_task(passwatch.run_forever()))
     # Each working day: the check-ins that are due (checkins.py). Code only. The buttons need Telegram.
-    checking = None
     if re.fullmatch(r"\d\d:\d\d", settings.checkins_at):
         async def note_on_person(item: dict, text: str) -> bool:
             if attio is None or not item.get("email"):
@@ -341,13 +360,12 @@ async def main() -> int:
             company = item["email"].rsplit("@", 1)[-1] if item.get("email") else ""
             from .brief import PUBLIC_MAIL
             return await leads.find(item["name"], "" if company in PUBLIC_MAIL else company, item.get("suggested") or [])
-        checking = asyncio.create_task(CheckinLoop(checkins, telegram, journal, now=now, at=settings.checkins_at,
+        me.tasks.append(asyncio.create_task(CheckinLoop(checkins, telegram, journal, now=now, at=settings.checkins_at,
                                                    suggest=people_to_ask_about if leads is not None else None,
                                                    send_mail=apps.send_for_code if apps is not None else None,
                                                    messages=apps.messages_for_code if apps is not None else None, note=note_on_person,
-                                                   on_delivered=conversation.record_delivery).run_forever())
+                                                   on_delivered=conversation.record_delivery).run_forever()))
     # Each morning: who the owner met or heard from that is not in the firm's database (capture.py). Code only, reads only.
-    capturing = None
     if apps is not None and attio is not None and re.fullmatch(r"\d\d:\d\d", settings.capture_at):
         async def in_database(email: str) -> bool:
             return (await attio.intake._existing("people", {"email_addresses": [email]}))[0] is not None
@@ -357,46 +375,85 @@ async def main() -> int:
         from zoneinfo import ZoneInfo
         capture = Capture(apps.events_between, apps.messages_for_code, apps.my_address, in_database, propose, journal, now=now,
                           state_file=settings.data_dir / "captured.json", at=settings.capture_at, zone=ZoneInfo(settings.tz) if settings.tz else None)
-        capturing = asyncio.create_task(capture.run_forever())
-    dispatcher = build_dispatcher(bot, conversation)
-    again = []
+        me.tasks.append(asyncio.create_task(capture.run_forever()))
+    if host:
+        # Connecting a service from the chat ends at an address on the machine that runs this, so for now it is the
+        # host's only. A newly connected service restarts the program, for everyone.
+        conversation._connector = Connector(settings.data_dir, journal, shared.restart, also=("Attio",) if attio is not None else ())
+    if brief_runner is not None:
+        me.closers.append(brief_runner.runner.close)
+    if leads_runner is not None:
+        me.closers.append(leads_runner.runner.close)
+    me.closers += [watch_runner.runner.close, runner.close, *(w.close for w in workers), run_routine.runner.close]
+    if watcher is not None:
+        me.closers += [watcher.stop, triage.runner.close]
+    return me
+
+
+def member_settings(settings: Settings, user_id: int) -> Settings:
+    """The host's settings as an invited person gets them: their own id, a folder of their own inside the host's, their
+    own daily limit, and no WhatsApp (one number serves one person)."""
+    return replace(settings, owner_id=user_id, data_dir=settings.data_dir / "people" / str(user_id),
+                   daily_usd=settings.member_daily_usd or settings.daily_usd, notify_on="telegram",
+                   whatsapp_token="", whatsapp_phone_id="", whatsapp_app_secret="", owner_whatsapp="")
+
+
+async def main() -> int:
+    marks = {"imports": round(time.monotonic() - _BEGAN, 1)}      # seconds since the process began, at each stage of start-up
+    try:
+        settings = load()
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+    service = synced_folder(settings.data_dir)
+    if service:
+        print(f"Warning: the data folder {settings.data_dir.resolve()} is inside a {service} folder, so your mail text and "
+              "conversation are being copied to that service. Set ODYSSEUS_DATA_DIR to a folder that is not synced.", file=sys.stderr)
+    again, box = [], {}
 
     def restart() -> None:
         # A newly connected service brings tools that are fixed when the program starts, so it starts again, in place.
         again.append(True)
-        asyncio.get_running_loop().call_later(1.5, lambda: asyncio.ensure_future(dispatcher.stop_polling()))
-    conversation._connector = Connector(settings.data_dir, journal, restart, also=("Attio",) if attio is not None else ())
+        asyncio.get_running_loop().call_later(1.5, lambda: asyncio.ensure_future(box["dispatcher"].stop_polling()))
+    # What there is one of, however many people are served: the bot, the search client, one plain call to the small model
+    # (the second reader, and closing a conversation), and the optional record of every task in Langfuse, from which
+    # every secret in the settings is removed.
+    bot = Bot(settings.telegram_token)
+    tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
+                      secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
+                               settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
+                               settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
+    marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
+    second_call = anthropic_call(settings.anthropic_api_key)
+    shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), restart=restart)
+    host = await assemble(settings, shared, True, marks)
+    if service:
+        host.journal.write("warning", where="data_dir", note=f"inside a {service} folder")
+    asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
+
+    # The people the host has invited, each with an assistant of their own (people.py).
+    people = People(settings.data_dir / "people.json")
+
+    async def link(code: str) -> str:
+        return f"https://t.me/{(await bot.get_me()).username}?start={code}"
+    house = House(settings.owner_id, people, host.journal, lambda user_id: assemble(member_settings(settings, user_id), shared, False),
+                  link, most=settings.people_max)
+    house.add(settings.owner_id, host)
+    for user_id in people.ids()[:settings.people_max - 1]:
+        try:
+            house.add(user_id, await assemble(member_settings(settings, user_id), shared, False))
+        except Exception as e:
+            host.journal.write("error", where="people.start", user_id=user_id, error=type(e).__name__, message=str(e)[:200])
+    if people.ids():
+        host.journal.write("people", serving=len(people.ids()) + 1)
+    dispatcher = box["dispatcher"] = build_dispatcher(bot, house)
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
         await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
-        ticking.cancel()
-        if briefing is not None:
-            briefing.cancel()
-            await brief_runner.runner.close()
-        if capturing is not None:
-            capturing.cancel()
-        if checking is not None:
-            checking.cancel()
-        if leads_runner is not None:
-            await leads_runner.runner.close()
-        watching_passes.cancel()
-        await watch_runner.runner.close()
-        if watching is not None:
-            watching.cancel()
-        await conversation.wait()
-        await runner.close()
-        for w in workers:
-            await w.close()
-        await run_routine.runner.close()
-        if watcher is not None:
-            watcher.stop()
-            await triage.runner.close()
+        await house.close()
         await bot.session.close()
-        if door is not None:
-            await door.cleanup()
-        if close_http is not None:
-            await close_http()
         tracing.close()
     return RESTART if again else 0
 
