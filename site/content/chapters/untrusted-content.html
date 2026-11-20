@@ -37,7 +37,7 @@
 </dl></div>
 
 <h2 id="routes">Where other people's words reach the model</h2>
-<p>Defence starts with an honest inventory. Every route below exists in the program. The last three are easy to forget.</p>
+<p>Defence starts with a list of every way in. Every route below exists in the program. The last three are easy to forget.</p>
 <div class="tablewrap"><table>
 <caption>Every route by which untrusted text reaches the model, and what is done to it on the way in.</caption>
 <thead><tr><th>Route</th><th>Who can write it</th><th>Treatment on arrival</th></tr></thead>
@@ -247,7 +247,7 @@ pages = make_page_reader(settings, journal, empty_server(),
 <li><strong>The model, misled or merely eager, searches for "SkyJet booking QX7R2L seat 14C".</strong> <code>leaked</code> returns <code>["qx7r2l"]</code>. The rule answers "ask". The owner sees a question built by code: "Search the web with this? It contains details that came from your mail, calendar or apps, and a search is sent to a search company. Details recognised: qx7r2l", followed by the query and its purpose.</li>
 <li><strong>Two variants.</strong> Had the owner typed "look up check-in for booking QX7R2L" in step 1, the same query would run unasked: the owner said it. And had the model written "SkyJet booking Q X 7 R 2 L", or searched "Lakeview Hall parking", nothing would be recognised. The first is a split code; the second a place name, which is not a fingerprint by design.</li>
 </ol>
-<p>The output is one question naming the detail that would have left. The variants are the honest part: the check notices the crude leak and nothing cleverer.</p>
+<p>The output is one question naming the detail that would have left. The variants show its limit: the check notices the crude leak and nothing cleverer.</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <h3>Two allowed actions that add up to a leak</h3>
