@@ -57,6 +57,26 @@ class Chat:
         self.buttons.append((text, links))
 
 
+def processes() -> tuple[int, int]:
+    """(how many processes this run has started and still has, their memory in MB), this one not counted. Windows only."""
+    import json
+    import os
+    import subprocess
+    out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                          "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Json -Compress"],
+                         capture_output=True, text=True).stdout
+    rows = json.loads(out)
+    kids: dict[int, list] = {}
+    for r in rows:
+        kids.setdefault(r["ParentProcessId"], []).append(r)
+    seen, todo, size = 0, [os.getpid()], 0
+    while todo:
+        for r in kids.get(todo.pop(), []):
+            seen, size = seen + 1, size + int(r["WorkingSetSize"] or 0)
+            todo.append(r["ProcessId"])
+    return seen, size // (1024 * 1024)
+
+
 async def say(house, uid, text) -> tuple[str, float]:
     chat = Chat()
     began = time.monotonic()
@@ -71,14 +91,16 @@ async def main() -> int:
     settings = replace(real, owner_id=HOST, data_dir=root, background_jobs=1, meeting_briefs=False, checkins_at="off", capture_at="off",
                        whatsapp_token="", langfuse_public_key="", langfuse_secret_key="")
     shared = SimpleNamespace(bot=Bot(), tracing=Tracing("", "", ""), second_call=anthropic_call(settings.anthropic_api_key),
-                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), restart=lambda: None)
-    host = await entry.assemble(settings, shared, False)
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=__import__('odysseus.door', fromlist=['Door']).Door(), rebuild=lambda user_id: None)
+    shared.rebuild = lambda user_id: house.rebuild_soon(user_id)
+    host = await entry.assemble(settings, shared, True)
+    at_start = processes()
     people = People(root / "people.json")
     built = []
 
     async def assemble(uid):
         began = time.monotonic()
-        a = await entry.assemble(entry.member_settings(settings, uid), shared, False)
+        a = await entry.assemble(settings, shared, True) if uid == HOST else await entry.assemble(entry.member_settings(settings, uid), shared, False)
         built.append(round(time.monotonic() - began, 1))
         return a
 
@@ -125,12 +147,38 @@ async def main() -> int:
     a_memory = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in (root / "people" / str(A) / "memory").rglob("*") if p.is_file())
     check("it is in the first person's own memory folder", "7741" in a_memory)
 
+    # 2b. What two people who have talked hold in processes and memory, and what is given back when they fall silent.
+    talking = processes()
+    house._heard = {A: 0.0, B: 0.0}
+    freed = await house.park_idle(1)
+    await asyncio.sleep(3)
+    parked = processes()
+    check("silent people's agent processes are let go, and the host's are kept",
+          freed >= 2 and parked[0] < talking[0] and parked[0] >= at_start[0],
+          f"processes and MB: host alone {at_start}, both people talking {talking}, after parking {parked}; {freed} agents let go")
+    back, t_back = await say(house, A, "What is my favourite fruit?")
+    check("a parked person's next message is answered from the same conversation", "7741" in back, f"{t_back:.0f} s")
+
+    # 2c. The host connects a service: only the host's assistant is built again, in the same process.
+    before_a, before_host = house._at[A], house._at[HOST]
+    hello, t_host = await say(house, HOST, "Reply with the single word: ready")
+    began = time.monotonic()
+    house._at[HOST].conversation._connector._restart()
+    await house._rebuilding[HOST]
+    t_rebuild = time.monotonic() - began
+    again, t_again = await say(house, HOST, "Reply with the single word: ready")
+    check("the host's assistant is built again in place and answers; the others are untouched",
+          house._at[HOST] is not before_host and house._at[A] is before_a and "ready" in hello.lower() and "ready" in again.lower(),
+          f"rebuilt in {t_rebuild:.1f} s; the host's replies took {t_host:.0f} s before and {t_again:.0f} s after")
+    in_a, _ = await say(house, A, "Reply with the single word: here")
+    check("someone else can talk straight after", "here" in in_a.lower())
+
     # 3. The host's view, and what it cost.
     chat = Chat()
     await house.handle(HOST, "/people", chat)
     print(chat.sent[-1], "\n")
     spent = {uid: house._at[uid].ledger.spent_today() for uid in (HOST, A, B)}
-    check("each person's spending is counted apart", spent[A] > 0 and spent[B] > 0 and spent[HOST] == 0, f"A ${spent[A]:.3f}, B ${spent[B]:.3f}, host ${spent[HOST]:.3f}")
+    check("each person's spending is counted apart", spent[A] > 0 and spent[B] > 0 and spent[HOST] > 0, f"A ${spent[A]:.3f}, B ${spent[B]:.3f}, host ${spent[HOST]:.3f}")
 
     # 4. Removing a person.
     await house.handle(HOST, f"/remove {B}", chat)

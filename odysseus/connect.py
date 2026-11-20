@@ -176,10 +176,13 @@ class Connector:
     def __init__(self, data_dir: Path, journal: Journal, restart: Callable[[], None], opener: Any = session,
                  port: Callable[[], int] = free_port, public: Callable[[str], Awaitable[bool]] = public_host,
                  timeout_s: float = SIGN_IN_TIMEOUT_S, also: tuple[str, ...] = (), lookup: Any = None, probe: Any = None,
-                 remote: bool = False):
+                 remote: bool = False, public_url: str = "", door: Any = None):
         self._lookup, self._probe = lookup or registry_lookup, probe or is_server
         self._remote = remote       # the person signing in is not at this machine: they send back the address their browser ends on
         self._came_back: asyncio.Future | None = None
+        # With a public address and a door (door.py), every sign-in comes back to a page of this program's own.
+        self._page = public_url.rstrip("/") + "/callback" if public_url and door is not None else ""
+        self._door = door
         self._dir, self._journal, self._restart = Path(data_dir), journal, restart
         self._also = also       # connected by other means (Attio has its own script), named in the list so it is complete
         self._open, self._port, self._public, self._timeout = opener, port, public, timeout_s
@@ -188,12 +191,17 @@ class Connector:
     def _tokens(self, slug: str) -> FileTokens:
         return FileTokens(self._dir / f"{slug}.json")
 
+    def _apps(self) -> dict[str, dict[str, Any]]:
+        return mcpapp.known(self._dir)
+
     def _on(self, slug: str) -> bool:
-        return self._tokens(slug).signed_in() or bool(mcpapp.APPS.get(slug, {}).get("open"))
+        return self._tokens(slug).signed_in() or bool(self._apps().get(slug, {}).get("open"))
 
     async def pasted(self, text: str) -> str:
         """The person sent the address their browser ended on. What to tell them. The address is not kept or logged."""
         waiting = self._came_back
+        if self._page:
+            return "There is nothing to send me for this sign-in: the page you approved on finishes it. If it said Connected, you are done."
         if waiting is None or waiting.done():
             return "No sign-in is waiting for that address. Send /connect and a name to start one."
         query = parse_qs(urlsplit(pasted_address(text) or "").query)
@@ -203,8 +211,8 @@ class Connector:
         return "Got it. Finishing the sign-in."
 
     def listing(self) -> str:
-        on = [a for a in self._also if a != "Attio" or self._tokens("attio").signed_in()] + [f"{spec['title']} ({slug})" for slug, spec in mcpapp.APPS.items() if self._on(slug)]
-        off = [f"{spec['title']} ({slug})" for slug, spec in mcpapp.APPS.items() if not self._on(slug)]
+        on = [a for a in self._also if a != "Attio" or self._tokens("attio").signed_in()] + [f"{spec['title']} ({slug})" for slug, spec in self._apps().items() if self._on(slug)]
+        off = [f"{spec['title']} ({slug})" for slug, spec in self._apps().items() if not self._on(slug)]
         if not self._tokens("attio").signed_in():
             off.insert(0, "Attio (attio)")
         return ("Connected: " + (", ".join(on) or "none") + "."
@@ -223,8 +231,9 @@ class Connector:
         first = words[0].strip(".,<>") if words else ""
         if first.lower() == "attio":
             return ("Attio is already connected." if self._tokens("attio").signed_in() else ("attio", ATTIO, ""))
-        if first.lower() in mcpapp.APPS:
-            return first.lower(), mcpapp.APPS[first.lower()], ""
+        apps = self._apps()
+        if first.lower() in apps:
+            return first.lower(), apps[first.lower()], ""
         if first.lower().startswith("http://"):
             return "I only connect to https addresses."
         note = ""
@@ -239,7 +248,7 @@ class Connector:
         u = urlsplit(first)
         if u.scheme != "https" or not u.hostname or "." not in u.hostname:
             return "Send /connect with a service's name, its website, or its server's address, for example /connect https://mcp.example.com/mcp."
-        for slug, spec in mcpapp.APPS.items():          # a known service given by its address keeps what is known of it
+        for slug, spec in apps.items():          # a known service given by its address keeps what is known of it
             known = urlsplit(spec["url"])
             if known.hostname == u.hostname and (known.path.rstrip("/") == u.path.rstrip("/") or u.path in ("", "/")):
                 return slug, spec, ""
@@ -258,7 +267,7 @@ class Connector:
                 return self._not_found(site, found)
             first, note = found[0], f"{u.hostname} is a website, not a server. The server that belongs to it is {found[0]}"
         slug = re.sub(r"[^a-z0-9]", "", words[1].lower())[:20] if len(words) > 1 else slug_for(first)
-        if not slug or slug in RESERVED or slug in mcpapp.APPS:
+        if not slug or slug in RESERVED or slug in apps:
             return (f"I need a short name for it that is not already taken. Send it after the address, for example "
                     f"/connect {first} mytool.")
         return slug, mcpapp.custom_spec(slug, first), note
@@ -302,6 +311,11 @@ class Connector:
 
         async def show(link: str) -> None:
             asked = (parse_qs(urlsplit(link).query).get("scope") or [""])[0]
+            if self._page:
+                await send(f"To connect {title}, open this link, sign in and approve. "
+                           + (f"It asks for these permissions: {asked}. " if asked else "The service chooses which permissions to ask for; read its page. ")
+                           + f"You will see a page that says Connected; then come back here. The link is good for ten minutes.\n\n{link}")
+                return
             if self._remote:
                 await send(f"To connect {title}, open this link, sign in and approve. "
                            + (f"It asks for these permissions: {asked}. " if asked else "The service chooses which permissions to ask for; read its page. ")
@@ -314,13 +328,25 @@ class Connector:
                        + f"The link is good for ten minutes.\n\n{link}")
         try:
             asked: list[bool] = []
+            mark: list[str] = []
 
             async def shown(link: str) -> None:
                 asked.append(True)
+                if self._page:          # tell the door which sign-in to let in, before anyone can open the link
+                    mark.append((parse_qs(urlsplit(link).query).get("state") or [""])[0])
+                    self._came_back = self._door.expect(mark[0])
                 await show(link)
 
             async def go() -> list[Any]:
-                if self._remote:
+                if self._page:
+                    registered = (tokens._read().get("client") or {}).get("redirect_uris") or []
+                    if registered and str(registered[0]) != self._page and not tokens.signed_in():
+                        tokens._write("client", {})      # registered for another return address: register again for this one
+
+                    async def from_the_page():
+                        return await self._came_back
+                    opened = self._open(tokens, shown, spec["url"], spec.get("scope"), CALLBACK_PORT, came_back_with=from_the_page, redirect=self._page)
+                elif self._remote:
                     self._came_back = asyncio.get_running_loop().create_future()
                     waiting = self._came_back
 
@@ -335,6 +361,8 @@ class Connector:
                 tools = await asyncio.wait_for(go(), self._timeout)
             finally:
                 self._came_back = None
+                if mark:
+                    self._door.forget(mark[0])
         except asyncio.TimeoutError:
             self._journal.write("connect", service=slug, ok=False, error="not approved in time")
             await send(f"Nobody approved the {title} sign-in in ten minutes, so nothing was connected. Send /connect again to try once more.")
@@ -361,20 +389,19 @@ class Connector:
         open_ = not tokens.signed_in()       # the server answered without any sign-in: a public one
         if open_:
             spec = {**spec, "open": True}
-            mcpapp.APPS[slug] = spec
-        if spec.get("custom"):
+        if spec.get("custom") or open_:
             mcpapp.save_custom(self._dir, slug, spec)
         self._journal.write("connect", service=slug, ok=True, tools=len(shown), reads=reads, custom=bool(spec.get("custom")))
         await send(f"{title} is connected" + (" (it asked for no sign-in: it is a public server)" if open_ else "") + f": {len(shown)} tools. {reads} only read and will run when I need them; "
                    f"{len(shown) - reads} add or change something and will be put to you first, each time."
                    + (" Nobody has read this server's tools before: they are sorted by the server's own labels and their names."
                       if spec.get("custom") else "")
-                   + (" One moment while I pick it up." if self._remote else " I am restarting to pick it up, which takes a few seconds."))
+                   + " One moment while I pick it up.")
         self._restart()
 
     async def disconnect(self, arg: str, send: Callable[[str], Awaitable[None]]) -> None:
         slug = arg.strip().lower()
-        known = {**mcpapp.APPS, "attio": ATTIO}
+        known = {**self._apps(), "attio": ATTIO}
         if slug not in known:
             await send("Send /disconnect and the name of a connected service. /connect lists them.")
             return
@@ -393,5 +420,5 @@ class Connector:
             return
         await send((f"{title} is forgotten here. It was a public server with no sign-in, so there is nothing to withdraw. " if public else
                     f"{title} is forgotten here: I have deleted its sign-in. To withdraw the permission at {title} itself, remove this "
-                    "program in that service's own settings. ") + ("One moment." if self._remote else "I am restarting, which takes a few seconds."))
+                    "program in that service's own settings. ") + "One moment.")
         self._restart()

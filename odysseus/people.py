@@ -131,6 +131,7 @@ class House:
         self._tries: dict[int, list[float]] = {}
         self._joining: set[int] = set()
         self._rebuilding: dict[int, Any] = {}     # people whose assistant is being built again (a new connection), and the task doing it
+        self._heard: dict[int, float] = {}        # when each person last sent anything
 
     def add(self, user_id: int, assistant: Any) -> None:
         self._at[user_id] = assistant
@@ -138,6 +139,19 @@ class House:
     def is_owner(self, user_id: int) -> bool:
         """Someone whose files may be fetched and whose late messages are reported: anyone with an assistant here."""
         return user_id in self._at
+
+    async def park_idle(self, after_s: float) -> int:
+        """Let go of the agent processes of every invited person who has sent nothing for `after_s` seconds. The host's
+        stay, so that the host's first message is never slow. How many processes were let go."""
+        freed = 0
+        for user_id, a in list(self._at.items()):
+            if user_id == self._host or user_id in self._rebuilding or self._clock() - self._heard.get(user_id, 0.0) < after_s:
+                continue
+            n = await a.park()
+            if n:
+                freed += n
+                self._journal.write("member", outcome="parked", user_id=user_id, agents=n)
+        return freed
 
     def rebuild_soon(self, user_id: int) -> None:
         """Build one person's assistant again, so that it has a service they have just connected. Nobody else is touched."""
@@ -267,6 +281,7 @@ class House:
         if a is None:
             await self._stranger(user_id, text, chat)
             return
+        self._heard[user_id] = self._clock()
         stripped = (text or "").strip()
         if user_id in self._rebuilding:
             await chat.send("One moment: I am picking up what you just connected. Send that again in a few seconds.")
@@ -282,6 +297,7 @@ class House:
         if a is None:
             self._journal.write("dropped", user_id=user_id)
             return
+        self._heard[user_id] = self._clock()
         await a.conversation.handle_file(user_id, *args, **more)
 
     async def handle_voice(self, user_id: int, *args: Any, **more: Any) -> None:
@@ -289,6 +305,7 @@ class House:
         if a is None:
             self._journal.write("dropped", user_id=user_id)
             return
+        self._heard[user_id] = self._clock()
         await a.conversation.handle_voice(user_id, *args, **more)
 
     async def handle_decision(self, user_id: int, *args: Any, **more: Any) -> str:

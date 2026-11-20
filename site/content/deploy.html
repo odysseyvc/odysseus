@@ -91,7 +91,7 @@ fly logs</code></pre></div>
 <li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions.</li>
 <li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
 <li>Set <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_APP_SECRET</code>, <code>OWNER_WHATSAPP</code> (your number with country code) and <code>WHATSAPP_VERIFY_TOKEN</code> (any phrase you choose) as secrets.</li>
-<li>Uncomment the <code>[http_service]</code> section at the end of <code>fly.toml</code> and deploy.</li>
+<li>The <code>[http_service]</code> section at the end of <code>fly.toml</code> opens the port; it is already on if you kept it for sign-ins. Deploy.</li>
 <li>In the Meta app, register the webhook address <code>https://your-app-name.fly.dev/whatsapp</code> with the same phrase, and subscribe to <code>messages</code>.</li>
 </ol>
 <div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>

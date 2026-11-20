@@ -346,6 +346,14 @@ class AgentRunner:
 
     close = reset
 
+    async def park(self) -> bool:
+        """Let the connection go if nothing is running on it. Each connection is a process of its own, holding memory
+        whether or not anyone is talking; the next task opens a new one and carries the same conversation on."""
+        if self._client is None or self._running:
+            return False
+        await self.reset()
+        return True
+
     async def forget_session(self) -> None:
         """End this conversation for good. The next task begins a new one with nothing carried over."""
         await self.reset()

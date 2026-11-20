@@ -217,6 +217,20 @@ def make_http(token: str) -> tuple[Http, Callable[[], Awaitable[None]]]:
     return http, client.aclose
 
 
+def attach(whatsapp: WhatsApp, door: Any) -> Callable[[], None]:
+    """Answer /whatsapp at the program's one door (door.py). Returns what takes it away again."""
+    from aiohttp import web
+
+    async def get(request):
+        status, body = whatsapp.verify(dict(request.query))
+        return web.Response(status=status, text=body)
+
+    async def post(request):
+        return web.Response(status=whatsapp.receive(await request.read(), request.headers.get("X-Hub-Signature-256", "")))
+    off = [door.route("GET", "/whatsapp", get), door.route("POST", "/whatsapp", post)]
+    return lambda: [f() for f in off] and None
+
+
 async def serve(whatsapp: WhatsApp, port: int):
     """Open the door: one address, /whatsapp, answering Meta's handshake and its deliveries. Returns the thing to stop it with."""
     from aiohttp import web

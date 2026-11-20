@@ -143,7 +143,8 @@ def _return_port(tokens: FileTokens, port: int | None) -> int:
 
 
 def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None, url: str = ATTIO_URL, scope: str | None = SCOPE,
-              port: int | None = None, came_back_with: Callable[[], Awaitable[tuple[str, str | None, str | None]]] | None = None):
+              port: int | None = None, came_back_with: Callable[[], Awaitable[tuple[str, str | None, str | None]]] | None = None,
+              redirect: str | None = None):
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import AuthorizationCodeResult, OAuthClientMetadata
 
@@ -155,7 +156,7 @@ def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | 
         code, state, iss = await (came_back_with() if came_back_with is not None else wait_for_callback(port=back))
         return AuthorizationCodeResult(code=code, state=state, iss=iss)
 
-    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[f"http://127.0.0.1:{back}/callback"], scope=scope, token_endpoint_auth_method="none",
+    meta = OAuthClientMetadata(client_name="Odysseus", redirect_uris=[redirect or f"http://127.0.0.1:{back}/callback"], scope=scope, token_endpoint_auth_method="none",
                                grant_types=["authorization_code", "refresh_token"], response_types=["code"])
     async def shown(link: str) -> None:
         await (show_link or _refuse)(pin_scope(link, scope))
@@ -246,7 +247,8 @@ async def renew_if_due(tokens: FileTokens, url: str, client: Any = None, now: Ca
 
 @asynccontextmanager
 async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | None = None, url: str = ATTIO_URL,
-                  scope: str | None = SCOPE, port: int | None = None, came_back_with: Any = None) -> AsyncIterator[Any]:
+                  scope: str | None = SCOPE, port: int | None = None, came_back_with: Any = None,
+                  redirect: str | None = None) -> AsyncIterator[Any]:
     """An open session with a vendor's own server (Attio's unless another address is given). Without `show_link` it never
     starts a sign-in: it fails if one is needed. `scope` None lets the server say what to ask for."""
     from mcp import ClientSession
@@ -254,7 +256,7 @@ async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]
 
     if show_link is None:           # an ordinary use, not a sign-in: make sure the saved sign-in has not run out
         await renew_if_due(tokens, url)
-    async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope, port, came_back_with)) as http:
+    async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope, port, came_back_with, redirect)) as http:
         async with streamable_http_client(url, http_client=http) as streams:
             async with ClientSession(streams[0], streams[1]) as s:
                 await s.initialize()

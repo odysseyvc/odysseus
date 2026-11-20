@@ -260,3 +260,45 @@ async def test_the_program_starts_an_assistant_for_each_member_and_connects_only
     assert not host.conversation._connector._remote and seven.conversation._connector._remote, "an invited person's sign-in comes back through the chat"
     assert seven.conversation.is_owner(7) and not seven.conversation.is_owner(1) and not host.conversation.is_owner(7)
     assert [r["kind"] for r in Journal(tmp_path / "people" / "7" / "journal.jsonl").read()] == ["start"]
+    # The host connects a service: only the host's assistant is built again, as a host, and nobody else's is touched.
+    host.conversation._connector._restart()
+    await house._rebuilding[1]
+    again = house._at[1]
+    assert again is not host and house._at[7] is seven and house._at[8] is eight
+    assert not again.conversation._connector._remote and again.conversation._s.data_dir == tmp_path and again.conversation._s.owner_id == 1
+    assert len(seven.agents) >= 4 and seven.gate is seven.conversation._gate, "every agent of a person is known, so that an idle one can be let go"
+
+
+async def test_a_silent_persons_agents_are_let_go_and_the_hosts_are_not(tmp_path):
+    x = rig(tmp_path)
+    parked = []
+    for uid in (HOST, 7, 8):
+        a = x.host if uid == HOST else assistant()
+
+        async def park(uid=uid):
+            parked.append(uid)
+            return 3
+        a.park = park
+        x.house.add(uid, a)
+    await x.house.handle(7, "hello", Chat())
+    x.clock.t += 600
+    await x.house.handle(8, "hello", Chat())
+    x.clock.t += 400
+    assert await x.house.park_idle(900) == 3 and parked == [7], "7 has been silent for long enough; 8 has not; the host is never parked"
+    assert [r["user_id"] for r in x.journal.read() if r.get("outcome") == "parked"] == [7]
+
+
+async def test_an_agent_is_parked_only_when_nothing_runs_on_it(tmp_path):
+    from odysseus.agent import AgentRunner
+    gone = []
+
+    class Client:
+        async def disconnect(self):
+            gone.append(1)
+    r = AgentRunner.__new__(AgentRunner)
+    r._journal, r._client, r._running = Journal(tmp_path / "j.jsonl"), None, False
+    assert await r.park() is False, "never connected"
+    r._client, r._running = Client(), True
+    assert await r.park() is False and gone == [], "a task is running on it"
+    r._running = False
+    assert await r.park() is True and gone == [1] and r._client is None

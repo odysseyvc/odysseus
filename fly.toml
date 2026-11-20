@@ -1,12 +1,18 @@
 # Odysseus on Fly.io: one small machine that is always on, with one disk.
 #
-# There is no [http_service] section on purpose. The bot fetches its messages
-# from Telegram by long polling, so nothing needs to reach this machine from
-# the internet, and no port is opened.
+# The bot fetches its messages from Telegram by long polling, so Telegram
+# needs no open port. One port is opened all the same, by the section at the
+# end of this file, for two things:
 #
-# WhatsApp is different: Meta calls the program. If you switch WhatsApp on,
-# uncomment the section at the end of this file. It opens one port, and the
-# address to register with Meta is https://<your-app>.fly.dev/whatsapp
+#   /callback   where a person's browser lands after approving a sign-in to
+#               Attio or another service, so that nobody has to copy an
+#               address into the chat. It needs ODYSSEUS_PUBLIC_URL below.
+#   /whatsapp   Meta's deliveries, if you switch WhatsApp on. The address to
+#               register with Meta is https://<your-app>.fly.dev/whatsapp
+#
+# Every other path answers "not found". To open no port at all, delete the
+# [http_service] section and the ODYSSEUS_PUBLIC_URL line; sign-ins then come
+# back through the chat.
 #
 app = "odysseus-611755"
 primary_region = "sin"
@@ -16,11 +22,16 @@ primary_region = "sin"
   # The server's own clock is UTC. Reminders, routines and message stamps must
   # use the owner's local time.
   ODYSSEUS_TZ = "Asia/Kolkata"
+  # This app's own address. Change it with the app's name.
+  ODYSSEUS_PUBLIC_URL = "https://odysseus-611755.fly.dev"
 
 [mounts]
   source = "odysseus_data"
   destination = "/data"
 
+# Memory: the host's agents hold about 420 MB, and each other person about
+# 200 MB while they are talking and nothing fifteen minutes after they stop.
+# 1 GB serves the host and two people talking at once; use 2gb for a firm.
 [[vm]]
   size = "shared-cpu-1x"
   memory = "1gb"
@@ -28,10 +39,10 @@ primary_region = "sin"
 [[restart]]
   policy = "always"
 
-# Only for WhatsApp. See the note at the top of this file.
-# [http_service]
-#   internal_port = 8080
-#   force_https = true
-#   auto_stop_machines = "off"
-#   auto_start_machines = false
-#   min_machines_running = 1
+# For sign-ins coming back, and for WhatsApp. See the note at the top of this file.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1

@@ -121,7 +121,6 @@ async def testset() -> int:
 
 def connected() -> list[mcpapp.McpApp]:
     s = load()
-    mcpapp.load_custom(s.data_dir)
     return [a for a in mcpapp.connected(Path(s.data_dir), Journal(OUT / "journal.jsonl")) if a.slug in VENDORS]
 
 

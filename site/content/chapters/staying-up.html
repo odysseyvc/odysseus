@@ -159,6 +159,7 @@ return True</code></pre>
 <p>The obvious way is to restart inside the running process: stop polling, tear everything down, build it all again. That leaves behind anything that exists once per process and was shut by the first clean-up. A restart must begin from a new process.</p>
 <div class="box example"><div class="label">Case note: a restart that dropped every trace</div>
 <p>Restarting in place worked every time it was tried, in testing and in the owner's real chat. Every trace after the first restart was nonetheless silently dropped. The tracing client exists once per process, the first run's clean-up had shut it, and nothing reopened it. The live check of tracing runs one task in a fresh process, so it could not see this. No test found it; running the errand for real, connect after connect, did.</p></div>
+<p>What follows is how the restart was first made safe. It is no longer what happens on a new connection. Once each person's assistant was built by one function from one folder ({{ch:channels}}), connecting a service could close that one assistant and build it again, leaving everything that exists once per process open: the tracing client, the bot, the other people. The supervisor remains, for whatever next needs a clean process.</p>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Supervisor</dt><dd>A small parent process whose only job is to start the real program as a child and decide, when the child exits, whether to start another.</dd></dl></div>
 <p>A new process has none of the old one's history. So <code>python -m odysseus</code> starts a supervisor, which runs the program as a child marked by an environment variable:</p>
@@ -269,7 +270,7 @@ return True</code></pre>
 <li>A conversation survives if two things are kept where data survives: the session identifier and the library's transcript. If it cannot be picked up, start a new one rather than fail every message.</li>
 <li>An interrupted task is announced, with its first words and any messages that were waiting, and not resumed: the program cannot know how far it got, and doing something twice cannot be undone. Approvals die with the process, and the notice says so.</li>
 <li>A message more than ten minutes old on arrival was written for a moment that has passed. Report it; do not act on it.</li>
-<li>Restart by exiting to a supervisor that starts a fresh process. Restarting in place leaves process-wide state behind.</li>
+<li>Restart by exiting to a supervisor that starts a fresh process. Restarting in place leaves process-wide state behind. Better still, rebuild only the part that changed and leave the process alone.</li>
 <li>Long polling needs no inbound port. A webhook channel opens one, and a sign-in that returns to the program completes only on the machine the program runs on.</li>
 <li>Pin the clock to the owner's zone, and hand the data disk to the program's user at start. Then check again after ten minutes, not thirty seconds.</li>
 </ul></div>

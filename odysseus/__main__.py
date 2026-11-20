@@ -16,9 +16,9 @@ RESTART = 75      # the exit code by which the child asks to be started again
 def supervise() -> int:
     """Run the program as a child process, and start it again whenever it ends asking to be restarted.
 
-    A newly connected service needs a restart (connect.py). Starting again inside the same process was tried first and
-    worked six times in a row, except that whatever exists once per process, such as the tracing client, had been shut
-    down by the first run and stayed shut. A new process has none of that history.
+    Nothing in the program asks for this today: a newly connected service now rebuilds one person's assistant in
+    place (people.py), where it once restarted the whole program. The exit code is kept for whatever next needs a
+    clean process.
     """
     import subprocess
     env = {**os.environ, "ODYSSEUS_CHILD": "1"}
@@ -46,7 +46,6 @@ from .anyapp import AnyApp
 from .attio import Attio, FileTokens, McpBackend
 from .connect import Connector
 from .mcpapp import connected as connected_services
-from .mcpapp import load_custom as load_custom_services
 from .apps import Apps, ComposioBackend
 from .browser import Browser, BrowserUseBackend
 from .capture import MATERIAL as CAPTURE_MATERIAL
@@ -54,6 +53,7 @@ from .capture import Capture
 from .closing import make_closer
 from .checkins import CheckinLoop, Checkins
 from .decisions import Decisions, PassWatch
+from .door import Door
 from .leads import Leads
 from dataclasses import replace
 from types import SimpleNamespace
@@ -76,7 +76,7 @@ from .tools import empty_server, make_gate, make_tool_server
 from .tracing import Tracing
 from .voice import MistralVoice
 from .watch import ComposioTriggers, Watcher, WatchStore
-from .whatsapp import WhatsApp, make_http, serve
+from .whatsapp import WhatsApp, attach, make_http
 
 
 SYNCED = ("onedrive", "dropbox", "google drive", "googledrive", "icloud", "mobile documents")
@@ -150,6 +150,15 @@ class Assistant:
         self.conversation = self.journal = self.ledger = self.apps = self.notify = None
         self.tasks: list = []
         self.closers: list = []          # called in order when this assistant stops
+        self.agents: list = []           # every agent this person has, each a process of its own while connected
+        self.gate = None
+
+    async def park(self) -> int:
+        """Let go of every agent connection that is doing nothing, if the person is not in the middle of anything.
+        How many were let go."""
+        if self.conversation is None or self.conversation.busy or (self.gate is not None and self.gate.pending()):
+            return 0
+        return sum([await a.park() for a in self.agents])
 
     async def close(self) -> None:
         for t in self.tasks:
@@ -191,7 +200,6 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     # Attio, the firm's customer database, through Attio's own server. It exists once the owner has signed in (scripts/connect_attio.py).
     attio_tokens = FileTokens(settings.data_dir / "attio.json")
     attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
-    load_custom_services(settings.data_dir)                          # servers the owner connected from the chat, by address
     services = connected_services(settings.data_dir, journal)       # other services with a server of their own, once signed in to
     mark("services")
     browser = Browser(BrowserUseBackend(settings.browser_use_api_key, settings.data_dir / "browser.json"), journal, settings.task_usd) \
@@ -335,8 +343,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
                   files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, host=host, boot=marks or {})
     if whatsapp is not None:
-        door = await serve(whatsapp, settings.whatsapp_port)
-        me.closers += [door.cleanup, close_http]
+        me.closers += [attach(whatsapp, shared.door), close_http]
     me.tasks.append(asyncio.create_task(scheduler.run_forever()))
     if briefer is not None:
         me.tasks.append(asyncio.create_task(briefer.run_forever()))
@@ -376,16 +383,19 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         capture = Capture(apps.events_between, apps.messages_for_code, apps.my_address, in_database, propose, journal, now=now,
                           state_file=settings.data_dir / "captured.json", at=settings.capture_at, zone=ZoneInfo(settings.tz) if settings.tz else None)
         me.tasks.append(asyncio.create_task(capture.run_forever()))
-    # Connecting a service from the chat (connect.py). The host's sign-in comes back to this machine, and a new service
-    # restarts the program. An invited person's browser cannot reach this machine, so they send back the address it
-    # ended on, and only their own assistant is built again.
-    conversation._connector = Connector(settings.data_dir, journal, also=("Attio",),
-                                        restart=shared.restart if host else (lambda: shared.rebuild(settings.owner_id)), remote=not host)
+    # Connecting a service from the chat (connect.py). Afterwards only this person's assistant is built again, so
+    # nobody else notices. Where the sign-in comes back to: a page of this program's own if it has a public address;
+    # otherwise this machine for the host, and for an invited person, whose browser cannot reach this machine, the
+    # address their browser ended on, sent back through the chat.
+    conversation._connector = Connector(settings.data_dir, journal, also=("Attio",), restart=lambda: shared.rebuild(settings.owner_id),
+                                        remote=not host, public_url=settings.public_url if shared.door.listening else "", door=shared.door)
     if brief_runner is not None:
         me.closers.append(brief_runner.runner.close)
     if leads_runner is not None:
         me.closers.append(leads_runner.runner.close)
     me.closers += [watch_runner.runner.close, runner.close, *(w.close for w in workers), run_routine.runner.close]
+    me.gate = gate
+    me.agents = [runner, *workers, run_routine.runner, watch_runner.runner, *(r.runner for r in (brief_runner, leads_runner, triage) if r is not None)]
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me
@@ -410,12 +420,10 @@ async def main() -> int:
     if service:
         print(f"Warning: the data folder {settings.data_dir.resolve()} is inside a {service} folder, so your mail text and "
               "conversation are being copied to that service. Set ODYSSEUS_DATA_DIR to a folder that is not synced.", file=sys.stderr)
-    again, box = [], {}
-
-    def restart() -> None:
-        # A newly connected service brings tools that are fixed when the program starts, so it starts again, in place.
-        again.append(True)
-        asyncio.get_running_loop().call_later(1.5, lambda: asyncio.ensure_future(box["dispatcher"].stop_polling()))
+    # The one port, opened only if something needs it: a public address for sign-ins, or WhatsApp (door.py).
+    door = Door()
+    if settings.public_url or (settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp):
+        await door.open(settings.whatsapp_port)
     # What there is one of, however many people are served: the bot, the search client, one plain call to the small model
     # (the second reader, and closing a conversation), and the optional record of every task in Langfuse, from which
     # every secret in the settings is removed.
@@ -427,7 +435,7 @@ async def main() -> int:
     marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     second_call = anthropic_call(settings.anthropic_api_key)
     shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
-                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), restart=restart, rebuild=lambda user_id: None)
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=door, rebuild=lambda user_id: None)
     host = await assemble(settings, shared, True, marks)
     if service:
         host.journal.write("warning", where="data_dir", note=f"inside a {service} folder")
@@ -438,8 +446,9 @@ async def main() -> int:
 
     async def link(code: str) -> str:
         return f"https://t.me/{(await bot.get_me()).username}?start={code}"
-    house = House(settings.owner_id, people, host.journal, lambda user_id: assemble(member_settings(settings, user_id), shared, False),
-                  link, most=settings.people_max)
+    def build(user_id: int):
+        return assemble(settings, shared, True) if user_id == settings.owner_id else assemble(member_settings(settings, user_id), shared, False)
+    house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max)
     house.add(settings.owner_id, host)
     shared.rebuild = house.rebuild_soon
     for user_id in people.ids()[:settings.people_max - 1]:
@@ -449,15 +458,26 @@ async def main() -> int:
             host.journal.write("error", where="people.start", user_id=user_id, error=type(e).__name__, message=str(e)[:200])
     if people.ids():
         host.journal.write("people", serving=len(people.ids()) + 1)
-    dispatcher = box["dispatcher"] = build_dispatcher(bot, house)
+    async def park_the_idle() -> None:
+        # An invited person who has said nothing for a while keeps their assistant and loses only its processes.
+        while settings.park_after_min > 0:
+            await asyncio.sleep(60)
+            try:
+                await house.park_idle(settings.park_after_min * 60)
+            except Exception as e:
+                host.journal.write("error", where="people.park", error=type(e).__name__)
+    parking = asyncio.create_task(park_the_idle())
+    dispatcher = build_dispatcher(bot, house)
     try:
         # Long polling: the bot asks Telegram for messages, so no public address is needed.
         await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
+        parking.cancel()
         await house.close()
+        await door.close()
         await bot.session.close()
         tracing.close()
-    return RESTART if again else 0
+    return 0
 
 
 if __name__ == "__main__":

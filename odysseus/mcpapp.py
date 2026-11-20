@@ -149,19 +149,26 @@ def _custom(data_dir: Path) -> dict[str, dict[str, Any]]:
     return {str(k): v for k, v in raw.items() if isinstance(v, dict) and str(v.get("url", "")).startswith("https://")} if isinstance(raw, dict) else {}
 
 
-def load_custom(data_dir: Path) -> None:
-    """Add the servers the owner connected from the chat to the ones this program knows. Called once at start."""
+def known(data_dir: Path) -> dict[str, dict[str, Any]]:
+    """Every service one person's assistant knows: the ones this program describes, and the servers that person
+    connected from the chat by address, read from their own folder. APPS itself is never changed, so a server one
+    person adds is not known to anyone else's assistant."""
+    out = dict(APPS)
     for slug, saved in _custom(data_dir).items():
-        if slug not in APPS and re.fullmatch(r"[a-z0-9]{1,20}", slug):
-            APPS[slug] = {**custom_spec(slug, saved["url"]), "open": saved.get("open") is True}
+        if slug in APPS:
+            if saved.get("open") is True:           # a described service that turned out to need no sign-in
+                out[slug] = {**APPS[slug], "open": True}
+        elif re.fullmatch(r"[a-z0-9]{1,20}", slug):
+            out[slug] = {**custom_spec(slug, saved["url"]), "open": saved.get("open") is True}
+    return out
 
 
 def save_custom(data_dir: Path, slug: str, spec: dict[str, Any]) -> None:
     all_ = _custom(data_dir)
     # Only the address is kept, and whether the server asked for no sign-in at all: the description is this program's.
     all_[slug] = {"url": spec["url"], **({"open": True} if spec.get("open") else {})}
+    Path(data_dir).mkdir(parents=True, exist_ok=True)
     (Path(data_dir) / CUSTOM_FILE).write_text(json.dumps(all_, indent=1), encoding="utf-8")
-    APPS.setdefault(slug, spec)
 
 
 def remove_custom(data_dir: Path, slug: str) -> None:
@@ -169,8 +176,6 @@ def remove_custom(data_dir: Path, slug: str) -> None:
     if slug in all_:
         del all_[slug]
         (Path(data_dir) / CUSTOM_FILE).write_text(json.dumps(all_, indent=1), encoding="utf-8")
-        if APPS.get(slug, {}).get("custom"):
-            del APPS[slug]
 
 
 def estimate(spec: dict[str, Any], name: str, text: str) -> float:
@@ -441,9 +446,9 @@ def _checked(tokens: Any, url: str, scope: str | None, public: Any = None):
 
 
 def connected(data_dir: Path, journal: Journal) -> list[McpApp]:
-    """An McpApp for every service in APPS that the owner has signed in to (scripts/connect_mcp.py)."""
+    """An McpApp for every service this person knows and has signed in to (scripts/connect_mcp.py, or /connect in the chat)."""
     out = []
-    for slug, spec in APPS.items():
+    for slug, spec in known(data_dir).items():
         tokens = FileTokens(Path(data_dir) / f"{slug}.json")
         if tokens.signed_in() or spec.get("open"):      # "open": a public server that asks for no sign-in
             opener = _checked(tokens, spec["url"], spec["scope"]) if spec.get("custom") else None

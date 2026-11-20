@@ -41,7 +41,8 @@ class Settings:
     whatsapp_app_secret: str = ""     # the Meta app's secret, which signs every delivery
     whatsapp_verify_token: str = ""   # any phrase you choose; Meta repeats it once when the address is registered
     owner_whatsapp: str = ""          # your own WhatsApp number with country code; only this number is listened to
-    whatsapp_port: int = 8080         # the port the program listens on for Meta's deliveries
+    whatsapp_port: int = 8080         # the port the program listens on, for Meta's deliveries and for sign-ins coming back
+    public_url: str = ""              # https address at which that port is reachable from the internet, if any (door.py)
     notify_on: str = "telegram"       # where reminders and routines are sent: telegram or whatsapp
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
@@ -59,6 +60,7 @@ class Settings:
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
     people_max: int = 10         # how many people this copy serves at most, the host included (people.py)
+    park_after_min: int = 15     # an invited person silent this long has their agents' processes let go until they speak. 0: never
     member_daily_usd: float = 0.0   # the daily spending limit of each invited person. 0: the same as daily_usd
 
 
@@ -120,7 +122,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         whatsapp_app_secret=merged.get("WHATSAPP_APP_SECRET", ""),
         whatsapp_verify_token=merged.get("WHATSAPP_VERIFY_TOKEN", ""),
         owner_whatsapp=merged.get("OWNER_WHATSAPP", ""),
-        whatsapp_port=int(merged.get("WHATSAPP_PORT", 8080)),
+        whatsapp_port=int(merged.get("ODYSSEUS_PORT", "") or merged.get("WHATSAPP_PORT", 8080)),
+        public_url=(lambda u: u if u.startswith("https://") else "")(merged.get("ODYSSEUS_PUBLIC_URL", "").strip().rstrip("/")),
         notify_on=merged.get("ODYSSEUS_NOTIFY_ON", "telegram").strip().lower(),
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
@@ -147,5 +150,6 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),
         people_max=max(1, min(50, int(merged.get("ODYSSEUS_PEOPLE_MAX", "") or 10))),
+        park_after_min=max(0, int(merged.get("ODYSSEUS_PARK_AFTER_MIN", "") or 15)),
         member_daily_usd=float(merged.get("ODYSSEUS_MEMBER_DAILY_USD", "") or 0.0),
     )

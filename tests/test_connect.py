@@ -32,8 +32,9 @@ class FakeServer:
         self.tools, self.fail, self.hang, self.opened = list(tools), fail, hang, []
 
     @asynccontextmanager
-    async def __call__(self, tokens, show, url, scope, port, came_back_with=None):
+    async def __call__(self, tokens, show, url, scope, port, came_back_with=None, redirect=None):
         self.opened.append((url, scope, port))
+        self.redirect = redirect
         await show(f"https://service.example/authorize?scope={(scope or 'everything').replace(' ', '+')}&state=s")
         if came_back_with is not None:
             self.returned = await came_back_with()
@@ -93,9 +94,10 @@ async def test_any_server_is_connected_by_its_address_saved_and_the_program_rest
     assert restarts == [1]
     assert json.loads((tmp_path / "services.json").read_text())["linear"] == {"url": "https://mcp.linear.app/mcp"}
     assert FileTokens(tmp_path / "linear.json").signed_in()
-    mcpapp.APPS.pop("linear")
-    mcpapp.load_custom(tmp_path)          # as at the next start
-    assert mcpapp.APPS["linear"]["custom"] and mcpapp.APPS["linear"]["scope"] is None and "written by that service" in mcpapp.APPS["linear"]["prompt"]
+    assert "linear" not in mcpapp.APPS, "what one person adds is kept in their folder, not in what every assistant knows"
+    mine = mcpapp.known(tmp_path)["linear"]          # as at the next start
+    assert mine["custom"] and mine["scope"] is None and "written by that service" in mine["prompt"]
+    assert "linear" not in mcpapp.known(tmp_path / "someone-else") and mcpapp.connected(tmp_path / "someone-else", Journal(tmp_path / "j3.jsonl")) == []
     assert [a.slug for a in mcpapp.connected(tmp_path, Journal(tmp_path / "j2.jsonl"))] == ["linear"]
 
 
@@ -198,8 +200,6 @@ async def test_a_public_server_that_asks_for_no_sign_in_is_connected_and_survive
     await c._task
     assert len(sent) == 1 and "Deepwiki is connected (it asked for no sign-in: it is a public server): 2 tools. 1 only read" in sent[0]
     assert json.loads((tmp_path / "services.json").read_text())["deepwiki"] == {"url": "https://mcp.deepwiki.example/mcp", "open": True}
-    mcpapp.APPS.pop("deepwiki")
-    mcpapp.load_custom(tmp_path)
     assert [a.slug for a in mcpapp.connected(tmp_path, Journal(tmp_path / "j2.jsonl"))] == ["deepwiki"], "no token, and still loaded at the next start"
     await c.connect("", send)
     assert sent[-1].startswith("Connected: Deepwiki (deepwiki).") and "not connected: Attio (attio)" in sent[-1], "Attio is listed as connected only when it is"
@@ -223,7 +223,6 @@ async def test_a_company_is_found_by_its_name_or_its_website_and_the_owner_is_to
         if told:
             assert told in sent[0] and sent[0].endswith("Connecting to it now."), sent[0]
         assert "Exa is connected" in sent[-1] and restarts == [1]
-        mcpapp.APPS.pop("exa", None)
 
 
 async def test_a_website_with_no_registry_entry_is_tried_at_the_usual_addresses(tmp_path):
@@ -281,6 +280,65 @@ async def test_someone_elsewhere_signs_in_by_sending_back_the_address_their_brow
     assert not (tmp_path / "attio.json").exists() and "Attio is forgotten here" in sent[-1] and rebuilt == [1, 1]
     assert pasted_address("see http://localhost:8765/callback?state=s&code=x.") and pasted_address("http://127.0.0.1/callback?code=1")
     assert pasted_address("https://example.org/callback?code=x") is None and pasted_address("http://127.0.0.1:8765/callback?state=s") is None
+
+
+async def test_with_a_public_address_the_sign_in_ends_on_a_page_of_the_programs_own(tmp_path):
+    from odysseus.door import Door
+    door, server = Door(), FakeServer([tool("search-records", True), tool("create-note", False)])
+    sent, rebuilt = [], []
+
+    async def send(text):
+        sent.append(text)
+    journal = Journal(tmp_path / "j.jsonl")
+    FileTokens(tmp_path / "attio.json")._write("client", {"client_id": "old", "redirect_uris": ["http://127.0.0.1:8765/callback"]})
+    c = Connector(tmp_path, journal, lambda: rebuilt.append(1), opener=server, timeout_s=5, remote=True, public_url="https://bot.example/", door=door)
+    await c.connect("attio", send)
+    await asyncio.sleep(0.05)
+    assert server.redirect == "https://bot.example/callback" and "says Connected" in sent[0] and "does not load" not in sent[0]
+    assert not FileTokens(tmp_path / "attio.json")._read().get("client"), "registered for the old return address: registered again for the new one"
+    assert "nothing to send me" in await c.pasted("http://127.0.0.1:8765/callback?code=x&state=s")
+    assert door.came_back({"code": "x", "state": "someone-elses"}) is False and not c._task.done(), "another mark is refused and the sign-in still waits"
+    assert door.came_back({"code": "SECRETCODE", "state": "s", "iss": "https://app.attio.com"}) is True
+    await c._task
+    assert server.returned == ("SECRETCODE", "s", "https://app.attio.com") and "Attio is connected" in sent[-1] and rebuilt == [1]
+    assert door.came_back({"code": "SECRETCODE", "state": "s"}) is False, "a mark is good once"
+    assert "SECRETCODE" not in str(journal.read()) and door._waiting == {}
+    # Not approved: the service sends the browser back with no code.
+    c2 = Connector(tmp_path / "b", journal, lambda: rebuilt.append(1), opener=server, timeout_s=5, public_url="https://bot.example", door=door)
+    await c2.connect("attio", send)
+    await asyncio.sleep(0.05)
+    assert door.came_back({"state": "s"}) is False
+    await c2._task
+    assert "could not be connected" in sent[-1] and not (tmp_path / "b" / "attio.json").exists() and rebuilt == [1] and door._waiting == {}
+
+
+async def test_the_door_serves_the_page_and_whatever_else_is_put_behind_it(tmp_path):
+    import aiohttp
+    from aiohttp import web
+    from odysseus.connect import free_port
+    from odysseus.door import Door
+    door, port = Door(), free_port()
+    assert not door.listening
+    await door.open(port)
+    off = door.route("GET", "/whatsapp", lambda request: asyncio.sleep(0, web.Response(text="hello")))
+    waiting = door.expect("m1")
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.get(f"http://127.0.0.1:{port}/callback?code=abc&state=<script>") as r:
+                body = await r.text()
+                assert r.status == 400 and "script" not in body and "Nothing was connected" in body
+            async with http.get(f"http://127.0.0.1:{port}/callback?code=abc&state=m1") as r:
+                assert r.status == 200 and "Connected." in await r.text() and r.headers["Cache-Control"] == "no-store"
+            assert await waiting == ("abc", "m1", None)
+            async with http.get(f"http://127.0.0.1:{port}/whatsapp") as r:
+                assert await r.text() == "hello"
+            off()
+            for path in ("/whatsapp", "/", "/anything"):
+                async with http.get(f"http://127.0.0.1:{port}{path}") as r:
+                    assert r.status == 404
+    finally:
+        await door.close()
+    assert not door.listening
 
 
 async def test_an_address_from_another_sign_in_is_refused_and_nothing_is_saved(tmp_path):

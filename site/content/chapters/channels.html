@@ -246,7 +246,14 @@
 <p class="src"><code>odysseus/people.py</code></p>
 <p>Two things are not hidden from the new person. The welcome says that the assistant runs on a machine kept by whoever invited them, and that what is stored there could be read by that person. Separation between members is enforced by code; privacy from the host is not possible, since the host holds the disk. That makes this an arrangement for a firm and not for strangers.</p>
 <p>An invited person's agents are connected by their first message and not at start-up, because each connected agent is a process and most people are silent at any moment. The host's are connected at once, as before.</p>
-<p><span class="g v">Verified</span>, one live run with two invented people, the real start-up code, the real model and the real connector (<code>scripts/live_people.py</code>): each was welcomed and given two sign-in links of their own; one told the assistant a fact, the other asked for it and was told nothing was known, and the fact was in the first person's folder and nowhere in the second's or the host's; spending was counted per person (3 cents and half a cent); a removed person got no reply. Joining took 8 and 3 seconds, the first reply 8 seconds and a later one 1. Nine unit tests (<code>tests/test_people.py</code>). <span class="g u">Not tested</span>: a real second person on a real phone; a sign-in completed from a welcome button; more than two people; how much memory each person's agents take; any of it on a server.</p>
+<p>The same reasoning runs the other way. A person who has sent nothing for fifteen minutes keeps their assistant, memory, schedule and conversation, and loses only the processes: each agent's connection is let go if nothing is running on it and no question is waiting, and their next message opens a new one that carries the same conversation on. In one live run the host alone held 3 processes and about 420 MB; two more people who had each just talked brought that to 5 processes and about 820 MB, so a person in conversation costs about 200 MB; after parking it was back to 3 and 420. The message after parking took 6 seconds against 1. A server sized for the host and two or three people talking at once can therefore hold ten who mostly are not. The host's agents are never parked.</p>
+<p>Three things used to leak across people or disturb them, and were found by asking what exists once per process:</p>
+<ul>
+<li>A server one person connected by its address went into the program's one list of known services, so every other person's assistant knew it too. Each person's additions are now read from their own folder, and the program's list is never changed.</li>
+<li>The host connecting a service restarted the whole program, so everyone waited. It now rebuilds the host's assistant alone, the way an invited person's always was. In a live run that took about 10 seconds, the host's replies took the same time before and after, and another person talked straight afterwards.</li>
+<li>WhatsApp opened a port of its own inside the host's assistant. The port now belongs to the program, and things are put behind it and taken away again.</li>
+</ul>
+<p><span class="g v">Verified</span>, one live run with two invented people, the real start-up code, the real model and the real connector (<code>scripts/live_people.py</code>): each was welcomed and given two sign-in links of their own; one told the assistant a fact, the other asked for it and was told nothing was known, and the fact was in the first person's folder and nowhere in the second's or the host's; spending was counted per person (3 cents and half a cent); a removed person got no reply. Joining took 8 and 3 seconds, the first reply 8 seconds and a later one 1. Twelve unit tests (<code>tests/test_people.py</code>). <span class="g u">Not tested</span>: a real second person on a real phone; a sign-in completed from a welcome button; more than two people; how much memory each person's agents take; any of it on a server.</p>
 <h3 id="remote-sign-in">A sign-in that comes back through the chat</h3>
 <p>Mail and calendar are signed in to on the connector's own pages, which work from any device. A service with a server of its own, such as the firm's database, is different: after the person approves, the service sends their browser to an address on the machine the program runs on ({{ch:services-with-their-own-server}}). The host is at that machine. An invited person is on a phone somewhere else, and their browser is sent to an address on their own phone, where nothing is listening.</p>
 <p>The page that fails to load still has what is needed: its address carries the one-time code the service issued. So an invited person is told in advance that the page will not load, and asked to copy its address into the chat. Code takes the code out of it and finishes the sign-in.</p>
@@ -254,10 +261,33 @@
 <li>The address never reaches the model. The conversation hands any message carrying such an address to the connector before anything else looks at it, whether or not a sign-in is waiting. It is not written to the log, the history or the memory.</li>
 <li>The code is useless to anyone else. It works once, and only together with a secret the program made for this sign-in and never sent anywhere.</li>
 <li>An address from another sign-in is refused. Each sign-in starts with a random mark that the service returns in the address. A person tricked into pasting someone else's address would otherwise attach that someone's account to their own assistant; the sign-in library compares the mark and stops.</li>
-<li>Only that person's assistant is built again to pick up the new tools. For the host a new connection still restarts the program.</li>
+<li>Only that person's assistant is built again to pick up the new tools.</li>
 </ul>
 <p class="src"><code>odysseus/connect.py</code></p>
-<p>The cost is a clumsy step: copying an address from a page that looks broken. A page of the program's own on a public address would remove it, and needs the server this program does not have yet.</p>
+<p>The cost is a clumsy step: copying an address from a page that looks broken.</p>
+<h3 id="sign-in-page">On a server, a page of the program's own</h3>
+<p>Once the program runs somewhere with a public https address, the clumsy step goes. The program is told its address in one setting, registers that address plus <code>/callback</code> with the service as the place to return to, and listens there. The person approves, sees a page that says Connected, and goes back to the chat. The host signs in the same way, which matters on a server: the host is no longer at the machine either.</p>
+<p>A page on the internet can be opened by anyone, so what it accepts is narrow.</p>
+<ul>
+<li>The connector reads the random mark out of the sign-in link before showing the link to the person, and tells the door to expect that mark. An address carrying any other mark gets a refusal, and the waiting sign-in goes on waiting.</li>
+<li>A mark is good once, and for ten minutes at most.</li>
+<li>The page says the same thing whatever was sent, and nothing from the address is put into it. The door keeps no log of addresses, since they carry one-time codes.</li>
+<li>Every other path answers "not found", apart from WhatsApp's if that is switched on.</li>
+</ul>
+<pre><code>def came_back(self, query: dict[str, str]) -> bool:
+    """A browser arrived at /callback with these values. Whether a sign-in was waiting for it."""
+    waiting = self._waiting.pop(query.get("state") or "", None)
+    if waiting is None or waiting.done():
+        return False
+    if not query.get("code"):
+        waiting.set_exception(RuntimeError("the service sent no code: the sign-in was not approved"))
+        return False
+    waiting.set_result((query["code"], query.get("state"), query.get("iss")))
+    return True</code></pre>
+<p class="src"><code>odysseus/door.py</code></p>
+<p>One risk is not removed, here or in any program that signs in through a browser: a person who starts a sign-in can give the link to someone else, and if that someone approves, their account is connected to the first person's assistant. The defence is the service's own approval page, which names the program and the permissions. Among partners who share one database the damage is small; it is a reason not to open this to strangers.</p>
+<p>Without a public address nothing changes: the host's sign-in comes back to the host's machine and an invited person's through the chat.</p>
+<p><span class="g v">Verified</span>, live (<code>scripts/live_public_sign_in.py</code>): the real database server registered the program with an https return address and issued a link that returns to it with a mark and a proof key; an address with another mark was refused and the sign-in went on waiting. Two unit tests, one of them over a real local port. <span class="g u">Not tested</span>: the program on a server with this switched on, and a person approving, so a real code has not been exchanged through the page.</p>
 <p><span class="g v">Verified</span>, live, as far as it can go without a second person: the real database server issued a sign-in link for an invited person, asking for the permissions the program names and returning to the fixed address; an address carrying the wrong mark was refused by the real library and nothing was saved. Three unit tests against a stand-in server (<code>tests/test_connect.py</code>). <span class="g u">Not tested</span>: a real person completing it from a phone, so the exchange of a real code has only run against the stand-in.</p>
 
 <h2 id="wrong">What goes wrong</h2>
