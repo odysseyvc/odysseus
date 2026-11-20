@@ -6,6 +6,7 @@ what the person is told when one ends. None of those decisions is the model's.
 from __future__ import annotations
 
 import asyncio
+import re
 import secrets
 import time
 from collections import deque
@@ -437,14 +438,15 @@ class Conversation:
             except Exception:
                 pass
 
-    def _keep(self, data: bytes | None, name: str, mime: str | None, size: int, caption: str, text: str, handle: str, kind: str) -> None:
+    def _keep(self, data: bytes | None, name: str, mime: str | None, size: int, caption: str, text: str, handle: str = "", kind: str = "document",
+              source: str = "chat", origin: str = "") -> None:
         """Keep a file the owner sent, so that it can be handed back (files.py). Never stops the file being read."""
         if self._files is None:
             return
         try:
-            entry = self._files.add(data, name, mime, size, said=caption, text=text, handle=handle, kind=kind)
+            entry = self._files.add(data, name, mime, size, said=caption, text=text, handle=handle, kind=kind, source=source, origin=origin)
             if entry is not None:
-                self._journal.write("kept", id=entry["id"], bytes=entry["size"], copy=entry["kept"], handle=bool(entry["handle"]))
+                self._journal.write("kept", id=entry["id"], bytes=entry["size"], copy=entry["kept"], handle=bool(entry["handle"]), source=source)
         except Exception as e:
             self._journal.write("error", where="files.keep", error=type(e).__name__)
 
@@ -564,6 +566,10 @@ class Conversation:
         self._viewing = False
         if view.ok:
             rest = " ".join(text.replace(where, " ").split()).strip(" .,:;-")
+            # There is no file behind such a link, so what is kept is the text that was read, with the link (files.py).
+            title = re.sub(r"[^A-Za-z0-9 ]", " ", re.sub(r"\[page \d+\]", " ", view.text[:200]))
+            self._keep(view.text.encode("utf-8"), "DocSend " + (" ".join(title.split()[:5]) or "document") + ".txt", "text/plain", 0, rest, view.text,
+                       source="docsend", origin=where)
             how = (" The site asked for an email address and yours was given" + (", and verified from your mailbox" if view.verified else "")
                    + "; the sender is told who looked.")
             said = (text if rest else NO_MESSAGE) + (f"\n\n[The program read this document in a browser.{how} Tell the owner, in one short line and "

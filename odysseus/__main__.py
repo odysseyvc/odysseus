@@ -277,6 +277,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     mark("conversation")
     if apps is not None:
         apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
+        apps.keep = lambda data, name, mime, text, origin: conversation._keep(data, name, mime, len(data), "", text, source="mail", origin=origin)
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
 

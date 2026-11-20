@@ -499,8 +499,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                 for e in found:
                     taint_.add(e.get("text", "")[:files_mod.SHOWN])
             if not found:
-                return _ok("No file the owner sent fits that. Only files sent to you in this chat since files began to be kept are here; "
-                           "say so, and do not look elsewhere unless the owner asks.")
+                return _ok("No kept file fits that. Kept files are the ones the owner sent you, and attachments and DocSend documents you have "
+                           "read, since files began to be kept. If it may be an attachment in their mail that you have not read, say so and offer to look.")
             return _ok(files_mod.NOTE + "\n\n" + "\n".join(files.line(e, opening=True) for e in found)
                        + "\n\nIf one of these is plainly the file meant, send it with files_send. If more than one could be, ask the owner which.")
 
@@ -514,7 +514,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             return _err(problem) if problem else _ok(f"Sent {entry['name']} to the owner in this chat. Do not paste its contents; one line saying it is sent is enough.")
         tools += [
             tool("files_find",
-                 "Search the files the owner sent you earlier (decks, documents, pictures), which are kept so that they can be handed back. "
+                 "Search the files kept for the owner so that they can be handed back: decks, documents and pictures they sent you, attachments you "
+                 "read in their mail, and documents you read from a DocSend link. "
                  "Use it when the owner asks for a file back, or asks which files you have. Search by the company, the file's name or what "
                  "it is about; an empty query lists the newest.",
                  {"type": "object", "properties": {"query": {"type": "string", "description": "A few words: a company, a name, a topic. Empty for the newest files."}}})(files_find),

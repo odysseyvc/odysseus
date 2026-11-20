@@ -157,3 +157,36 @@ async def test_a_file_that_could_not_be_read_is_still_kept(tmp_path):
     chat = FileChat()
     await x.conv.handle_file(OWNER, b"%PDF-1.7 fake", "scan.pdf", PDF, 13, "", chat, handle="tg-8")
     assert "could not read" in chat.sent[-1] and x.conv._files.all()[0]["name"] == "scan.pdf" and x.conv._files.all()[0]["text"] == ""
+
+
+async def test_an_attachment_read_from_mail_is_kept_with_where_it_came_from(tmp_path):
+    from test_attachments import rig as mail_rig
+    x, s = mail_rig(tmp_path), Shelf(tmp_path / "files")
+    x.apps.keep = lambda data, name, mime, text, origin: s.add(data, name, mime, text=text, source="mail", origin=origin)
+    out = await x.run({"message_id": "m9", "name": "Corvid Freight deck.pdf"})
+    assert not out.get("is_error")
+    e = s.all()[0]
+    assert e["name"] == "Corvid Freight deck.pdf" and e["source"] == "mail" and s.data(e) == b"%PDF-1.7 the deck" and e["origin"].startswith("an email")
+    assert "Traction" in e["text"] and "where from: an email" in s.line(e) and "the owner wrote" not in s.line(e)
+    chat = FileChat()
+    assert await deliver(s, e, chat) == "" and chat.files[0]["data"] == b"%PDF-1.7 the deck" and "read 20" in chat.files[0]["caption"]
+
+
+async def test_a_docsend_document_is_kept_as_the_text_that_was_read_with_its_link(tmp_path):
+    from odysseus.deckview import View
+    from test_deckview import LINK, PAGES, FakeViewer
+    from test_deckview import rig as deck_rig
+    x = deck_rig(tmp_path)
+    x.conv._files = Shelf(tmp_path / "files")
+    x.conv._deckview = FakeViewer(View(True, PAGES, pages=2, cost_usd=0.4, verified=True))
+    await x.conv.handle(OWNER, LINK, x.chat)
+    await x.conv.wait()
+    e = x.conv._files.all()[0]
+    assert e["name"] == "DocSend Corvid Freight Traction A bar.txt" and e["source"] == "docsend" and e["link"] == LINK and e["mime"] == "text/plain"
+    assert x.conv._files.data(e).decode("utf-8") == PAGES and x.conv._files.find("corvid")[0]["id"] == e["id"]
+    chat = FileChat()
+    assert await deliver(x.conv._files, e, chat) == "" and LINK in chat.files[0]["caption"] and "no file to download" in chat.files[0]["caption"]
+    x.conv._deckview = FakeViewer(View(False, "the site asks for a passcode"))
+    await x.conv.handle(OWNER, LINK, x.chat)
+    await x.conv.wait()
+    assert len(x.conv._files.all()) == 1, "a document that could not be read leaves nothing behind"

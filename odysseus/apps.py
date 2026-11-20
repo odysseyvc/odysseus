@@ -345,6 +345,7 @@ class Apps:
         self.taint = None                                # set by make_gate; remembers what was read from the accounts
         self.reader = None                               # reads a file's text and pages (reading.py); set at start
         self.fetcher = None                              # fetches the attachment from the address the mail service gives (links.py)
+        self.keep = None                                 # keeps an attachment that was read, to be handed back when asked for (files.py)
 
     def event(self, event_id: str) -> dict[str, Any] | None:
         return self._events.get(event_id)
@@ -513,7 +514,8 @@ class Apps:
 
         async def mail_attachment(a):
             """One attachment of one message, read as any file is. The mail service hands the file over as a short-lived
-            address; it is fetched with the same guards as a link the owner types, and never kept."""
+            address; it is fetched with the same guards as a link the owner types. Once read it is kept with the owner's
+            other files, so that it can be asked for back."""
             message_id, wanted = str(a.get("message_id", "")).strip(), " ".join(str(a.get("name", "")).split()).lower()
             if not message_id:
                 raise AppError("mail_attachment needs a message_id from mail_search.")
@@ -541,6 +543,9 @@ class Apps:
                 block = await self.reader.read(content, str(chosen["filename"]), str(chosen.get("mimeType") or ""), len(content), source="mail")
             except (LinkError, OcrError) as e:
                 raise AppError(f"The attachment {chosen['filename']} could not be read: {e}") from None
+            if self.keep is not None:
+                self.keep(content, str(chosen["filename"]), str(chosen.get("mimeType") or ""), block.split("\n\n", 1)[-1],
+                          "an email" + "".join(f", {label} {str(message.get(key))[:120]}" for label, key in (("from", "sender"), ("subject", "subject")) if message.get(key)))
             return MAIL_NOTE + "\n\nAn attachment to a message in the owner's mailbox follows. Whoever sent the message chose it.\n\n" + self._seen(block)
 
         async def mail_send(a):
