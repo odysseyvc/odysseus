@@ -59,6 +59,24 @@ class FileTokens:
 
     async def set_tokens(self, tokens) -> None:
         self._write("tokens", tokens.model_dump(mode="json", exclude_none=True))
+        self._write("saved_at", time.time())        # when they were issued: without it nothing can tell that they have run out
+
+    def expires_at(self) -> float | None:
+        """When the saved access token runs out, a minute early. None if the service gave it no lifetime.
+
+        The library that signs in keeps this moment only in memory. After a restart it has the token and not its age,
+        takes it to be good for ever, and never renews it; the service then refuses it, and the only way left is a new
+        sign-in by the owner. So the moment is worked out here from what is on disk and handed to the library
+        (_provider). A file written before this was kept is dated by when it was last written."""
+        data = self._read()
+        lifetime = (data.get("tokens") or {}).get("expires_in")
+        if not lifetime:
+            return None
+        try:
+            issued = float(data.get("saved_at") or self.path.stat().st_mtime)
+        except (OSError, TypeError, ValueError):
+            return None
+        return issued + float(lifetime) - 60
 
     async def get_client_info(self):
         from mcp.shared.auth import OAuthClientInformationFull
@@ -140,7 +158,88 @@ def _provider(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]] | 
     async def shown(link: str) -> None:
         await (show_link or _refuse)(pin_scope(link, scope))
 
-    return OAuthClientProvider(url, meta, tokens, redirect_handler=shown, callback_handler=came_back)
+    provider = OAuthClientProvider(url, meta, tokens, redirect_handler=shown, callback_handler=came_back)
+    # Tell the library when the saved token runs out, so that it renews it with the saved renewal token and does not
+    # go on presenting a dead one until the service refuses it (FileTokens.expires_at).
+    expiry = tokens.expires_at()
+    if expiry is not None:
+        provider.context.token_expiry_time = expiry
+    return provider
+
+
+_RENEWING: dict[str, asyncio.Lock] = {}       # one renewal of a sign-in at a time: a renewal token is good for one use
+
+
+def _same_site(a: str, b: str) -> bool:
+    """Whether two hosts are the same site: equal, or one a subdomain of the other's last two labels (mcp.attio.com, app.attio.com)."""
+    a, b = a.lower().strip("."), b.lower().strip(".")
+    return bool(a and b) and (a == b or ".".join(a.split(".")[-2:]) == ".".join(b.split(".")[-2:]))
+
+
+async def renew_if_due(tokens: FileTokens, url: str, client: Any = None, now: Callable[[], float] = time.time) -> str:
+    """Renew a saved sign-in whose access token has run out, before a session is opened with it.
+
+    The library renews a token only if it knows where the service's token address is, and it learns that during a
+    sign-in, not from disk. After a restart it guessed an address, was refused, threw the sign-in away and asked for a
+    new one, which nobody is there to give: every connection "lapsed" a few hours after it was made. So the renewal is
+    done here, by the standard steps: read where the token address is from the service's own published description,
+    and exchange the renewal token for a new pair.
+
+    The renewal token is sent only to an https address on the same site as the server the owner connected, whatever
+    the description says. Returns "fresh", "renewed", "no renewal token", or "failed: ..."; on anything but "renewed"
+    the file is left as it was, and the library then says, as before, that the owner must connect again.
+    """
+    lock = _RENEWING.setdefault(str(tokens.path), asyncio.Lock())
+    async with lock:
+        due = tokens.expires_at()
+        if due is None or now() < due:
+            return "fresh"
+        data = tokens._read()
+        saved, registered = data.get("tokens") or {}, data.get("client") or {}
+        if not saved.get("refresh_token") or not registered.get("client_id"):
+            return "no renewal token"
+        import httpx
+        own = client is None
+        http = client or httpx.AsyncClient(timeout=20, follow_redirects=False)
+        try:
+            host = urlsplit(url).hostname or ""
+            endpoint = str(data.get("token_endpoint") or "")
+            if not endpoint:
+                bases = [b for b in (str(registered.get("issuer") or "").rstrip("/"), f"https://{host}") if b.startswith("https://")]
+                for base in dict.fromkeys(bases):
+                    for path in ("/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"):
+                        try:
+                            r = await http.get(base + path)
+                            found = r.json().get("token_endpoint") if r.status_code == 200 else None
+                        except Exception:
+                            found = None
+                        if found:
+                            endpoint = str(found)
+                            break
+                    if endpoint:
+                        break
+            parts = urlsplit(endpoint)
+            if parts.scheme != "https" or not _same_site(parts.hostname or "", host):
+                return "failed: no token address on the service's own site"
+            form = {"grant_type": "refresh_token", "refresh_token": saved["refresh_token"], "client_id": registered["client_id"]}
+            if registered.get("client_secret"):
+                form["client_secret"] = registered["client_secret"]
+            r = await http.post(endpoint, data=form, headers={"Accept": "application/json"})
+            body = r.json() if r.status_code == 200 else {}
+            if not body.get("access_token"):
+                return f"failed: the service answered {r.status_code}"
+            fresh = {k: body[k] for k in ("access_token", "token_type", "expires_in", "scope", "refresh_token") if body.get(k) is not None}
+            fresh.setdefault("refresh_token", saved["refresh_token"])       # a service that does not rotate it sends none back
+            fresh.setdefault("token_type", saved.get("token_type") or "Bearer")
+            tokens._write("tokens", fresh)
+            tokens._write("saved_at", now())
+            tokens._write("token_endpoint", endpoint)
+            return "renewed"
+        except Exception as e:
+            return f"failed: {type(e).__name__}"
+        finally:
+            if own:
+                await http.aclose()
 
 
 @asynccontextmanager
@@ -151,6 +250,8 @@ async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]
     from mcp import ClientSession
     from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
+    if show_link is None:           # an ordinary use, not a sign-in: make sure the saved sign-in has not run out
+        await renew_if_due(tokens, url)
     async with create_mcp_http_client(auth=_provider(tokens, show_link, url, scope, port)) as http:
         async with streamable_http_client(url, http_client=http) as streams:
             async with ClientSession(streams[0], streams[1]) as s:
