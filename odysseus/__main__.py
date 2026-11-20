@@ -376,10 +376,11 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         capture = Capture(apps.events_between, apps.messages_for_code, apps.my_address, in_database, propose, journal, now=now,
                           state_file=settings.data_dir / "captured.json", at=settings.capture_at, zone=ZoneInfo(settings.tz) if settings.tz else None)
         me.tasks.append(asyncio.create_task(capture.run_forever()))
-    if host:
-        # Connecting a service from the chat ends at an address on the machine that runs this, so for now it is the
-        # host's only. A newly connected service restarts the program, for everyone.
-        conversation._connector = Connector(settings.data_dir, journal, shared.restart, also=("Attio",) if attio is not None else ())
+    # Connecting a service from the chat (connect.py). The host's sign-in comes back to this machine, and a new service
+    # restarts the program. An invited person's browser cannot reach this machine, so they send back the address it
+    # ended on, and only their own assistant is built again.
+    conversation._connector = Connector(settings.data_dir, journal, also=("Attio",),
+                                        restart=shared.restart if host else (lambda: shared.rebuild(settings.owner_id)), remote=not host)
     if brief_runner is not None:
         me.closers.append(brief_runner.runner.close)
     if leads_runner is not None:
@@ -426,7 +427,7 @@ async def main() -> int:
     marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     second_call = anthropic_call(settings.anthropic_api_key)
     shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
-                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), restart=restart)
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), restart=restart, rebuild=lambda user_id: None)
     host = await assemble(settings, shared, True, marks)
     if service:
         host.journal.write("warning", where="data_dir", note=f"inside a {service} folder")
@@ -440,6 +441,7 @@ async def main() -> int:
     house = House(settings.owner_id, people, host.journal, lambda user_id: assemble(member_settings(settings, user_id), shared, False),
                   link, most=settings.people_max)
     house.add(settings.owner_id, host)
+    shared.rebuild = house.rebuild_soon
     for user_id in people.ids()[:settings.people_max - 1]:
         try:
             house.add(user_id, await assemble(member_settings(settings, user_id), shared, False))

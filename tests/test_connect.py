@@ -32,9 +32,13 @@ class FakeServer:
         self.tools, self.fail, self.hang, self.opened = list(tools), fail, hang, []
 
     @asynccontextmanager
-    async def __call__(self, tokens, show, url, scope, port):
+    async def __call__(self, tokens, show, url, scope, port, came_back_with=None):
         self.opened.append((url, scope, port))
         await show(f"https://service.example/authorize?scope={(scope or 'everything').replace(' ', '+')}&state=s")
+        if came_back_with is not None:
+            self.returned = await came_back_with()
+            if self.returned[1] != "s":
+                raise ValueError("state mismatch")
         if self.hang:
             await asyncio.sleep(60)
         if self.fail:
@@ -198,7 +202,7 @@ async def test_a_public_server_that_asks_for_no_sign_in_is_connected_and_survive
     mcpapp.load_custom(tmp_path)
     assert [a.slug for a in mcpapp.connected(tmp_path, Journal(tmp_path / "j2.jsonl"))] == ["deepwiki"], "no token, and still loaded at the next start"
     await c.connect("", send)
-    assert sent[-1].startswith("Connected: Attio, Deepwiki (deepwiki).")
+    assert sent[-1].startswith("Connected: Deepwiki (deepwiki).") and "not connected: Attio (attio)" in sent[-1], "Attio is listed as connected only when it is"
     await c.disconnect("deepwiki", send)
     assert "Deepwiki is forgotten here" in sent[-1] and "deepwiki" not in mcpapp.APPS and restarts == [1, 1]
     empty, send, sent, restarts = make(tmp_path / "e", OpenServer([]))
@@ -246,3 +250,70 @@ async def test_the_data_vendors_are_known_by_name_and_get_no_special_trust(tmp_p
     assert server.opened[0][:2] == ("https://mcp.api.harmonic.ai", None)
     assert "Harmonic is connected: 2 tools. 1 only read" in sent[-1], "a tool that saves still asks, whoever the vendor is"
     assert not mcpapp.APPS["harmonic"].get("read_only_connection") and "metered" in mcpapp.APPS["harmonic"]["prompt"]
+
+
+async def test_someone_elsewhere_signs_in_by_sending_back_the_address_their_browser_ended_on(tmp_path):
+    from odysseus.attio import ATTIO_URL, CALLBACK_PORT, SCOPE
+    from odysseus.connect import pasted_address
+    server = FakeServer([tool("search-records", True), tool("create-note", False)])
+    sent, rebuilt = [], []
+
+    async def send(text):
+        sent.append(text)
+    journal = Journal(tmp_path / "j.jsonl")
+    c = Connector(tmp_path, journal, lambda: rebuilt.append(1), opener=server, timeout_s=5, remote=True, also=("Attio",))
+    assert "No sign-in is waiting" in await c.pasted("http://127.0.0.1:8765/callback?code=abc&state=s")
+    await c.connect("attio", send)
+    await asyncio.sleep(0.05)
+    assert server.opened == [(ATTIO_URL, SCOPE, CALLBACK_PORT)] and "page that does not load" in sent[0] and "send it to me here" in sent[0]
+    assert "on the computer I am running on" not in sent[0] and rebuilt == []
+    assert "no sign-in code" in await c.pasted("http://127.0.0.1:8765/callback?error=denied"), "still waiting"
+    assert await c.pasted("here you go http://127.0.0.1:8765/callback?code=SECRETCODE&state=s&iss=https%3A%2F%2Fapp.attio.com") == "Got it. Finishing the sign-in."
+    await c._task
+    assert server.returned == ("SECRETCODE", "s", "https://app.attio.com")
+    assert "Attio is connected: 2 tools. 1 only read" in sent[-1] and "One moment" in sent[-1] and rebuilt == [1]
+    assert (tmp_path / "attio.json").exists() and "SECRETCODE" not in str(journal.read())
+    await c.connect("attio", send)
+    assert sent[-1] == "Attio is already connected."
+    await c.connect("", send)
+    assert sent[-1].startswith("Connected: Attio.")
+    await c.disconnect("attio", send)
+    assert not (tmp_path / "attio.json").exists() and "Attio is forgotten here" in sent[-1] and rebuilt == [1, 1]
+    assert pasted_address("see http://localhost:8765/callback?state=s&code=x.") and pasted_address("http://127.0.0.1/callback?code=1")
+    assert pasted_address("https://example.org/callback?code=x") is None and pasted_address("http://127.0.0.1:8765/callback?state=s") is None
+
+
+async def test_an_address_from_another_sign_in_is_refused_and_nothing_is_saved(tmp_path):
+    server = FakeServer([tool("search-records", True)])
+    sent, rebuilt = [], []
+
+    async def send(text):
+        sent.append(text)
+    c = Connector(tmp_path, Journal(tmp_path / "j.jsonl"), lambda: rebuilt.append(1), opener=server, timeout_s=5, remote=True)
+    await c.connect("attio", send)
+    await asyncio.sleep(0.05)
+    await c.pasted("http://127.0.0.1:8765/callback?code=theirs&state=someone-elses")
+    await c._task
+    assert "could not be connected" in sent[-1] and rebuilt == [] and not (tmp_path / "attio.json").exists()
+    from odysseus.connect import _mismatch
+    assert _mismatch(ExceptionGroup("x", [RuntimeError("State parameter mismatch: a != b")])) and not _mismatch(ValueError("other"))
+
+
+async def test_a_pasted_sign_in_address_reaches_the_connector_and_never_the_model_or_the_log(tmp_path):
+    x = rig(tmp_path)
+    got = []
+
+    class Fake:
+        async def pasted(self, text):
+            got.append(text)
+            return "Got it. Finishing the sign-in."
+    x.conv._connector = Fake()
+    address = "http://127.0.0.1:8765/callback?code=SECRETCODE&state=s"
+    await x.conv.handle(OWNER, address, x.chat)
+    await x.conv.wait()
+    assert got == [address] and x.chat.sent[-1] == "Got it. Finishing the sign-in."
+    x.conv._connector = None
+    await x.conv.handle(OWNER, f"here {address}", x.chat)
+    await x.conv.wait()
+    assert x.chat.sent[-1] == "No sign-in is waiting for that address."
+    assert "SECRETCODE" not in str(x.journal.read()) and not [r for r in x.journal.read() if r["kind"] == "task_start"], "no task was started with it"

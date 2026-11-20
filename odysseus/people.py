@@ -44,6 +44,7 @@ WELCOME = ("You're in. I'm an assistant, and this chat is yours alone: nobody el
            "for your tap.\n\n"
            "One thing to know: I run on a machine kept by the person who invited you. What you send me and what I read "
            "from your accounts is stored there, and they could read it.\n\n"
+           "If your firm keeps its contacts and deals in Attio, send /connect attio to sign in to it.\n\n"
            "Send /help for the commands.")
 CONNECT = "To let me read your mail and calendar, sign in to each. Then just send me a message."
 NO_ACCOUNTS = "Mail and calendar are not set up on this copy, so there is nothing to sign in to yet."
@@ -129,6 +130,7 @@ class House:
         self._at: dict[int, Any] = {}             # the assistant of each person who may speak
         self._tries: dict[int, list[float]] = {}
         self._joining: set[int] = set()
+        self._rebuilding: dict[int, Any] = {}     # people whose assistant is being built again (a new connection), and the task doing it
 
     def add(self, user_id: int, assistant: Any) -> None:
         self._at[user_id] = assistant
@@ -136,6 +138,25 @@ class House:
     def is_owner(self, user_id: int) -> bool:
         """Someone whose files may be fetched and whose late messages are reported: anyone with an assistant here."""
         return user_id in self._at
+
+    def rebuild_soon(self, user_id: int) -> None:
+        """Build one person's assistant again, so that it has a service they have just connected. Nobody else is touched."""
+        import asyncio
+        if user_id in self._at and user_id not in self._rebuilding:
+            self._rebuilding[user_id] = asyncio.get_running_loop().create_task(self._rebuild(user_id))
+
+    async def _rebuild(self, user_id: int) -> None:
+        old = self._at.get(user_id)
+        try:
+            if old is not None:
+                await old.close()
+            self._at[user_id] = await self._assemble(user_id)
+            self._journal.write("member", outcome="rebuilt", user_id=user_id)
+        except Exception as e:
+            self._journal.write("error", where="people.rebuild", user_id=user_id, error=type(e).__name__, message=str(e)[:200])
+            await self._tell_host(f"The assistant of the person with id {user_id} could not be started again after they connected a service. A restart will fix it.")
+        finally:
+            self._rebuilding.pop(user_id, None)
 
     # --- the host's own commands --------------------------------------------------------------------------------
     async def _hosting(self, text: str, chat: Any) -> bool:
@@ -247,6 +268,9 @@ class House:
             await self._stranger(user_id, text, chat)
             return
         stripped = (text or "").strip()
+        if user_id in self._rebuilding:
+            await chat.send("One moment: I am picking up what you just connected. Send that again in a few seconds.")
+            return
         if user_id == self._host and stripped.startswith("/") and await self._hosting(stripped, chat):
             return
         await a.conversation.handle(user_id, text, chat, **more)

@@ -20,6 +20,7 @@ from .memory import MEMORY_NOTE, MemoryStore
 from . import deckview as deckview_mod
 from .reading import Reader
 from . import links as links_mod
+from .connect import pasted_address
 from .ocr import MAX_BYTES, MAX_CHARS, NO_MESSAGE, OcrBackend, OcrError, file_block, resolve_type, shown_whole
 from . import voice as voice_mod
 from .voice import VoiceBackend, VoiceError
@@ -150,6 +151,14 @@ class Conversation:
             return
         command = text.lower()
 
+        # The address a browser ended on after a sign-in carries a one-time code. It goes to the connector and nowhere
+        # else: not to the model, not into the log, the history or the memory, whether or not a sign-in is waiting.
+        if material is None and pasted_address(text):
+            self._journal.write("command", name="sign-in address")
+            await chat.send(await self._connector.pasted(text) if self._connector is not None
+                            else "No sign-in is waiting for that address.")
+            return
+
         # The owner tapped Done on a check-in a moment ago and was asked what came of it. Whether this message is the
         # answer is for the model to judge; code says only that the question is open, and says it once.
         if self._checkins is not None and material is None and not images and not command.startswith("/") and command not in STOP_WORDS:
@@ -224,7 +233,7 @@ class Conversation:
             if self._connector is None:
                 await chat.send("Connecting services from the chat is not set up here.")
             elif self.busy:
-                await chat.send("I'm in the middle of a task. Send stop first, or wait until it is done, because connecting restarts me.")
+                await chat.send("I'm in the middle of a task. Send stop first, or wait until it is done, because connecting starts me afresh.")
             elif command.startswith("/disconnect"):
                 await self._connector.disconnect(text[len("/disconnect"):], chat.send)
             else:

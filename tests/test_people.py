@@ -257,6 +257,6 @@ async def test_the_program_starts_an_assistant_for_each_member_and_connects_only
     assert seven.conversation._s.owner_id == 7 and seven.conversation._memory is not eight.conversation._memory is not host.conversation._memory
     assert seven.conversation._gate is not host.conversation._gate and seven.conversation._gate.taint is not eight.conversation._gate.taint
     assert seven.apps._b._user_id == "odysseus-7" and host.apps._b._user_id == "odysseus-1", "sign-ins are named by person"
-    assert host.conversation._connector is not None and seven.conversation._connector is None
+    assert not host.conversation._connector._remote and seven.conversation._connector._remote, "an invited person's sign-in comes back through the chat"
     assert seven.conversation.is_owner(7) and not seven.conversation.is_owner(1) and not host.conversation.is_owner(7)
     assert [r["kind"] for r in Journal(tmp_path / "people" / "7" / "journal.jsonl").read()] == ["start"]

@@ -26,8 +26,22 @@ What is decided here and by whom.
   The address must be https and resolve to a public address. The sign-in itself is the service's; this program cannot
   see what the owner is shown there, only the permissions the link asks for, which it repeats in the chat.
 
-One limit, stated plainly: the service sends the browser back to the machine this program runs on. So the link has to
-be opened in a browser on that machine. From a phone, with the program on a laptop or a server, it will not complete.
+The service sends the browser back to the machine this program runs on. For the person who runs the program that is
+their own machine, and the sign-in completes by itself.
+
+A person the host invited (people.py) is somewhere else, usually on a phone. Their browser is sent to an address on
+their own device, where nothing is listening, and shows a page that does not load. The address of that page carries
+the one-time code the service issued. So for them the connector is "remote": it says in advance that the page will not
+load, and asks them to copy its address into the chat. Code takes the code out of it and finishes the sign-in.
+
+  The pasted address never reaches the model, the log or the memory. conversation.py hands it here before anything
+  else looks at the message.
+  The code in it is good once, and only together with a secret this program made for this sign-in and never sent
+  anywhere (PKCE). Someone who saw the address could not use it.
+  It must carry the mark this sign-in was started with (the state). An address from any other sign-in is refused by
+  the sign-in library, so nobody can attach their own account to someone else's assistant by getting them to paste it.
+
+Attio is connected the same way, by name: /connect attio.
 """
 from __future__ import annotations
 
@@ -40,13 +54,23 @@ from typing import Any, Awaitable, Callable
 from urllib.parse import parse_qs, urlsplit
 
 from . import mcpapp
-from .attio import FileTokens, session
+from .attio import ATTIO_URL, CALLBACK_PORT, SCOPE, FileTokens, session
 from .journal import Journal
 from .links import _public
 
 SIGN_IN_TIMEOUT_S = 600
 RESERVED = {"odysseus", "attio", "mail", "calendar", "app", "web", "browse", "memory", "schedule", "watch"}
 _STRIP = ("mcp", "api", "www", "app", "server", "connect")
+
+
+ATTIO = {"title": "Attio", "url": ATTIO_URL, "scope": SCOPE}
+_PASTED = re.compile(r"https?://(?:127\.0\.0\.1|localhost)(?::\d+)?/callback\?[^\s<>\"']*", re.I)
+
+
+def pasted_address(text: str) -> str | None:
+    """The address a browser ended on after a sign-in, if this message carries one. It holds a one-time code."""
+    found = _PASTED.search(text or "")
+    return found.group(0) if found and "code=" in found.group(0) else None
 
 
 def slug_for(url: str) -> str:
@@ -142,11 +166,20 @@ async def is_server(url: str) -> bool:
         return False
 
 
+def _mismatch(e: BaseException) -> bool:
+    """Whether a failed sign-in failed because the address sent back belongs to another sign-in (its state differs)."""
+    inner = getattr(e, "exceptions", None)
+    return "state parameter mismatch" in str(e).lower() or any(_mismatch(x) for x in inner or ())
+
+
 class Connector:
     def __init__(self, data_dir: Path, journal: Journal, restart: Callable[[], None], opener: Any = session,
                  port: Callable[[], int] = free_port, public: Callable[[str], Awaitable[bool]] = public_host,
-                 timeout_s: float = SIGN_IN_TIMEOUT_S, also: tuple[str, ...] = (), lookup: Any = None, probe: Any = None):
+                 timeout_s: float = SIGN_IN_TIMEOUT_S, also: tuple[str, ...] = (), lookup: Any = None, probe: Any = None,
+                 remote: bool = False):
         self._lookup, self._probe = lookup or registry_lookup, probe or is_server
+        self._remote = remote       # the person signing in is not at this machine: they send back the address their browser ends on
+        self._came_back: asyncio.Future | None = None
         self._dir, self._journal, self._restart = Path(data_dir), journal, restart
         self._also = also       # connected by other means (Attio has its own script), named in the list so it is complete
         self._open, self._port, self._public, self._timeout = opener, port, public, timeout_s
@@ -158,9 +191,22 @@ class Connector:
     def _on(self, slug: str) -> bool:
         return self._tokens(slug).signed_in() or bool(mcpapp.APPS.get(slug, {}).get("open"))
 
+    async def pasted(self, text: str) -> str:
+        """The person sent the address their browser ended on. What to tell them. The address is not kept or logged."""
+        waiting = self._came_back
+        if waiting is None or waiting.done():
+            return "No sign-in is waiting for that address. Send /connect and a name to start one."
+        query = parse_qs(urlsplit(pasted_address(text) or "").query)
+        if not query.get("code"):
+            return "That address has no sign-in code in it. Copy the whole address from the page that did not load, and send it again."
+        waiting.set_result((query["code"][0], (query.get("state") or [None])[0], (query.get("iss") or [None])[0]))
+        return "Got it. Finishing the sign-in."
+
     def listing(self) -> str:
-        on = list(self._also) + [f"{spec['title']} ({slug})" for slug, spec in mcpapp.APPS.items() if self._on(slug)]
+        on = [a for a in self._also if a != "Attio" or self._tokens("attio").signed_in()] + [f"{spec['title']} ({slug})" for slug, spec in mcpapp.APPS.items() if self._on(slug)]
         off = [f"{spec['title']} ({slug})" for slug, spec in mcpapp.APPS.items() if not self._on(slug)]
+        if not self._tokens("attio").signed_in():
+            off.insert(0, "Attio (attio)")
         return ("Connected: " + (", ".join(on) or "none") + "."
                 + ("\nKnown and not connected: " + ", ".join(off) + "." if off else "")
                 + "\n\nTo connect one, send /connect and its name (for example /connect exa), its website, or the address of its "
@@ -175,6 +221,8 @@ class Connector:
         """
         words = arg.split()
         first = words[0].strip(".,<>") if words else ""
+        if first.lower() == "attio":
+            return ("Attio is already connected." if self._tokens("attio").signed_in() else ("attio", ATTIO, ""))
         if first.lower() in mcpapp.APPS:
             return first.lower(), mcpapp.APPS[first.lower()], ""
         if first.lower().startswith("http://"):
@@ -254,6 +302,13 @@ class Connector:
 
         async def show(link: str) -> None:
             asked = (parse_qs(urlsplit(link).query).get("scope") or [""])[0]
+            if self._remote:
+                await send(f"To connect {title}, open this link, sign in and approve. "
+                           + (f"It asks for these permissions: {asked}. " if asked else "The service chooses which permissions to ask for; read its page. ")
+                           + "Your browser will then try to open a page that does not load, at an address beginning http://127.0.0.1. "
+                             "That is expected. Copy that whole address from the address bar and send it to me here. "
+                           + f"The link is good for ten minutes.\n\n{link}")
+                return
             await send(f"To connect {title}, open this link in a browser on the computer I am running on, sign in there and approve. "
                        + (f"It asks for these permissions: {asked}. " if asked else "The service chooses which permissions to ask for; read its page. ")
                        + f"The link is good for ten minutes.\n\n{link}")
@@ -265,9 +320,21 @@ class Connector:
                 await show(link)
 
             async def go() -> list[Any]:
-                async with self._open(tokens, shown, spec["url"], spec.get("scope"), self._port()) as s:
+                if self._remote:
+                    self._came_back = asyncio.get_running_loop().create_future()
+                    waiting = self._came_back
+
+                    async def from_the_chat():
+                        return await waiting
+                    opened = self._open(tokens, shown, spec["url"], spec.get("scope"), CALLBACK_PORT, came_back_with=from_the_chat)
+                else:
+                    opened = self._open(tokens, shown, spec["url"], spec.get("scope"), self._port())
+                async with opened as s:
                     return list((await s.list_tools()).tools)
-            tools = await asyncio.wait_for(go(), self._timeout)
+            try:
+                tools = await asyncio.wait_for(go(), self._timeout)
+            finally:
+                self._came_back = None
         except asyncio.TimeoutError:
             self._journal.write("connect", service=slug, ok=False, error="not approved in time")
             await send(f"Nobody approved the {title} sign-in in ten minutes, so nothing was connected. Send /connect again to try once more.")
@@ -276,6 +343,10 @@ class Connector:
             if isinstance(e, (KeyboardInterrupt, asyncio.CancelledError)):
                 raise
             self._journal.write("connect", service=slug, ok=False, error=type(e).__name__)
+            if self._remote and _mismatch(e):
+                await send(f"That address is from a different sign-in, so I have not used it, and {title} is not connected. "
+                           "Send /connect again and use the address from that new attempt.")
+                return
             await send(f"{title} could not be connected: its server did not complete the sign-in ({type(e).__name__}). Nothing was saved."
                        + ("" if tokens.signed_in() else " If the address is right, the server may not offer the standard sign-in."))
             return
@@ -298,16 +369,17 @@ class Connector:
                    f"{len(shown) - reads} add or change something and will be put to you first, each time."
                    + (" Nobody has read this server's tools before: they are sorted by the server's own labels and their names."
                       if spec.get("custom") else "")
-                   + " I am restarting to pick it up, which takes a few seconds.")
+                   + (" One moment while I pick it up." if self._remote else " I am restarting to pick it up, which takes a few seconds."))
         self._restart()
 
     async def disconnect(self, arg: str, send: Callable[[str], Awaitable[None]]) -> None:
         slug = arg.strip().lower()
-        if slug not in mcpapp.APPS:
+        known = {**mcpapp.APPS, "attio": ATTIO}
+        if slug not in known:
             await send("Send /disconnect and the name of a connected service. /connect lists them.")
             return
-        path, title, was = self._dir / f"{slug}.json", mcpapp.APPS[slug]["title"], self._on(slug)
-        public = bool(mcpapp.APPS[slug].get("open"))
+        path, title, was = self._dir / f"{slug}.json", known[slug]["title"], self._tokens(slug).signed_in() or self._on(slug)
+        public = bool(known[slug].get("open"))
         try:
             path.unlink(missing_ok=True)
         except OSError as e:
@@ -321,5 +393,5 @@ class Connector:
             return
         await send((f"{title} is forgotten here. It was a public server with no sign-in, so there is nothing to withdraw. " if public else
                     f"{title} is forgotten here: I have deleted its sign-in. To withdraw the permission at {title} itself, remove this "
-                    "program in that service's own settings. ") + "I am restarting, which takes a few seconds.")
+                    "program in that service's own settings. ") + ("One moment." if self._remote else "I am restarting, which takes a few seconds."))
         self._restart()
