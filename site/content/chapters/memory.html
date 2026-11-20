@@ -180,11 +180,11 @@ Suggest one dinner dish I could cook tonight. One line.
 <dl class="terms"><dt>Memory poisoning</dt><dd>Causing an agent to store false or hostile content, so that it influences later conversations that have no connection to where the content came from.</dd></dl></div>
 <p>The defences come in layers. Only the later ones are enforced by code.</p>
 <ol>
-<li><strong>The model is told</strong> to save only what the owner said or clearly meant, never because a page or search result said to, and never passwords, card numbers or keys. This lowers the odds and guarantees nothing.</li>
-<li><strong>Memory is labelled</strong> each time it is shown as the model's own records, possibly out of date, not instructions, authorising nothing.</li>
-<li><strong>Every change is reported by code</strong> in the reply, as shown above.</li>
-<li><strong>The owner can list and prune memory without the model</strong>, through <code>/memory</code> and <code>/forget</code>.</li>
-<li><strong>A save made after reading other people's writing is put to the owner</strong> before it happens.</li>
+<li>The model is told to save only what the owner said or clearly meant, never because a page or search result said to, and never passwords, card numbers or keys. This lowers the odds and guarantees nothing.</li>
+<li>Memory is labelled each time it is shown as the model's own records, possibly out of date, not instructions, authorising nothing.</li>
+<li>Every change is reported by code in the reply, as shown above.</li>
+<li>The owner can list and prune memory without the model, through <code>/memory</code> and <code>/forget</code>.</li>
+<li>A save made after reading other people's writing is put to the owner before it happens.</li>
 </ol>
 <p>The fifth layer needs explaining, because it limits a reasonable default. Saving to memory writes only to the program's own files, and asking permission for every saved preference would be unbearable; {{ch:the-gate}} explains why a gate that asks too often trains its owner to stop reading. A save from the owner's own words needs no question: the line in the reply tells the owner afterwards.</p>
 <p>That reasoning rests on an assumption that is easy to leave unwritten: that what the model saves came from what the owner said. It stops holding once the model can read mail. A sentence in a stranger's email that looks like something the owner would say can become a "fact about the owner", and the line <code>Memory: saved ...</code> at the end of a long reply is easy to miss.</p>
@@ -217,8 +217,8 @@ gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text"
 <h2 id="closing">Closing a conversation before leaving it</h2>
 <p>The common shape saves just before the agent library condenses a long conversation. In this program the conversation is lost sooner and more often than that: to keep each message cheap, a new conversation is begun after a pause, carrying only the last three exchanges ({{ch:the-conversation}}). So that is where the save belongs. When a conversation of four or more exchanges ends, a small model with no tools reads it once and writes two things.</p>
 <ul>
-<li><strong>A summary.</strong> One paragraph on what was being done, what was decided and what is still open. It goes at the head of the new conversation under a heading that says a small model wrote it, that it may be wrong, and that it is a record and not an instruction.</li>
-<li><strong>Proposals.</strong> At most three lasting facts the owner stated about themselves that are not already saved. Each is put to the owner with two buttons. Nothing is saved without the tap.</li>
+<li>A summary. One paragraph on what was being done, what was decided and what is still open. It goes at the head of the new conversation under a heading that says a small model wrote it, that it may be wrong, and that it is a record and not an instruction.</li>
+<li>Proposals. At most three lasting facts the owner stated about themselves that are not already saved. Each is put to the owner with two buttons. Nothing is saved without the tap.</li>
 </ul>
 <p>The tap is needed because a conversation holds what other people wrote, quoted in the assistant's own replies, so a fact saved from it unasked would let a stranger's email write to memory by way of a summary. The model is told to take facts only from the owner's own lines; code does not rely on its having done so. Code also reads the reply: anything outside the two headings is dropped, as is a proposal that is already saved, too long, or looks like a code or a sign-in link.</p>
 <pre><code>    for line in m.group(2).splitlines():
@@ -251,10 +251,10 @@ gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text"
 <h2 id="testing">How to test memory</h2>
 <p>A test of memory must check four different things, and it helps to keep them apart.</p>
 <ol>
-<li><strong>The store</strong>: survival across a new process, replacement with history, refusals, the size limit, dated notes found after a restart, and odd search input.</li>
-<li><strong>What the model is shown</strong>: the profile at the start, again only when it changes, after a restart, and after compaction is signalled.</li>
-<li><strong>What the owner is told and can do</strong>: every change appears in the reply; <code>/memory</code> and <code>/forget</code> work with no model call; a stranger gets no reply.</li>
-<li><strong>Whether a real model uses it well</strong>: saves what matters, uses it unprompted, replaces rather than adds, and refuses to save what a page told it to.</li>
+<li>The store: survival across a new process, replacement with history, refusals, the size limit, dated notes found after a restart, and odd search input.</li>
+<li>What the model is shown: the profile at the start, again only when it changes, after a restart, and after compaction is signalled.</li>
+<li>What the owner is told and can do: every change appears in the reply; <code>/memory</code> and <code>/forget</code> work with no model call; a stranger gets no reply.</li>
+<li>Whether a real model uses it well: saves what matters, uses it unprompted, replaces rather than adds, and refuses to save what a page told it to.</li>
 </ol>
 <p>The first three can be tested with a scripted stand-in for the model, and <code>tests/test_memory.py</code> does so in sixteen tests. The stand-in "calls" the tools by running their handlers directly, so the tests say nothing about whether a real model chooses to save or use anything. One test is worth reading for its technique: it builds a conversation, saves a fact, then builds a second conversation on the same folder, which is how a restart is simulated without a process. Another calls <code>_on_compact</code> by hand to stand in for the library's signal.</p>
 <p>The rule about asking after reading is tested in <code>tests/test_stage0.py</code>: a save is allowed when nothing has been read, asked about after search results have been read, allowed again in a fresh task, and asked about in a later task if the text repeats a detail read from the mailbox. <code>forget</code> and <code>recall</code> stay allowed throughout.</p>

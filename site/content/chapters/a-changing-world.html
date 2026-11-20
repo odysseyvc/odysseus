@@ -161,7 +161,7 @@ for e in world.created:
         bad("once", f"'{e['title']}' was created twice")
     seen.add(key)</code></pre>
 <p>It knows nothing about the errand, which is why it catches what the errand's check misses: after a duplicate send, "an email to Ravi exists" is still true. The file defines its own notion of a private detail rather than importing the program's, "so that the measurement does not inherit the program's blind spots". Code checks these and not a model: published work found that models shown a transcript detected a false "done" barely better than chance, while simple text-matching code did far better. <span class="g s">Secondary</span></p>
-<p>When an invariant is never broken, report a count and a ceiling, not "0%". With no failures in <em>n</em> runs the true rate can still be about 3 divided by <em>n</em> (the standard "rule of three" approximation; the explanation is ours). Zero in 581 means "probably under about 0.5%", and only for a check that could have failed.</p>
+<p>When an invariant is never broken, report a count and a ceiling, not "0%". With no failures in <em>n</em> runs the true rate can still be about 3 divided by <em>n</em> (the standard "rule of three" approximation; the explanation is this book's). Zero in 581 means "probably under about 0.5%", and only for a check that could have failed.</p>
 
 <h2 id="conditions">The same errand, said differently and under failure</h2>
 <p>Every errand and scenario runs under five conditions, and the same check must pass in each: <em>clean</em>, the request as written with every call working; <em>reword</em>, rewritten by a model once and saved so every later run uses the same words; <em>messy</em>, typed in a hurry (lower case, missing punctuation, swapped letters, chatter in front), made by rule from the seed; <em>faults</em>, as written, with about one tool call in seven failing; and <em>both</em>, reworded with faults. Comparing a disturbed run with its clean twin is the metamorphic test.</p>
@@ -174,11 +174,11 @@ for e in world.created:
 <h2 id="worked">A worked example: the meeting someone else moved</h2>
 <p>The scenario above, clean condition, as the program stood before the changes described later:</p>
 <ol>
-<li><strong>"What does my afternoon look like today?"</strong> The calendar call reaches <code>Sim.execute</code>; no fault is due; the world lists "1:1 with Sam" at 15:00.</li>
-<li><strong>Wait 30 minutes.</strong> The clock advances.</li>
-<li><strong>World step.</strong> <code>others_move</code> sets the start to 17:00. The agent is not told.</li>
-<li><strong>"Remind me 15 minutes before my 1:1 with Sam."</strong> The conversation holds a listing showing 15:00, and the model sets a reminder for 14:45 without reading again.</li>
-<li><strong>Check.</strong> <code>job</code> looks in the real scheduler for a reminder at 16:45 mentioning Sam, finds 14:45, and fails the run. No invariant is broken.</li>
+<li>"What does my afternoon look like today?" The calendar call reaches <code>Sim.execute</code>; no fault is due; the world lists "1:1 with Sam" at 15:00.</li>
+<li>Wait 30 minutes. The clock advances.</li>
+<li>World step. <code>others_move</code> sets the start to 17:00. The agent is not told.</li>
+<li>"Remind me 15 minutes before my 1:1 with Sam." The conversation holds a listing showing 15:00, and the model sets a reminder for 14:45 without reading again.</li>
+<li>Check. <code>job</code> looks in the real scheduler for a reminder at 16:45 mentioning Sam, finds 14:45, and fails the run. No invariant is broken.</li>
 </ol>
 <p>This failed in all seven runs of the first evaluation, in every condition including clean.</p>
 
@@ -269,11 +269,11 @@ for attempt in range(3 if reading else 1):
 
 <h2 id="wrong">What goes wrong</h2>
 <ul>
-<li><strong>Clean success hides fragility</strong>: 201 of 201 and 61 of 67 describe the same errands.</li>
-<li><strong>Goal checks miss side effects</strong>: a duplicate calendar entry passed its own check.</li>
-<li><strong>The program, not the model, may be at fault</strong>: the program had been passing the model only the class name of an error.</li>
-<li><strong>A safety fix costs elsewhere</strong>: never retrying writes took needless approvals from 2 runs to 8.</li>
-<li><strong>A change to the instructions is a change to the program</strong>: the sentence that fixed stale reads also changed how the agent read "promises".</li>
+<li>Clean success hides fragility: 201 of 201 and 61 of 67 describe the same errands.</li>
+<li>Goal checks miss side effects: a duplicate calendar entry passed its own check.</li>
+<li>The program, not the model, may be at fault: the program had been passing the model only the class name of an error.</li>
+<li>A safety fix costs elsewhere: never retrying writes took needless approvals from 2 runs to 8.</li>
+<li>A change to the instructions is a change to the program: the sentence that fixed stale reads also changed how the agent read "promises".</li>
 </ul>
 
 <h2 id="testing">How to test this part</h2>

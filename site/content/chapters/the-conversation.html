@@ -59,9 +59,9 @@
 </svg><figcaption>The checks every message passes, in order. Notice that commands and "stop" are tested before "is a task running?", so they are never made to wait; and that a stranger and an exhausted budget both leave before any model is called, so neither costs anything. In the code some commands are matched just before stop and some (<code>/status</code>, <code>/memory</code>, <code>/new</code>, <code>/help</code>) just after; all come before the busy check.</figcaption></figure>
 <p>Three properties follow from the order.</p>
 <ul>
-<li><strong>The owner check is first.</strong> Nothing a stranger sends reaches any later code: not the command parser, not the file reader, not the model. Every later check can therefore assume it is talking to the owner.</li>
-<li><strong>Commands and "stop" come before the busy check.</strong> A queue that could hold "stop" behind a long task would make the most important command the slowest one.</li>
-<li><strong>The budget check is last, just before the model.</strong> Everything above it is answered by code, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone. (Two steps not drawn run before the commands, and only when nothing is running: fetching a PDF the owner linked to, and reading a DocSend link in a browser, which is paid for and checks the budget itself; see {{ch:decks-and-data-rooms}}.)</li>
+<li>The owner check is first. Nothing a stranger sends reaches any later code: not the command parser, not the file reader, not the model. Every later check can therefore assume it is talking to the owner.</li>
+<li>Commands and "stop" come before the busy check. A queue that could hold "stop" behind a long task would make the most important command the slowest one.</li>
+<li>The budget check is last, just before the model. Everything above it is answered by code, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone. (Two steps not drawn run before the commands, and only when nothing is running: fetching a PDF the owner linked to, and reading a DocSend link in a browser, which is paid for and checks the budget itself; see {{ch:decks-and-data-rooms}}.)</li>
 </ul>
 
 <h3>Why these choices and not the obvious ones</h3>
@@ -225,9 +225,9 @@
 <p>Three decisions sit in these lines. The file is opened in append mode, so nothing written is changed later. Listeners hear of each record as it is written; the spending ledger is one, which is how spending stays current without a second file. And on a hosting service whose log shows in a dashboard, only <code>ECHO_FIELDS</code> (statuses and numbers) are copied there, never queries or message contents. <code>Journal.read</code> skips a line that does not parse, which is what a crash in the middle of a write leaves.</p>
 <p>From this one file the program derives several things it would otherwise have to store separately:</p>
 <ul>
-<li><strong>Spending.</strong> The <code>Ledger</code> sums a cost per day from every line, and <code>/status</code> answers from it: <code>"Idle. Spent today: $0.42 of $3.00."</code></li>
-<li><strong>What was interrupted.</strong> At start-up, <code>unfinished</code> in <code>odysseus/__main__.py</code> looks for a <code>task_start</code> with no <code>task_end</code> and <code>queued</code> lines with no <code>dequeued</code>, so the owner can be told what was cut off and lost ({{ch:staying-up}}). The 80-character <code>preview</code> in <code>task_start</code> is what makes the notice readable.</li>
-<li><strong>Whether a reply left.</strong> A <code>reply</code> line, or an <code>error</code> line saying how many parts went first.</li>
+<li>Spending. The <code>Ledger</code> sums a cost per day from every line, and <code>/status</code> answers from it: <code>"Idle. Spent today: $0.42 of $3.00."</code></li>
+<li>What was interrupted. At start-up, <code>unfinished</code> in <code>odysseus/__main__.py</code> looks for a <code>task_start</code> with no <code>task_end</code> and <code>queued</code> lines with no <code>dequeued</code>, so the owner can be told what was cut off and lost ({{ch:staying-up}}). The 80-character <code>preview</code> in <code>task_start</code> is what makes the notice readable.</li>
+<li>Whether a reply left. A <code>reply</code> line, or an <code>error</code> line saying how many parts went first.</li>
 </ul>
 
 <h3>Commands with no model</h3>
@@ -271,18 +271,18 @@
 <h2 id="example">Worked example: one busy minute</h2>
 <p>Take the scenario from the opening, with the stranger included. The journal lines below are illustrative (the times and numbers are invented), but every <code>kind</code> and field name is the one the code writes.</p>
 <ol>
-<li><strong>The owner sends</strong> "What is the last train to the coast tonight?". Owner check passes; it is not a command; nothing is running; the day's ledger stands at $0.21 of $3.00. A task starts.
+<li>The owner sends "What is the last train to the coast tonight?". Owner check passes; it is not a command; nothing is running; the day's ledger stands at $0.21 of $3.00. A task starts.
 <pre><code>{"ts": 1795000000.0, "kind": "task_start", "chars": 44, "preview": "What is the last train to the coast tonight?"}</code></pre></li>
-<li><strong>The model asks for a search.</strong> The loop records the request, and the search tool records its result and the price the search service reported.
+<li>The model asks for a search. The loop records the request, and the search tool records its result and the price the search service reported.
 <pre><code>{"ts": 1795000002.1, "kind": "tool_request", "name": "mcp__odysseus__web_search", "input": {"query": "...", "objective": "..."}}
 {"ts": 1795000004.0, "kind": "tool", "name": "web_search", "query": "...", "objective": "...", "ok": true, "results": 6, "cost_usd": 0.007}</code></pre>
 The owner's phone shows a draft that grows every 0.8 seconds or so.</li>
-<li><strong>A stranger sends</strong> "hello, who are you?". The owner check fails at the first line of <code>handle</code>. Nothing is sent; no model is called.
+<li>A stranger sends "hello, who are you?". The owner check fails at the first line of <code>handle</code>. Nothing is sent; no model is called.
 <pre><code>{"ts": 1795000004.5, "kind": "dropped", "user_id": 555000111}</code></pre></li>
-<li><strong>The owner adds</strong> "and the first one tomorrow". A task is running, nothing is being stopped, no approval is pending, and the queue is empty, so the message is queued and the owner gets "Noted. I'll do this as soon as the current task is finished. Send stop to end everything."
+<li>The owner adds "and the first one tomorrow". A task is running, nothing is being stopped, no approval is pending, and the queue is empty, so the message is queued and the owner gets "Noted. I'll do this as soon as the current task is finished. Send stop to end everything."
 <pre><code>{"ts": 1795000006.0, "kind": "queued", "waiting": 1, "q": 1, "preview": "and the first one tomorrow"}</code></pre></li>
-<li><strong>The owner sends</strong> <code>/status</code>. It is a command, matched before the busy check, and answered at once from the ledger: "Working on a task. Spent today: $0.22 of $3.00." The ledger already includes the search's 0.7 cents, because the ledger listened to the <code>tool</code> line as it was written.</li>
-<li><strong>The task ends.</strong> The reply is sent, and the queued message runs next.
+<li>The owner sends <code>/status</code>. It is a command, matched before the busy check, and answered at once from the ledger: "Working on a task. Spent today: $0.22 of $3.00." The ledger already includes the search's 0.7 cents, because the ledger listened to the <code>tool</code> line as it was written.</li>
+<li>The task ends. The reply is sent, and the queued message runs next.
 <pre><code>{"ts": 1795000011.2, "kind": "task_end", "status": "done", "cost_usd": 0.012, "browser_usd": 0.0, "turns": 2, "detail": "success", "seconds": 11.2}
 {"ts": 1795000011.4, "kind": "reply", "parts": 1, "chars": 212}
 {"ts": 1795000011.4, "kind": "dequeued", "q": 1}

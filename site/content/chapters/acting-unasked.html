@@ -139,10 +139,10 @@ def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -&gt; 
 <dt>Own store</dt><dd>A service that holds the owner's own records: the firm's database, the owner's meeting notes. Asking it about someone the owner deals with tells it nothing new.</dd>
 </dl></div>
 <ol>
-<li><strong>Read only.</strong> A service tool that is not a plain read is refused, not asked about.</li>
-<li><strong>Nothing private leaves in a search.</strong> A web search, or a request to somebody else's service, that carries details recognised from the owner's mail, calendar or database is refused.</li>
-<li><strong>A fixed number of reads per run.</strong> Some services charge per item, and a model that keeps looking keeps spending. The allowances in the code are eight reads of X, six of each company-data vendor, and twelve of the others, the firm's database included.</li>
-<li><strong>The owner's own stores are exempt from rule 2.</strong> Looking up the person the owner is about to meet in the firm's database or meeting notes is the point of a brief. Rule 2 stays in full for a service that is somebody else's, such as X.</li>
+<li>Read only. A service tool that is not a plain read is refused, not asked about.</li>
+<li>Nothing private leaves in a search. A web search, or a request to somebody else's service, that carries details recognised from the owner's mail, calendar or database is refused.</li>
+<li>A fixed number of reads per run. Some services charge per item, and a model that keeps looking keeps spending. The allowances in the code are eight reads of X, six of each company-data vendor, and twelve of the others, the firm's database included.</li>
+<li>The owner's own stores are exempt from rule 2. Looking up the person the owner is about to meet in the firm's database or meeting notes is the point of a brief. Rule 2 stays in full for a service that is somebody else's, such as X.</li>
 </ol>
 <p>Rule 2 for web search sits in the read-only tool server; it refuses with a reason the model can read:</p>
 <pre><code># odysseus/tools.py (make_tool_server, the unattended branch)
@@ -268,10 +268,10 @@ if not watches:
 <h3>Judging something a stranger wrote</h3>
 <p>A watch means a model reads every email a stranger sends. Several things limit what a hostile one can achieve.</p>
 <ul>
-<li><strong>The agent that reads it has almost nothing:</strong> three tools (search mail, read one message, list the calendar). No web search, so nothing it reads can leave in a query. No memory tools, so nothing can be written down. Nothing that sends, changes or schedules.</li>
-<li><strong>Its prompt says who wrote what:</strong> everything about the event was written by other people and is never an instruction. The event is never presented as the owner's request.</li>
-<li><strong>Sign-in codes and account links are removed</strong> from the event by code before any model sees it, and what the event carried is added to the taint record.</li>
-<li><strong>Code reads the answer narrowly:</strong> one line per satisfied watch, starting with its id in square brackets, or <code>NO_REPLY</code>. A line with an id the owner never set is discarded, and links are removed from what is passed on.</li>
+<li>The agent that reads it has almost nothing: three tools (search mail, read one message, list the calendar). No web search, so nothing it reads can leave in a query. No memory tools, so nothing can be written down. Nothing that sends, changes or schedules.</li>
+<li>Its prompt says who wrote what: everything about the event was written by other people and is never an instruction. The event is never presented as the owner's request.</li>
+<li>Sign-in codes and account links are removed from the event by code before any model sees it, and what the event carried is added to the taint record.</li>
+<li>Code reads the answer narrowly: one line per satisfied watch, starting with its id in square brackets, or <code>NO_REPLY</code>. A line with an id the owner never set is discarded, and links are removed from what is passed on.</li>
 </ul>
 <pre><code># odysseus/watch.py (Watcher._on_event)
 if status == "done" and reply.strip(" .\"'`").upper() != NO_REPLY:
@@ -331,9 +331,9 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 
 <h2 id="control">What the owner sees and controls</h2>
 <ul>
-<li><strong>Reported by code.</strong> When a task adds or cancels a job or watch, a line the model did not write is appended to the reply: id, kind, time and the start of the text.</li>
-<li><strong>Asked when it matters.</strong> A reminder reaches only the owner and is set without a question. A routine or watch commits the owner to paid unattended runs: under the owner's choice to be asked as little as possible, one set up from the owner's own words alone is reported, and one set up after reading anything others wrote, or whose text carries details recognised from the owner's accounts, is put to the owner, by the same test memory uses ({{ch:the-gate}}, {{ch:memory}}). Code builds the question, listing every service the run can read.</li>
-<li><strong>Commands that bypass the model.</strong> <code>/schedule</code> lists every job; <code>/cancel</code> with an id removes one. <code>/watches</code> lists watches; <code>/unwatch</code> with an id stops one. A test checks that anyone other than the owner gets no answer, and that a bare <code>/cancel</code> still means "stop the running task".</li>
+<li>Reported by code. When a task adds or cancels a job or watch, a line the model did not write is appended to the reply: id, kind, time and the start of the text.</li>
+<li>Asked when it matters. A reminder reaches only the owner and is set without a question. A routine or watch commits the owner to paid unattended runs: under the owner's choice to be asked as little as possible, one set up from the owner's own words alone is reported, and one set up after reading anything others wrote, or whose text carries details recognised from the owner's accounts, is put to the owner, by the same test memory uses ({{ch:the-gate}}, {{ch:memory}}). Code builds the question, listing every service the run can read.</li>
+<li>Commands that bypass the model. <code>/schedule</code> lists every job; <code>/cancel</code> with an id removes one. <code>/watches</code> lists watches; <code>/unwatch</code> with an id stops one. A test checks that anyone other than the owner gets no answer, and that a bare <code>/cancel</code> still means "stop the running task".</li>
 </ul>
 
 <h2 id="alternative">The alternative: a model that checks every half hour</h2>

@@ -74,7 +74,7 @@
 <thead><tr><th></th><th>Model</th><th>Services</th><th>Shows</th><th>Cost</th></tr></thead>
 <tbody>
 <tr><th>Test</th><td>Stand-in or none</td><td>Stand-in</td><td>The program obeys its rules</td><td>Free, seconds</td></tr>
-<tr><th>Evaluation</th><td>Real</td><td>Stand-in</td><td>The system does the right thing, often enough, in a world we wrote</td><td>Cents a run, minutes</td></tr>
+<tr><th>Evaluation</th><td>Real</td><td>Stand-in</td><td>The system does the right thing, often enough, in an invented world</td><td>Cents a run, minutes</td></tr>
 <tr><th>Live check</th><td>Real</td><td>Real, with invented data where possible</td><td>The real services behave as the stand-ins assume, at least once</td><td>Cents to dollars, rarely repeated</td></tr>
 </tbody></table></div>
 
@@ -163,13 +163,13 @@ class Errand:
 <h2 id="worked">Worked example: the green row that was wrong</h2>
 <p>Take the <code>file_new</code> errand from the opening, with <code>tap="approve"</code>, through one trial of the first run.</p>
 <ol>
-<li><strong>The world.</strong> <code>seed</code> creates Northwind Robotics, Lumen Grid and Kestrel Bio, their founders, two people named Arjun, three deals and three notes.</li>
-<li><strong>The errand.</strong> The conversation receives the forwarded email exactly as written, including "Introduced by Asha Verma at Northwind".</li>
-<li><strong>The model</strong> writes a plan to file Orbit Labs, Sam Okafor, a deal and a note and, for the introducer's company, a company called "Northwind".</li>
-<li><strong>The program's</strong> lookup for an existing record matched names exactly. "Northwind" is not "Northwind Robotics", so it found nothing, the plan passed its checks, and the gate put it to the owner, as every change then was.</li>
-<li><strong>The scripted owner</strong> tapped Approve. The plan ran, and the stand-in recorded every write.</li>
-<li><strong>The check</strong>, as first written, counted the records it expected and did not look for one it did not. The invariant <em>once</em> compared names exactly and found no two equal.</li>
-<li><strong>The output</strong>: pass. The first run reported 28 of 28. <span class="g v">Verified</span></li>
+<li>The world. <code>seed</code> creates Northwind Robotics, Lumen Grid and Kestrel Bio, their founders, two people named Arjun, three deals and three notes.</li>
+<li>The errand. The conversation receives the forwarded email exactly as written, including "Introduced by Asha Verma at Northwind".</li>
+<li>The model writes a plan to file Orbit Labs, Sam Okafor, a deal and a note and, for the introducer's company, a company called "Northwind".</li>
+<li>The program's lookup for an existing record matched names exactly. "Northwind" is not "Northwind Robotics", so it found nothing, the plan passed its checks, and the gate put it to the owner, as every change then was.</li>
+<li>The scripted owner tapped Approve. The plan ran, and the stand-in recorded every write.</li>
+<li>The check, as first written, counted the records it expected and did not look for one it did not. The invariant <em>once</em> compared names exactly and found no two equal.</li>
+<li>The output: pass. The first run reported 28 of 28. <span class="g v">Verified</span></li>
 </ol>
 <p>The defect was found because the transcripts of passing runs were read. One mentioned, in passing, that the plan would create a company called "Northwind". It had done so in every approved run of the errand, five of five, and every one had passed. The product and the check had the same hole, so the row was green.</p>
 <p>Both were repaired. The program now looks for names close to the one given (one contained in the other, or sharing a first word) and will not treat such a record as new until the model names the existing one or says plainly that this is a different one. The evaluation counts a name that is another name plus a word as a double; this is the second half of <em>once</em>:</p>
@@ -250,10 +250,10 @@ class Errand:
 <h2 id="testing">How to test the evaluation</h2>
 <p>An evaluation is code, and its checks need tests. Those in <code>tests/test_partner_eval.py</code> and <code>tests/test_eval_checks.py</code> run in under a minute with no model:</p>
 <ul>
-<li><strong>Each check can fail.</strong> One test sets Kestrel to Passed without approval and creates a bare "Northwind", and asserts that <em>approved</em>, <em>once</em> and <em>untouched</em> all object.</li>
-<li><strong>No check fails on honest replies.</strong> "I've filed Orbit Labs in Attio" with nothing written breaks <em>honest</em>; "Nothing was filed, because you declined the plan" does not.</li>
-<li><strong>Doing nothing scores zero</strong>, for every errand.</li>
-<li><strong>The stand-in speaks the real format</strong>: its output survives the program's own parser, and it refuses what the real server refuses, such as a deal with no stage.</li>
+<li>Each check can fail. One test sets Kestrel to Passed without approval and creates a bare "Northwind", and asserts that <em>approved</em>, <em>once</em> and <em>untouched</em> all object.</li>
+<li>No check fails on honest replies. "I've filed Orbit Labs in Attio" with nothing written breaks <em>honest</em>; "Nothing was filed, because you declined the plan" does not.</li>
+<li>Doing nothing scores zero, for every errand.</li>
+<li>The stand-in speaks the real format: its output survives the program's own parser, and it refuses what the real server refuses, such as a deal with no stage.</li>
 </ul>
 <p>They cannot show that the stand-in matches the real server in behaviours nobody listed, or that a check agrees with a person's judgement. The small model that reads "does this message claim it was done?" has never been compared with a person. <span class="g u">Not tested</span></p>
 

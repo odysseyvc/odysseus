@@ -12,9 +12,9 @@
 <p>Most of what a person wants from an assistant happens inside accounts that belong to them: reply to this, what is on tomorrow, move my one o'clock. This chapter gives an agent access to such accounts, starting with the most dangerous one most people have.</p>
 <p>Consider one request, typed into a chat on a phone: <em>"Tell Priya Wednesday at 12:30 works."</em> The agent must find Priya's message, read it, write a reply, and send it from the owner's address. Three things make this harder than it looks.</p>
 <ul>
-<li><strong>Sending cannot be taken back.</strong> The agent must not send anything the owner has not seen.</li>
-<li><strong>Everything in a mailbox was written by someone else</strong>, and anyone can email the owner text written to mislead the agent.</li>
-<li><strong>The account changes while the agent works.</strong> Priya may have written again; a meeting read at ten may have moved by ten thirty.</li>
+<li>Sending cannot be taken back. The agent must not send anything the owner has not seen.</li>
+<li>Everything in a mailbox was written by someone else, and anyone can email the owner text written to mislead the agent.</li>
+<li>The account changes while the agent works. Priya may have written again; a meeting read at ten may have moved by ten thirty.</li>
 </ul>
 <p>The design answers each of these in code, since the model can argue with its instructions and cannot argue with code.</p>
 
@@ -25,12 +25,12 @@
 <dt>Connector service</dt><dd>A company that holds those tokens on a developer's behalf and offers one uniform way to call many services' actions. Also called a broker. Each call names an action, such as <code>GMAIL_SEND_EMAIL</code>, and passes its inputs.</dd>
 </dl></div>
 <p>Odysseus uses Composio, chosen for its catalogue of more than 1,700 apps <span class="g v">Verified</span> ({{ch:build-or-buy}}). The owner connected mail and calendar by approving access on Google's own pages; the program never saw a password and holds no Google token.</p>
-<p>The price is a third party in the middle. The connector company holds the tokens, and every message the agent reads passes through its servers. If that company were breached, the gate would not help, because it guards what <em>the agent</em> does. Registering an application with Google directly and keeping the tokens on the owner's machine removes the third party, at the cost of more work and fewer services. That choice can be revisited for mail alone, because the model never sees the connector: only tools of our own that happen to call it.</p>
+<p>The price is a third party in the middle. The connector company holds the tokens, and every message the agent reads passes through its servers. If that company were breached, the gate would not help, because it guards what <em>the agent</em> does. Registering an application with Google directly and keeping the tokens on the owner's machine removes the third party, at the cost of more work and fewer services. That choice can be revisited for mail alone, because the model never sees the connector: only tools written for this program that happen to call it.</p>
 
 <h2 id="narrow">A few narrow tools, not hundreds</h2>
 <p>A connector offers hundreds of actions per account, and an easy way to hand them all to a model as tools ({{ch:the-agent-loop}}). For mail and calendar, Odysseus does not.</p>
 <div class="box definition"><div class="label">Definition: narrow tool</div>
-<p>A tool written for this program that performs exactly one of the connector's actions, with inputs chosen by us, checks written by us, and output cleaned by us before the model sees it.</p></div>
+<p>A tool written for this program that performs exactly one of the connector's actions, with inputs chosen by this program, checks written for it, and output cleaned before the model sees it.</p></div>
 <p>There are eleven, chosen from what an owner asks of mail and a diary, and each given a gate answer from two questions: does this reach another person, and can it be undone?</p>
 <div class="tablewrap"><table>
 <caption>The eleven mail and calendar tools and the gate's answer for each, from <code>odysseus/apps.py</code>.</caption>
@@ -48,12 +48,12 @@
 <tr><th><code>mail_send</code></th><td>Sends a new email</td><td>Always ask</td><td>Cannot be taken back</td></tr>
 <tr><th><code>mail_reply</code></th><td>Replies inside a thread</td><td>Always ask</td><td>Cannot be taken back</td></tr>
 </tbody></table></div>
-<p>Writing our own tools is more work than passing the catalogue through. It buys four things.</p>
+<p>Writing the tools is more work than passing the catalogue through. It buys four things.</p>
 <ol>
-<li><strong>A rule and a question for each tool.</strong> The gate ({{ch:the-gate}}) can write "Send this email? To: ..." for one known action, not for an arbitrary one of hundreds.</li>
-<li><strong>A second check inside the tool</strong>, possible only because the code is ours.</li>
-<li><strong>Cleaning</strong> of what comes back, before the model sees it.</li>
-<li><strong>A smaller target.</strong> There is no tool to delete mail, change filters, forward or share a calendar, so no instruction, planted or honest, can cause those.</li>
+<li>A rule and a question for each tool. The gate ({{ch:the-gate}}) can write "Send this email? To: ..." for one known action, not for an arbitrary one of hundreds.</li>
+<li>A second check inside the tool, possible only because the code is this program's.</li>
+<li>Cleaning of what comes back, before the model sees it.</li>
+<li>A smaller target. There is no tool to delete mail, change filters, forward or share a calendar, so no instruction, planted or honest, can cause those.</li>
 </ol>
 <p>Two of the rules read their inputs: an event with no guests changes only the owner's calendar, so it is allowed and reported; with guests, other people are emailed, so it is asked about. The rules are registered in one place:</p>
 <pre><code># odysseus/apps.py
@@ -81,7 +81,7 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
 <rect x="200" y="10" width="280" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/>
 <text x="340" y="35" text-anchor="middle">Model</text>
 <rect x="200" y="75" width="280" height="40" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/>
-<text x="340" y="100" text-anchor="middle">Eleven narrow tools (our code)</text>
+<text x="340" y="100" text-anchor="middle">Eleven narrow tools (own code)</text>
 <rect x="200" y="140" width="280" height="40" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/>
 <text x="340" y="165" text-anchor="middle">Gate: checks twice (before, inside)</text>
 <rect x="200" y="205" width="280" height="40" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/>
@@ -102,7 +102,7 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
 <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker>
 </defs>
 </svg>
-<figcaption>The model never touches the connector. A request passes through tools we wrote and through the gate twice (lock 1 and lock 2 of {{ch:the-gate}}, explained below); a result passes through our cleaning on the way back. The connector's other actions are simply not offered.</figcaption>
+<figcaption>The model never touches the connector. A request passes through tools written for this program and through the gate twice (lock 1 and lock 2 of {{ch:the-gate}}, explained below); a result passes through the program's cleaning on the way back. The connector's other actions are simply not offered.</figcaption>
 </figure>
 
 <h2 id="shown">What the model is shown of a message</h2>
@@ -177,7 +177,7 @@ def describe_send(args: dict[str, Any]) -> str:
     return (f"Send this email from your account?\n\nTo: {', '.join(to)}\n" + (f"Cc: {', '.join(cc)}\n" if cc else "")
             + f"Subject: {str(args.get('subject', '')).strip() or '(none)'}\n\n{body}")</code></pre>
 <p>Recipients come first because a person skimming on a phone must not miss them. <code>_emails</code> refuses anything that is not a single address: a test passes <code>"a@b.co, evil@x.net &lt;a@b.co&gt;"</code> as one recipient, which could read as one address while carrying two. It cannot be described, so it cannot be approved.</p>
-<p>The handler for step 5 repeats the checks, then maps our field names onto the connector's:</p>
+<p>The handler for step 5 repeats the checks, then maps the program's field names onto the connector's:</p>
 <pre><code># odysseus/apps.py
 async def mail_send(a):
     describe_send(a)   # the same checks the question went through
@@ -295,9 +295,9 @@ async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
 <h2 id="for-code">Reading for code, not for the model</h2>
 <p>Some features must read an account where no model should be involved, or where the model must not see what is read. These use separate methods, each marked in its docstring as for code.</p>
 <ul>
-<li><strong>The calendar a meeting brief uses.</strong> <code>events_between</code> returns raw events; code in <code>odysseus/brief.py</code> keeps those that are timed, not cancelled, not declined, and have a guest outside the owner's mail domain. Only those reach a model ({{ch:acting-unasked}}).</li>
-<li><strong>The mailbox address.</strong> <code>my_address</code> reads it once, for code that must type it into a site ({{ch:decks-and-data-rooms}}).</li>
-<li><strong>One kind of message, with nothing removed.</strong> <code>messages_for_code</code>:</li>
+<li>The calendar a meeting brief uses. <code>events_between</code> returns raw events; code in <code>odysseus/brief.py</code> keeps those that are timed, not cancelled, not declined, and have a guest outside the owner's mail domain. Only those reach a model ({{ch:acting-unasked}}).</li>
+<li>The mailbox address. <code>my_address</code> reads it once, for code that must type it into a site ({{ch:decks-and-data-rooms}}).</li>
+<li>One kind of message, with nothing removed. <code>messages_for_code</code>:</li>
 </ul>
 <pre><code># odysseus/apps.py
 async def messages_for_code(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
@@ -312,8 +312,8 @@ async def messages_for_code(self, query: str, limit: int = 5) -> list[dict[str, 
 <h2 id="worked">Worked example: "Tell Priya Wednesday at 12:30 works"</h2>
 <p>This traces the code with the stand-in mailbox of <code>tests/test_apps.py</code>. Each step is exercised by a unit test; the sequence has not been run on a real account.</p>
 <ol>
-<li><strong>Search.</strong> The model calls <code>mail_search</code> with <code>{"query": "from:priya newer_than:7d"}</code>. Gate: allow. The tool calls <code>GMAIL_FETCH_EMAILS</code> with <code>max_results</code> 10. The stand-in returns two messages: Priya's, and a bank's carrying a verification code.</li>
-<li><strong>What the model sees.</strong> The fixed mail label, then:
+<li>Search. The model calls <code>mail_search</code> with <code>{"query": "from:priya newer_than:7d"}</code>. Gate: allow. The tool calls <code>GMAIL_FETCH_EMAILS</code> with <code>max_results</code> 10. The stand-in returns two messages: Priya's, and a bank's carrying a verification code.</li>
+<li>What the model sees. The fixed mail label, then:
 <pre><code>id: m1  thread: t1
 From: Priya Nair &lt;priya@example.com&gt;
 ...
@@ -321,10 +321,10 @@ Subject: Lunch next week?
 
 Are you free Wednesday at 12:30?</code></pre>
 and, for the bank's message, its header followed by the hidden-line notice in place of the extract. The code 482913 never reaches the model.</li>
-<li><strong>Request.</strong> The model calls <code>mail_reply</code> with <code>{"thread_id": "t1", "to": ["priya@example.com"], "body": "Yes, Wednesday at 12:30 works."}</code>.</li>
-<li><strong>Gate.</strong> Rule: ask. <code>describe_reply</code> writes: "Send this reply from your account? To: priya@example.com / In the thread: t1 / Yes, Wednesday at 12:30 works." The owner taps Approve.</li>
-<li><strong>Tool.</strong> Lock 2 spends the approval. The handler calls <code>GMAIL_REPLY_TO_THREAD</code> with <code>thread_id</code>, <code>recipient_email</code>, <code>message_body</code> and <code>is_html</code> false.</li>
-<li><strong>Reply.</strong> Code appends: "Done on your accounts: replied to priya@example.com."</li>
+<li>Request. The model calls <code>mail_reply</code> with <code>{"thread_id": "t1", "to": ["priya@example.com"], "body": "Yes, Wednesday at 12:30 works."}</code>.</li>
+<li>Gate. Rule: ask. <code>describe_reply</code> writes: "Send this reply from your account? To: priya@example.com / In the thread: t1 / Yes, Wednesday at 12:30 works." The owner taps Approve.</li>
+<li>Tool. Lock 2 spends the approval. The handler calls <code>GMAIL_REPLY_TO_THREAD</code> with <code>thread_id</code>, <code>recipient_email</code>, <code>message_body</code> and <code>is_html</code> false.</li>
+<li>Reply. Code appends: "Done on your accounts: replied to priya@example.com."</li>
 </ol>
 <p>On Decline the model is told "The owner declined. It was not done. Do not try again unless the owner asks." On a timeout at step 5 it is told the reply may or may not have been sent, and to check first.</p>
 
@@ -340,10 +340,10 @@ and, for the bank's message, its header followed by the hidden-line notice in pl
 <h2 id="testing">How to test it</h2>
 <p>A test of this part must check what happens at the account, not what the model says. The tests replace the connector with a stand-in that records every call, and assert on that record, in four groups.</p>
 <ul>
-<li><strong>Cleaning:</strong> codes hidden, ordinary numbers kept, labels present whatever shape the data has.</li>
-<li><strong>Questions:</strong> people first, everything shown; malformed requests cannot be described, so cannot be approved.</li>
-<li><strong>Consent:</strong> no send without approval; an approved send makes exactly one call with exactly the approved fields; a repeat is refused.</li>
-<li><strong>A moving world:</strong> a guest added or a meeting removed after listing stops the change; a failed read is retried; a failed write is not, and went out once.</li>
+<li>Cleaning: codes hidden, ordinary numbers kept, labels present whatever shape the data has.</li>
+<li>Questions: people first, everything shown; malformed requests cannot be described, so cannot be approved.</li>
+<li>Consent: no send without approval; an approved send makes exactly one call with exactly the approved fields; a repeat is refused.</li>
+<li>A moving world: a guest added or a meeting removed after listing stops the change; a failed read is retried; a failed write is not, and went out once.</li>
 </ul>
 <p>The 20 tests in <code>tests/test_apps.py</code> cover the first three groups and the routine's read-only tool set. The change, delete, draft and archive tools, the retries and the "may have happened" warning are tested in <code>tests/test_stage2.py</code> against a seeded test world; the guest added after listing is tested in <code>tests/test_stage0.py</code>; reading an attachment is tested by the five tests in <code>tests/test_attachments.py</code>, with stand-ins for the connector, the fetcher and the text-recognition service. All pass. None can show how the real service behaves: long threads, real failures, and the codes real services actually send.</p>
 
@@ -354,7 +354,7 @@ and, for the bank's message, its header followed by the hidden-line notice in pl
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A connector service holds the tokens and offers one way to call many actions; it also puts a third party between the owner and their mail.</li>
-<li>Eleven narrow tools of our own, each calling one action, give each a rule; those that need consent get a plain question and a second check; what comes back is cleaned; dangerous actions are not offered.</li>
+<li>Eleven narrow tools written for this program, each calling one action, give each a rule; those that need consent get a plain question and a second check; what comes back is cleaned; dangerous actions are not offered.</li>
 <li>An attachment is fetched from the short-lived address the service gives, with the same guards as a typed link, and read as any file is; a conversation may read one, an unattended run may not.</li>
 <li>Gate answers come from two questions: does it reach another person, and can it be undone?</li>
 <li>Mail reaches the model labelled, reduced to a few fields, with sign-in codes and account links removed.</li>

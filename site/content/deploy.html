@@ -1,7 +1,7 @@
 <header>
 <p class="eyebrow">Deploy guide</p>
 <h1>Run your own Odysseus</h1>
-<p class="lede">From nothing to a bot that answers you in Telegram, first on your own computer and then on a small server that stays awake. These are the steps we took ourselves, and where something went wrong for us, it says so. We ran them on Windows; the macOS and Linux forms shown beside them are the standard equivalents.</p>
+<p class="lede">From nothing to a bot that answers you in Telegram, first on your own computer and then on a small server that stays awake. These steps were followed for real, and where something went wrong, the page says so. They were run on Windows; the macOS and Linux forms shown beside them are the standard equivalents.</p>
 </header>
 
 {{repo_notice}}
@@ -22,7 +22,7 @@
 </tbody>
 </table></div>
 <p>You also need <b>Python 3.13</b> (the version it is tested on) and, for the server step, a card on a hosting account.</p>
-<div class="callout info"><p><b>What it costs to run.</b> The model and the other services bill you directly, by use. In our own single measurements a question with one web search cost about 1.5 cents and a browser run about 4 cents. The program enforces a limit per task (50 cents by default) and per day (3 dollars by default), and you can change both. A small server is a few dollars a month on top.</p></div>
+<div class="callout info"><p><b>What it costs to run.</b> The model and the other services bill you directly, by use. In single measurements made here a question with one web search cost about 1.5 cents and a browser run about 4 cents. The program enforces a limit per task (50 cents by default) and per day (3 dollars by default), and you can change both. A small server is a few dollars a month on top.</p></div>
 
 <div class="stage"><div class="num">1</div><div>
 <h2>Get the code and install it</h2>
@@ -65,8 +65,8 @@ pip install -r requirements.txt</code></pre></div>
 
 <div class="stage"><div class="num">4</div><div>
 <h2>Give it a server</h2>
-<p>On a laptop, reminders only fire while the laptop is awake. A small always-on server fixes that. These steps use Fly.io, which is what we used; any host that can run a container with a persistent disk will do.</p>
-<div class="callout bad"><p><b>Add a payment card first. This one cost us two failed deployments.</b> On a new Fly.io account with no card, every machine is stopped five minutes after it starts. Nothing in the deploy output says so. The bot starts, answers for five minutes and goes silent. The only trace is one line in the machine's log: "Trial machine stopping".</p></div>
+<p>On a laptop, reminders only fire while the laptop is awake. A small always-on server fixes that. These steps use Fly.io, which is what this project used; any host that can run a container with a persistent disk will do.</p>
+<div class="callout bad"><p><b>Add a payment card first. Skipping it cost two failed deployments.</b> On a new Fly.io account with no card, every machine is stopped five minutes after it starts. Nothing in the deploy output says so. The bot starts, answers for five minutes and goes silent. The only trace is one line in the machine's log: "Trial machine stopping".</p></div>
 <h3>Create the app and its disk</h3>
 <p>Install the <code>fly</code> command from Fly.io, then:</p>
 <div class="cmd"><pre><code>fly auth login
@@ -84,9 +84,9 @@ fly volumes create odysseus_data --app your-app-name --region sin --size 1</code
 <h3>Check that it stayed up</h3>
 <div class="cmd"><pre><code>fly status
 fly logs</code></pre></div>
-<p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> We reported our first deployment as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
+<p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> The first deployment was reported as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
 <h3>Optional: WhatsApp as a second channel</h3>
-<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. We have built and tested this channel without Meta and have not yet connected it, so treat these steps as untried.</p>
+<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. This channel was built and tested without Meta and has not yet been connected, so treat these steps as untried.</p>
 <ol>
 <li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions.</li>
 <li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
@@ -148,4 +148,4 @@ fly logs</code></pre></div>
 <p>The tests run in under a minute and call no outside service.</p>
 <div class="cmd"><pre><code>pip install -r requirements-dev.txt
 pytest</code></pre></div>
-<p>They prove what the code around the model does. They do not prove that it works with real services; three faults in our first day were found only by running it for real. The scripts in <code>scripts/</code> are the live checks we used, and each one spends a few cents.</p>
+<p>They prove what the code around the model does. They do not prove that it works with real services; three faults in the first day were found only by running it for real. The scripts in <code>scripts/</code> are the live checks used here, and each one spends a few cents.</p>

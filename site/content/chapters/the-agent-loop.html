@@ -20,7 +20,7 @@
 <dt>Token</dt><dd>The unit a model reads and writes, roughly a short word or part of a word. Models are priced per token, separately for tokens read and tokens written.</dd>
 <dt>System prompt</dt><dd>Fixed instructions sent at the start of every call, telling the model who it is, what it can do and how to behave.</dd>
 </dl></div>
-<p>A model call is a function from text to text. What goes in is the system prompt, the conversation so far and, if the model may use tools, a list of their descriptions. What comes out is the model's next message. (This is our general explanation of how such services work, not a finding of this project.)</p>
+<p>A model call is a function from text to text. What goes in is the system prompt, the conversation so far and, if the model may use tools, a list of their descriptions. What comes out is the model's next message. (This is a general explanation of how such services work, not a finding of this project.)</p>
 <p>The model keeps nothing between calls: it does not remember the previous call, and everything it needs to know must be sent again each time. A conversation of twenty messages is, from the model's side, twenty separate calls, each containing all the messages before it. This is why a long conversation becomes slower and more expensive, and why "the model's memory" is really a question of what the surrounding program chooses to send ({{ch:memory}}).</p>
 <p>Calls cost money by the token. The system's code holds a price table, used to estimate a task's cost while it runs. For the mid-priced model it reads:</p>
 <pre><code># Dollars per million tokens: input, output, cache read, cache write.
@@ -73,11 +73,11 @@ PRICES = {
 </figure>
 <p>A turn can end in five ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
 <ul>
-<li><strong>done</strong>: the model replied with text and no further tool request.</li>
-<li><strong>stopped</strong>: the owner sent "stop". This is matched by the shell and never shown to the model ({{ch:the-conversation}}).</li>
-<li><strong>budget</strong>: the estimated cost of this task's steps reached the per-task limit, by default $0.50.</li>
-<li><strong>turn_limit</strong>: the task used more steps than allowed, by default 25.</li>
-<li><strong>error</strong>: something failed, and the owner is told it could not finish.</li>
+<li>done: the model replied with text and no further tool request.</li>
+<li>stopped: the owner sent "stop". This is matched by the shell and never shown to the model ({{ch:the-conversation}}).</li>
+<li>budget: the estimated cost of this task's steps reached the per-task limit, by default $0.50.</li>
+<li>turn_limit: the task used more steps than allowed, by default 25.</li>
+<li>error: something failed, and the owner is told it could not finish.</li>
 </ul>
 <p>Only the first is chosen by the model. The other four are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
 
@@ -270,14 +270,14 @@ else:
 <h2 id="worked">Worked example: one message, end to end</h2>
 <p>The owner sends <em>"Is the museum on Harbour Street open on Monday, and what does a ticket cost?"</em></p>
 <ol>
-<li><strong>Channel.</strong> <code>telegram.py</code> receives the message in a private chat and passes the sender's id and text on.</li>
-<li><strong>Conversation rules.</strong> The sender is the owner; the text is not a command such as <code>stop</code>; no task is running; today's spending is under the limit. A task starts and the journal records <code>task_start</code>.</li>
-<li><strong>Prompt assembly.</strong> The time is appended in square brackets, as the weekday, the date and the hour (a stamp that begins <code>[Friday</code>, say), so that "Monday" can be worked out. At the start of a conversation the owner's saved memory is put in front.</li>
-<li><strong>Step 1.</strong> The model replies with a tool call: <code>mcp__odysseus__web_search</code>, query <em>Harbour Street museum opening hours and admission prices</em>, objective <em>the museum's own page first; Monday hours and adult price</em>. The runner logs <code>tool_request</code> and counts one step.</li>
-<li><strong>Policy.</strong> The gate's rule for search finds nothing from the owner's mail or calendar in the query, so it allows it.</li>
-<li><strong>Tool.</strong> The search runs and is logged as <code>tool</code> with <code>ok: true</code> and its cost. The model receives the results under the line saying they are material to read.</li>
-<li><strong>Step 2.</strong> The model replies with text only: closed on Mondays, the adult price, and the page it came from. The words appear in the chat as they are written.</li>
-<li><strong>End.</strong> The <code>ResultMessage</code> arrives; the status is <code>done</code>; the task's cost is the new running total minus the old. The journal records <code>task_end</code> with status, cost, two steps and the seconds taken.</li>
+<li>Channel. <code>telegram.py</code> receives the message in a private chat and passes the sender's id and text on.</li>
+<li>Conversation rules. The sender is the owner; the text is not a command such as <code>stop</code>; no task is running; today's spending is under the limit. A task starts and the journal records <code>task_start</code>.</li>
+<li>Prompt assembly. The time is appended in square brackets, as the weekday, the date and the hour (a stamp that begins <code>[Friday</code>, say), so that "Monday" can be worked out. At the start of a conversation the owner's saved memory is put in front.</li>
+<li>Step 1. The model replies with a tool call: <code>mcp__odysseus__web_search</code>, query <em>Harbour Street museum opening hours and admission prices</em>, objective <em>the museum's own page first; Monday hours and adult price</em>. The runner logs <code>tool_request</code> and counts one step.</li>
+<li>Policy. The gate's rule for search finds nothing from the owner's mail or calendar in the query, so it allows it.</li>
+<li>Tool. The search runs and is logged as <code>tool</code> with <code>ok: true</code> and its cost. The model receives the results under the line saying they are material to read.</li>
+<li>Step 2. The model replies with text only: closed on Mondays, the adult price, and the page it came from. The words appear in the chat as they are written.</li>
+<li>End. The <code>ResultMessage</code> arrives; the status is <code>done</code>; the task's cost is the new running total minus the old. The journal records <code>task_end</code> with status, cost, two steps and the seconds taken.</li>
 </ol>
 <p>The museum and its answer are invented for this example. The order of events and the journal entries are those the code produces. <span class="g v">Verified</span> For scale: in the first live measurement, one sample, a question that needed one search cost $0.0145.</p>
 

@@ -50,10 +50,10 @@ for slug in wanted:
 <p>Each action is shown with its app, whether that app is connected, how the program has sorted it (read, change or reach), a description cut to 240 characters and an input schema cut to 1,600. At most six are shown; inputs the search left out are fetched first. Mail and calendar actions are dropped, and the general tools refuse them, so the cleaning and questions of {{ch:mail-and-calendar}} cannot be got round this way.</p>
 <p>The pattern has costs:</p>
 <ul>
-<li><strong>An extra step.</strong> Every job in a new app begins with a search: a round trip and a model turn.</li>
-<li><strong>The finder is not ours.</strong> If the connector's search returns the wrong actions, the model works with them. How good it is across thousands of apps is not known.</li>
-<li><strong>Plainer questions.</strong> No code of ours knows what an arbitrary action's fields mean, so the owner sees the action's name and raw inputs.</li>
-<li><strong>Memory of tools.</strong> A model may call an action remembered from earlier without looking it up. The program then sorts it by its name alone, without the vendor's labels, which are learned only in <code>app_find</code>.</li>
+<li>An extra step. Every job in a new app begins with a search: a round trip and a model turn.</li>
+<li>The finder belongs to the connector. If the connector's search returns the wrong actions, the model works with them. How good it is across thousands of apps is not known.</li>
+<li>Plainer questions. No code in this program knows what an arbitrary action's fields mean, so the owner sees the action's name and raw inputs.</li>
+<li>Memory of tools. A model may call an action remembered from earlier without looking it up. The program then sorts it by its name alone, without the vendor's labels, which are learned only in <code>app_find</code>.</li>
 </ul>
 
 <figure>
@@ -189,7 +189,7 @@ return (f"{name} is not connected yet. A link to connect it is being sent to the
         "it, approve, and then tell you. Do not invent or repeat a link yourself. When they say it is done, carry on.")</code></pre>
 <p>The link is put in <code>self._links</code>, not in the text returned to the model. When the reply is sent, code appends it: "To connect Google Sheets, open this link and approve, then tell me it's done:" followed by the link exactly as the connector issued it. A test asserts that the text the model receives contains no "https://".</p>
 <p>A link is the one thing in a reply that must not be altered or invented, so the model is kept away from it. A model can mistype a long address, and a misled model can substitute an attacker's sign-in page; an owner used to approving links from the assistant is exactly the owner a phishing page wants. If the link never passes through the model, the model cannot change it. The owner opens it, approves on the provider's own page, and says so in the chat.</p>
-<p>The instructions also say: "When the owner asks for something in an app, do not say you cannot. Call app_find with the job in plain words". It is our expectation, not a measurement, that without such a sentence a cautious model declines requests in apps it has no tool for.</p>
+<p>The instructions also say: "When the owner asks for something in an app, do not say you cannot. Call app_find with the job in plain words". It is an expectation, not a measurement, that without such a sentence a cautious model declines requests in apps it has no tool for.</p>
 
 <h2 id="own-files">The owner's own files: small edits unasked</h2>
 <p>Asking before every change is safe and tiresome. An owner who is asked to approve each row added to their own spreadsheet soon taps Approve without reading, and then the question protects nothing. The owner chose to be asked as little as possible, on the model of a capable intern who does the thing and says what was done. One setting restores a question before every change.</p>
@@ -254,7 +254,7 @@ def decide(self, args: dict[str, Any]) -> str:
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>Tool definitions are text sent on every turn. One app's 58 tools came to about 46,000 tokens; a catalogue of thousands cannot be shown at all.</li>
-<li>The two-tool pattern keeps the catalogue outside the model: one tool finds a few actions for a job and shows how to call them, one runs an action. The costs are an extra step, a finder that is not ours, plainer questions, and models that call tools from memory.</li>
+<li>The two-tool pattern keeps the catalogue outside the model: one tool finds a few actions for a job and shows how to call them, one runs an action. The costs are an extra step, a finder that belongs to the connector, plainer questions, and models that call tools from memory.</li>
 <li>An unknown action is sorted by the words in its name into read, change or reach. Only a positively recognised read runs unasked; an unrecognised name is a change and is asked about.</li>
 <li>The vendor's labels are used with the name and almost only towards asking; a label alone never makes a read.</li>
 <li>A read whose inputs carry the owner's private details is asked about, because some reads send their inputs to another company.</li>
