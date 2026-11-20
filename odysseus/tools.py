@@ -50,6 +50,7 @@ ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})
 SCHEDULE_TOOL = _name("schedule")
 WATCH_TOOL = _name("watch")
 CHECKIN_ADD, CHECKIN_DONE = _name("checkin_add"), _name("checkin_done")
+LEADS_TOOL = _name("who_to_ask_about")
 
 
 def _after_reading(taint: Taint, text: str) -> list[str]:
@@ -216,6 +217,11 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(CHECKIN_ADD, lambda a: ASK if str(a.get("assignee_email") or "").strip() else ALLOW, checkin_question)
     gate.rule(CHECKIN_DONE, lambda a: ASK if _after_reading(taint, str(a.get("result", ""))) else ALLOW,
               lambda a: describe_memory({"text": a.get("result", "")}, taint, f"Record this against the check-in with {a.get('who', '')}?"))
+    # Who to ask a contact about (leads.py): a web search for a name and a company, by an agent that sees nothing else.
+    # Like any search, it is asked about if what would be searched for carries details read from the owner's accounts.
+    gate.rule(LEADS_TOOL, lambda a: ASK if taint.leaked(f"{a.get('name', '')} {a.get('company', '')}") else ALLOW,
+              lambda a: describe_search({"query": f"{a.get('name', '')} {a.get('company', '')}".strip(),
+                                         "objective": "who this person knows that the firm would want to meet"}, taint))
     gate.rule(_name("checkin_list"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
@@ -302,7 +308,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
-                     checkins: Any = None):
+                     checkins: Any = None, leads: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -478,6 +484,33 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             tool("checkin_remove", "Take a person off the list of people to keep in touch with, by id or name.",
                  {"type": "object", "properties": {"who": {"type": "string"}}, "required": ["who"]})(checkin_remove),
         ]
+    if leads is not None:
+        from . import leads as leads_mod
+
+        async def who_to_ask_about(args: dict[str, Any]) -> dict[str, Any]:
+            found = await leads.find(str(args.get("name", "")), str(args.get("company", "")), [str(x) for x in args.get("not_these") or []][:20])
+            journal.write("tool", name="who_to_ask_about", ok=True, found=len(found))
+            taint_ = getattr(gate, "taint", None)
+            if taint_ is not None:
+                taint_.saw("web search results")
+            if not found:
+                return _ok("Nobody was found with a public connection that can be pointed to, or the search could not be run. Say so plainly.")
+            return _ok(leads_mod.MATERIAL + "\n\n" + leads_mod.lines(found) + "\n\nGive the owner these as people to ask about, with the page for "
+                       "each, and say that a public connection is not proof they know each other. Offer to draft the message asking for an introduction.")
+        if gate is not None:
+            who_to_ask_about = gate.guarded(LEADS_TOOL, who_to_ask_about)      # lock 2
+        tools.append(tool(
+            "who_to_ask_about",
+            "Find up to three people a named contact probably knows well whom the firm would want to meet, so the owner can ask the contact "
+            "about them by name: 'do you know X, and would you introduce us?'. Use it when the owner asks who a founder or contact might "
+            "know, who to ask them about, or who the smartest people around them are. It searches the public web for who the contact has "
+            "built, worked, invested or appeared with; it takes a minute or two and leaves out people already in the firm's database. "
+            "It does not read who follows whom on any site.",
+            {"type": "object",
+             "properties": {"name": {"type": "string", "description": "The contact's full name."},
+                            "company": {"type": "string", "description": "Where they work or what they founded, to tell them from others of the same name."},
+                            "not_these": {"type": "array", "items": {"type": "string"}, "description": "Names not to suggest, e.g. ones already given."}},
+             "required": ["name"]})(who_to_ask_about))
     if watches is not None:
         async def watch(args: dict[str, Any]) -> dict[str, Any]:
             try:

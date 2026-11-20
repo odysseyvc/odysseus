@@ -26,6 +26,7 @@ class Settings:
     browser_use_api_key: str = ""  # optional: without it, there is no browser
     browser_ask_signed_in: bool = True    # ask the owner before a browser run that is signed in as them; 0 turns it off
     background_jobs: int = 2              # how many jobs may run in the background at once (a deck sent by itself, a filing you approved) while you go on talking; 0: one thing at a time
+    suggest_people: bool = True           # with a check-in that is due, and on request: up to three people to ask that person about, from a web search. 0: off
     checkins_at: str = "09:30"            # when each working day to ask about check-ins that are due and remind colleagues; "off": never
     capture_at: str = "08:30"             # when each day to ask about people met or heard from who are not in the database; "off": never
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
@@ -127,6 +128,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         background_jobs=_how_many(merged.get("ODYSSEUS_BACKGROUND_JOBS", "")),
         capture_at=(merged.get("ODYSSEUS_CAPTURE_AT", "") or "08:30").strip().lower(),
         checkins_at=(merged.get("ODYSSEUS_CHECKINS_AT", "") or "09:30").strip().lower(),
+        suggest_people=merged.get("ODYSSEUS_SUGGEST_PEOPLE", "").strip().lower() not in ("0", "false", "no", "off"),
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),
         viewer_email=merged.get("ODYSSEUS_VIEWER_EMAIL", "").strip(),
         pages_model=merged.get("ODYSSEUS_PAGES_MODEL", "").strip(),

@@ -54,6 +54,7 @@ from .capture import Capture
 from .closing import make_closer
 from .checkins import CheckinLoop, Checkins
 from .decisions import Decisions, PassWatch
+from .leads import Leads
 from .config import ConfigError, load, make_clock
 from .conversation import Conversation
 from .history import History
@@ -196,9 +197,26 @@ async def main() -> int:
                                        with_files=ocr is not None, with_anyapp=anyapp is not None,
                                        with_watches=watches is not None, with_attio=attio is not None) + "".join(s.prompt() for s in services)
 
+    # Who to ask a contact about (leads.py): an agent of its own that can search the web and read nothing of the owner's.
+    leads = leads_runner = None
+    if settings.suggest_people:
+        async def already_known(name: str) -> bool:
+            if attio is None:
+                return False
+            from .attio_layout import parse
+            from .attio_intake import _norm, _texts
+            found = parse(await attio._call(attio._b.call("search-records", {"object": "people", "query": name, "limit": 5})))
+            return any(isinstance(hit, dict) and _norm(name) in {_norm(t) for t in _texts(hit.get("attributes") or hit)}
+                       for hit in found.get("results") or found.get("records") or [])
+        # On the main model: in a trial on one public founder the small model named long-standing colleagues and the main one named
+        # early founders the person had backed, which is the answer wanted, for about seven cents against under one.
+        leads_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True), memory, now, program_tasks=True,
+                                           model=settings.model)
+        leads = Leads(leads_runner, journal, ledger, settings.daily_usd, known=already_known)
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
-                                on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins)
+                                on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -318,7 +336,12 @@ async def main() -> int:
             await attio._call(attio._b.call("create-note", {"parent_object": "people", "parent_record_id": rid,
                                                            "title": f"Check-in, {now().strftime('%d %b %Y')}", "content": text}))
             return True
+        async def people_to_ask_about(item: dict) -> list:
+            company = item["email"].rsplit("@", 1)[-1] if item.get("email") else ""
+            from .brief import PUBLIC_MAIL
+            return await leads.find(item["name"], "" if company in PUBLIC_MAIL else company, item.get("suggested") or [])
         checking = asyncio.create_task(CheckinLoop(checkins, telegram, journal, now=now, at=settings.checkins_at,
+                                                   suggest=people_to_ask_about if leads is not None else None,
                                                    send_mail=apps.send_for_code if apps is not None else None,
                                                    messages=apps.messages_for_code if apps is not None else None, note=note_on_person,
                                                    on_delivered=conversation.record_delivery).run_forever())
@@ -354,6 +377,8 @@ async def main() -> int:
             capturing.cancel()
         if checking is not None:
             checking.cancel()
+        if leads_runner is not None:
+            await leads_runner.runner.close()
         watching_passes.cancel()
         await watch_runner.runner.close()
         if watching is not None:

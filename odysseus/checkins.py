@@ -237,9 +237,11 @@ class CheckinLoop:
     def __init__(self, store: Checkins, chat: Any, journal: Journal, now: Callable[[], datetime] = datetime.now, at: str = "09:30",
                  send_mail: Callable[[str, str, str], Awaitable[None]] | None = None,
                  messages: Callable[[str, int], Awaitable[list[dict[str, Any]]]] | None = None,
-                 note: Callable[[dict[str, Any], str], Awaitable[bool]] | None = None, on_delivered: Callable[[str], None] | None = None):
+                 note: Callable[[dict[str, Any], str], Awaitable[bool]] | None = None, on_delivered: Callable[[str], None] | None = None,
+                 suggest: Callable[[dict[str, Any]], Awaitable[list[dict[str, str]]]] | None = None):
         self._store, self._chat, self._journal, self._now, self._at = store, chat, journal, now, at
         self._send_mail, self._messages, self._note, self._on_delivered = send_mail, messages, note, on_delivered or (lambda t: None)
+        self._suggest = suggest        # who to ask this person about (leads.py); the one part that uses a model, and optional
         self._asked_on: tuple[str, int] = ("", 0)
         self._checked: dict[str, datetime] = {}
 
@@ -330,6 +332,17 @@ class CheckinLoop:
                         + (f"\nLast time, {date.fromisoformat(last['on']):%d %b}: {last['text'][:300]}" if last.get("text") else ""))
                 item.update(asks=item["asks"] + 1, asked=today.isoformat(), first_asked=item.get("first_asked") or today.isoformat())
                 self._store.save()
+                if self._suggest is not None and item["asks"] == 1:        # once a round, not with every repeat of the question
+                    try:
+                        found = await self._suggest(item)
+                    except Exception as e:
+                        self._journal.write("error", where="checkins.suggest", error=type(e).__name__)
+                        found = []
+                    if found:
+                        from .leads import lines
+                        text += "\n\nWorth asking about (each may or may not know them):\n" + lines(found)
+                        item["suggested"] = ((item.get("suggested") or []) + [f["name"] for f in found])[-12:]
+                        self._store.save()
                 await self._chat.choose(text, offer_for(item), OPTIONS)
                 self._on_delivered(text)
                 self._asked_on = (self._asked_on[0], self._asked_on[1] + 1)
