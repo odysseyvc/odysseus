@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramRetryAfter
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from .conversation import Conversation, split_message
 from .ocr import MAX_BYTES
@@ -31,6 +31,14 @@ class TelegramChat:
         """A message with one button per address. Each button opens its address in the person's own browser."""
         rows = [[InlineKeyboardButton(text=label[:40], url=url)] for label, url in links[:6]]
         await self._bot.send_message(self._chat_id, text, parse_mode=None, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+    async def send_file(self, name: str, data: bytes | None = None, handle: str = "", kind: str = "document", caption: str = "") -> None:
+        """Send a file: by the id Telegram gave it when it arrived, which uploads nothing, or from its bytes."""
+        what = handle or BufferedInputFile(data or b"", filename=name or "file")
+        if kind == "photo" and handle:
+            await self._bot.send_photo(self._chat_id, what, caption=caption[:1000] or None, parse_mode=None)
+        else:
+            await self._bot.send_document(self._chat_id, what, caption=caption[:1000] or None, parse_mode=None)
 
     async def send(self, text: str) -> None:
         # Plain text: no parse mode, so nothing the model writes is read as markup.
@@ -115,7 +123,8 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
                 data = buffer.read() if buffer else None
             except Exception:
                 data = None
-        await conversation.handle_file(user_id, data, name, mime, size, message.caption or "", chat)
+        await conversation.handle_file(user_id, data, name, mime, size, message.caption or "", chat,
+                                       handle=item.file_id, kind="photo" if message.photo else "document")
 
     # Voice notes and audio files. Fetched only for the owner, and never kept.
     @dp.message(F.chat.type == "private", F.voice | F.audio)

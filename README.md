@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 499 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 506 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -111,6 +111,8 @@ reminders fire in UTC.
   domain), or by the server's address. You approve on the service's own page, in a browser on the machine the program runs on. Tools the server
   labels read-only run unasked; everything else asks. Only you can do this; the assistant cannot connect anything.
 - Your messages, mail and files pass through the vendors whose keys you supply.
+- Files you send in the chat are kept in the data folder so that you can ask for them back. `/files` lists them and
+  `/files remove` with an id deletes one.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
 

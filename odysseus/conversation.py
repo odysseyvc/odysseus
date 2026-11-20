@@ -72,7 +72,7 @@ class Conversation:
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
                  services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None,
-                 decisions: Any = None, worker: Any = None, checkins: Any = None):
+                 decisions: Any = None, worker: Any = None, checkins: Any = None, files: Any = None):
         self._s = settings
         # More agents, each for one job at a time in the background (see _run): a deck sent with no message, a document read
         # from a link, a filing the owner approved from a question. The owner's conversation stays free meanwhile. How
@@ -112,6 +112,7 @@ class Conversation:
         self._history, self._closer = history, closer
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
+        self._files = files                # what the owner sent, kept to be handed back: files.py
         self._offers: dict[str, Any] = {}       # what the program has put to the owner, by the id on its buttons: a fact to save, or work to run
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
@@ -275,6 +276,7 @@ class Conversation:
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/checkins shows the people I remind you to keep in touch with. "
+                            "/files shows the files you sent that I am keeping. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
@@ -286,6 +288,29 @@ class Conversation:
             entry_id = command[len("/forget"):].strip()
             old = self._memory.forget(entry_id, by="owner") if entry_id else None
             await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
+            return
+        # The files the owner sent, listed, handed back or deleted by the owner directly. No model is involved.
+        if command.split()[0] == "/files":
+            words = command.split()
+            self._journal.write("command", name="/files", action=words[1] if len(words) > 1 else "list")
+            if self._files is None:
+                await chat.send("Files are not being kept here.")
+            elif len(words) == 1:
+                await chat.send(self._files.listing())
+            elif len(words) == 3 and words[1] in ("remove", "delete", "send"):
+                entry = self._files.get(words[2])
+                if entry is None:
+                    await chat.send("No file has that id. /files lists them.")
+                elif words[1] == "send":
+                    from .files import deliver
+                    problem = await deliver(self._files, entry, chat)
+                    if problem:
+                        await chat.send(problem)
+                else:
+                    self._files.remove(words[2])
+                    await chat.send(f"Deleted {entry['name']} from my files. The copy in this chat is yours to delete.")
+            else:
+                await chat.send("Send /files to list them, /files send and an id to get one back, or /files remove and an id to delete one.")
             return
         if command == "/checkins":
             await chat.send(("People to keep in touch with:\n" + self._checkins.listing()) if self._checkins is not None else "No list is kept here.")
@@ -412,7 +437,19 @@ class Conversation:
             except Exception:
                 pass
 
-    async def handle_file(self, user_id: int, data: bytes | None, name: str, mime: str | None, size: int, caption: str, chat: Chat) -> None:
+    def _keep(self, data: bytes | None, name: str, mime: str | None, size: int, caption: str, text: str, handle: str, kind: str) -> None:
+        """Keep a file the owner sent, so that it can be handed back (files.py). Never stops the file being read."""
+        if self._files is None:
+            return
+        try:
+            entry = self._files.add(data, name, mime, size, said=caption, text=text, handle=handle, kind=kind)
+            if entry is not None:
+                self._journal.write("kept", id=entry["id"], bytes=entry["size"], copy=entry["kept"], handle=bool(entry["handle"]))
+        except Exception as e:
+            self._journal.write("error", where="files.keep", error=type(e).__name__)
+
+    async def handle_file(self, user_id: int, data: bytes | None, name: str, mime: str | None, size: int, caption: str, chat: Chat,
+                          handle: str = "", kind: str = "document") -> None:
         """The owner sent a photo or a document. Read its text, then treat it as a message that includes that text.
 
         `data` is None when the file was too big to fetch; `size` is what Telegram reported.
@@ -428,6 +465,7 @@ class Conversation:
             picture = False
         if picture and data is not None and len(data) <= MAX_PICTURE_BYTES:
             self._journal.write("file", name=name, ok=True, type=resolve_type(mime, name), bytes=len(data), seen=True)
+            self._keep(data, name, mime, size, caption, "", handle, kind)
             said = (caption or "").strip() or "(The owner sent this picture with no message.)"
             await self.handle(user_id, f"{PICTURE_NOTE.format(name=name)}\n\n{said}", chat, images=[(resolve_type(mime, name), data)],
                               material="a picture you sent")
@@ -437,7 +475,10 @@ class Conversation:
         except OcrError as e:
             self._journal.write("file", name=name, ok=False, error=str(e)[:200])
             await chat.send(str(e))
+            if data is not None or handle:         # unread, and still the owner's file: it can be asked for back
+                self._keep(data, name, mime, size, caption, "", handle, kind)
             return
+        self._keep(data, name, mime, size, caption, block.split("\n\n", 1)[-1], handle, kind)
         said = (caption or "").strip() or NO_MESSAGE
         # A file sent with no message is a job complete in itself: it is dealt with in the background.
         await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent", background=not (caption or "").strip())

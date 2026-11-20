@@ -223,6 +223,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
               lambda a: describe_search({"query": f"{a.get('name', '')} {a.get('company', '')}".strip(),
                                          "objective": "who this person knows that the firm would want to meet"}, taint))
     gate.rule(_name("checkin_list"), ALLOW)
+    # The owner's own files, found in the owner's own index and sent to the owner's own chat (files.py): nothing leaves.
+    gate.rule(_name("files_find"), ALLOW)
+    gate.rule(_name("files_send"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
         # A watch commits the owner to unattended, paid checks of everything that arrives, so the owner is asked once.
@@ -308,7 +311,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
-                     checkins: Any = None, leads: Any = None):
+                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -483,6 +486,42 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                   "required": ["who"]})(checkin_done),
             tool("checkin_remove", "Take a person off the list of people to keep in touch with, by id or name.",
                  {"type": "object", "properties": {"who": {"type": "string"}}, "required": ["who"]})(checkin_remove),
+        ]
+    if files is not None and send_file is not None:
+        from . import files as files_mod
+
+        async def files_find(args: dict[str, Any]) -> dict[str, Any]:
+            found = files.find(str(args.get("query", "")), 5)
+            journal.write("tool", name="files_find", ok=True, results=len(found))
+            taint_ = getattr(gate, "taint", None)
+            if found and taint_ is not None:
+                taint_.saw("a file you sent")
+                for e in found:
+                    taint_.add(e.get("text", "")[:files_mod.SHOWN])
+            if not found:
+                return _ok("No file the owner sent fits that. Only files sent to you in this chat since files began to be kept are here; "
+                           "say so, and do not look elsewhere unless the owner asks.")
+            return _ok(files_mod.NOTE + "\n\n" + "\n".join(files.line(e, opening=True) for e in found)
+                       + "\n\nIf one of these is plainly the file meant, send it with files_send. If more than one could be, ask the owner which.")
+
+        async def files_send(args: dict[str, Any]) -> dict[str, Any]:
+            entry = files.get(str(args.get("id", "")))
+            if entry is None:
+                journal.write("tool", name="files_send", ok=False, error="no such id")
+                return _err("No kept file has that id. Use files_find to get the id.")
+            problem = await send_file(entry)
+            journal.write("tool", name="files_send", ok=not problem, id=entry["id"])
+            return _err(problem) if problem else _ok(f"Sent {entry['name']} to the owner in this chat. Do not paste its contents; one line saying it is sent is enough.")
+        tools += [
+            tool("files_find",
+                 "Search the files the owner sent you earlier (decks, documents, pictures), which are kept so that they can be handed back. "
+                 "Use it when the owner asks for a file back, or asks which files you have. Search by the company, the file's name or what "
+                 "it is about; an empty query lists the newest.",
+                 {"type": "object", "properties": {"query": {"type": "string", "description": "A few words: a company, a name, a topic. Empty for the newest files."}}})(files_find),
+            tool("files_send",
+                 "Send one kept file back to the owner in this chat, by its id from files_find. It can only go to the owner. To send a file to "
+                 "anyone else, say that this is not possible yet.",
+                 {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(files_send),
         ]
     if leads is not None:
         from . import leads as leads_mod
