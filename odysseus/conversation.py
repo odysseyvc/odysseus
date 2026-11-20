@@ -71,8 +71,16 @@ class Conversation:
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
                  services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None,
-                 decisions: Any = None):
+                 decisions: Any = None, worker: Any = None):
         self._s = settings
+        # More agents, each for one job at a time in the background (see _run): a deck sent with no message, a document read
+        # from a link, a filing the owner approved from a question. The owner's conversation stays free meanwhile. How
+        # many is a setting; a job that finds them all busy waits its turn.
+        self._workers: list[AgentRunner] = list(worker) if isinstance(worker, (list, tuple)) else ([worker] if worker is not None else [])
+        self._worker = self._workers[0] if self._workers else None
+        self._bg_tasks: dict[int, asyncio.Task] = {}        # which agent is doing which job
+        self._bg_waiting: deque = deque(maxlen=MAX_WAITING)
+        self._running = 0            # tasks running now, the conversation's and the background's together
         self._viewing = False
         self._reading: asyncio.Task | None = None      # a DocSend document being read in the background
         self._view_next: deque = deque(maxlen=3)       # links that arrived while one was being read
@@ -130,7 +138,7 @@ class Conversation:
         return self._task is not None and not self._task.done()
 
     async def handle(self, user_id: int, text: str, chat: Chat, images: list[tuple[str, bytes]] | None = None,
-                     material: str | None = None, link_tried: bool = False) -> None:
+                     material: str | None = None, link_tried: bool = False, background: bool = False) -> None:
         """`material` names what the message carries that the owner did not write themselves: a file, a picture."""
         # 1. Who may speak. Anyone but the owner gets no reply at all.
         if user_id != self._s.owner_id:
@@ -161,7 +169,7 @@ class Conversation:
                     return
         # A DocSend link has no file to fetch. It is read in a browser by fixed steps, giving the owner's address if asked.
         if self._deckview is not None and material is None and not images and not command.startswith("/") and not link_tried \
-                and (self._viewing or not self.busy) and not (self._gate is not None and self._gate.pending()) and self._ledger.spent_today() < self._s.daily_usd:
+                and (self._viewing or not self.busy or self._worker is not None) and not (self._gate is not None and self._gate.pending()) and self._ledger.spent_today() < self._s.daily_usd:
             where = deckview_mod.docsend_link(text)
             if where and self._viewing:
                 # One document is read at a time. A second link waits its turn and is not handed to the model as words.
@@ -266,6 +274,10 @@ class Conversation:
             return
         if command == "/status":
             state = "working on a task" if self.busy else "idle"
+            jobs = len(self._jobs())
+            if jobs:
+                state += (", with a job in the background" if jobs == 1 else f", with {jobs} jobs in the background") \
+                    + (f" and {len(self._bg_waiting)} waiting behind {'it' if jobs == 1 else 'them'}" if self._bg_waiting else "")
             await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f} of ${self._s.daily_usd:.2f}.")
             return
 
@@ -280,6 +292,26 @@ class Conversation:
             self._journal.write("new_conversation")
             await chat.send("Started a new conversation. I still have what I remember about you, your reminders and your connections; "
                             "I no longer have what we said before.")
+            return
+
+        # A job the owner did not attach a message to (a deck by itself, a document from a link, a filing they approved
+        # from a question) is complete in itself, so it runs on the second agent and the conversation stays free.
+        if background and self._worker is not None and material is not None and not images:
+            free = next((i for i in range(len(self._workers)) if i not in self._bg_tasks or self._bg_tasks[i].done()), None)
+            if free is None:
+                if len(self._bg_waiting) >= MAX_WAITING:
+                    await chat.send(f"I already have {MAX_WAITING} jobs waiting in the background. Send stop to drop them all.")
+                    return
+                self._bg_waiting.append((text, chat, material))
+                self._journal.write("queued", background=True, waiting=len(self._bg_waiting))
+                await chat.send("Got it. I'll start on this when one of the jobs I'm working on is done." if len(self._workers) > 1
+                                else "Got it. I'll start on this when the one I'm working on is done.")
+                return
+            if self._ledger.spent_today() >= self._s.daily_usd:
+                self._journal.write("refused", reason="daily_budget")
+                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started this.")
+                return
+            self._bg_tasks[free] = asyncio.create_task(self._bg_work(free, text, chat, material))
             return
 
         # 3. One task runs at a time. A message that arrives meanwhile waits its turn; it is not thrown away.
@@ -323,13 +355,32 @@ class Conversation:
                 continue
             await self._safely(text, chat, images, material)
 
-    async def _safely(self, text: str, chat: Chat, images: Any, material: str | None) -> None:
+    def _jobs(self) -> dict[int, asyncio.Task]:
+        """The jobs running in the background now, by the agent doing each."""
+        return {i: t for i, t in self._bg_tasks.items() if not t.done()}
+
+    async def _bg_work(self, slot: int, text: str, chat: Chat, material: str | None) -> None:
+        """One job in the background on agent `slot`, then whichever were sent while all the agents were busy, in order."""
+        await self._safely(text, chat, None, material, bg=True, slot=slot)
+        while self._bg_waiting:
+            text, chat, material = self._bg_waiting.popleft()
+            if self._ledger.spent_today() >= self._s.daily_usd:
+                self._journal.write("refused", reason="daily_budget")
+                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started a job that was waiting.")
+                continue
+            await self._safely(text, chat, None, material, bg=True, slot=slot)
+
+    async def _safely(self, text: str, chat: Chat, images: Any, material: str | None, bg: bool = False, slot: int = 0) -> None:
         """One task. Whatever goes wrong inside it is recorded and said, and the messages waiting behind it still run."""
         try:
-            await self._run(text, chat, images, material)
+            if bg:
+                await self._run(text, chat, images, material, bg=True, slot=slot)
+            else:
+                await self._run(text, chat, images, material)
         except Exception as e:
             self._journal.write("error", where="conversation.run", error=type(e).__name__, message=str(e)[:300])
-            self._journal.write("task_end", status="error", cost_usd=round(self._runner.estimate, 4), detail=type(e).__name__)
+            self._journal.write("task_end", status="error", cost_usd=round((self._workers[slot] if bg else self._runner).estimate, 4), detail=type(e).__name__,
+                                **({"background": True} if bg else {}))
             try:
                 await chat.send("Something went wrong and I could not finish. The details are in the log.")
             except Exception:
@@ -362,7 +413,8 @@ class Conversation:
             await chat.send(str(e))
             return
         said = (caption or "").strip() or NO_MESSAGE
-        await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent")
+        # A file sent with no message is a job complete in itself: it is dealt with in the background.
+        await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent", background=not (caption or "").strip())
 
     async def handle_voice(self, user_id: int, data: bytes | None, name: str, size: int, seconds: int, chat: Chat) -> None:
         """The owner sent a voice note. Turn it into text, show the owner what was heard, then treat it as a message."""
@@ -409,7 +461,7 @@ class Conversation:
             self._journal.write("offer", accepted=approved)
             if not approved:
                 return "Left as they are."
-            asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material))
+            asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material, background=True))
             return "Approved. Filing them now."
         if approval_id in self._offers:
             # A fact from a closed conversation, offered for saving (closing.py). Saved only by this tap.
@@ -449,7 +501,8 @@ class Conversation:
                    + "; the sender is told who looked.")
             said = (text if rest else NO_MESSAGE) + (f"\n\n[The program read this document in a browser.{how} Tell the owner, in one short line and "
                                                      "in plain words, that their email address was given to open it and that the sender can see they viewed it.]")
-            await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser")
+            await self.handle(user_id, f"{deckview_mod.file_text(view)}\n\n{said}", chat, material="a document read through the browser",
+                              background=not rest)
         else:
             failed = (f"{text}\n\n[The program tried to read the document at that link in a browser and could not: {view.text}. Nothing of it "
                       "has been read. Tell the owner exactly that, and ask for the file itself or what the site needs.]")
@@ -469,6 +522,8 @@ class Conversation:
                 await asyncio.gather(reading, return_exceptions=True)
             if self._task is not None:
                 await asyncio.gather(self._task, return_exceptions=True)
+            if self._bg_tasks:
+                await asyncio.gather(*list(self._bg_tasks.values()), return_exceptions=True)
             if self._reading is reading or self._reading is None or self._reading.done():
                 break
 
@@ -481,8 +536,31 @@ class Conversation:
             self._view_next.clear()
             self._viewing = False
             self._journal.write("stop_requested", reading=True)
-            if task is None or task.done():
+            if (task is None or task.done()) and not self._jobs():
                 await chat.send("Stopped reading that document.")
+                return
+        jobs = self._jobs()
+        if jobs:
+            # Stop means everything: every job in the background ends too, and whatever was waiting behind them is dropped.
+            self._bg_waiting.clear()
+            self._journal.write("stop_requested", background=True, jobs=len(jobs))
+            if self._gate is not None:
+                self._gate.cancel_all()
+            for slot in jobs:
+                try:
+                    await self._workers[slot].stop()
+                except Exception as e:
+                    self._journal.write("error", where="stop.background", error=type(e).__name__)
+            await asyncio.wait(set(jobs.values()), timeout=self._s.stop_grace_s)
+            for slot, job in jobs.items():
+                if not job.done():
+                    spent = self._workers[slot].estimate
+                    job.cancel()
+                    await asyncio.gather(job, return_exceptions=True)
+                    await self._workers[slot].reset()
+                    self._journal.write("task_end", status="stopped", forced=True, cost_usd=round(spent, 4), estimated=True, background=True)
+            if task is None or task.done():
+                await chat.send("Stopped the job I was doing in the background." if len(jobs) == 1 else f"Stopped the {len(jobs)} jobs I was doing in the background.")
                 return
         if task is None or task.done():
             await chat.send("Nothing is running.")
@@ -587,10 +665,12 @@ class Conversation:
     async def _ask_verdict(self, reply: str, chat: Chat) -> None:
         """After a take on a deck that was filed: ask the owner for theirs, one button for each answer."""
         filed = getattr(getattr(self._attio, "intake", None), "last_filed", None) if self._attio is not None else None
-        if filed is not None:
-            self._attio.intake.last_filed = None        # one task's filing is asked about once, in that task's reply or never
         from .decisions import options, view_in
         view = view_in(reply)
+        if filed is not None and (view or self._running <= 1):
+            # One task's filing is asked about once, in that task's reply or never. With another task still running, a
+            # reply that holds no view is that other task's, and the filing is left for the reply it belongs to.
+            self._attio.intake.last_filed = None
         if self._decisions is None or not filed or not filed.get("company") or not view or not hasattr(chat, "choose"):
             return
         reasons = self._pass_reasons()
@@ -652,7 +732,29 @@ class Conversation:
             raise
         self.record_delivery(question)
 
-    async def _run(self, prompt: str, chat: Chat, images: list[tuple[str, bytes]] | None = None, material: str | None = None) -> None:
+    def _bg_preamble(self, blank: bool) -> str:
+        """What a job in the background is shown first: what is remembered about the owner, and nothing of the conversation."""
+        if self._memory is None:
+            return ""
+        return f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+
+    async def _run(self, prompt: str, chat: Chat, images: list[tuple[str, bytes]] | None = None, material: str | None = None, bg: bool = False,
+                   slot: int = 0) -> None:
+        """One task: in the owner's conversation, or (bg) a job on another agent while the conversation stays free.
+
+        Several may run at once. Whatever is kept "for the current task" is then kept for both together, in the stricter
+        direction: the record of what was read is not cleared, changes waiting to be reported are not thrown away, and
+        the gate goes on asking until the last of them has ended (gate.begin_task)."""
+        runner = self._workers[slot] if bg else self._runner
+        key = f"background-{slot}" if bg else "main"
+        alone = self._running == 0
+        self._running += 1
+        try:
+            await self._run_one(prompt, chat, images, material, bg, runner, key, alone)
+        finally:
+            self._running -= 1
+
+    async def _run_one(self, prompt: str, chat: Chat, images: Any, material: str | None, bg: bool, runner: AgentRunner, key: str, alone: bool) -> None:
         self._draft_seq += 1
         draft_id = self._draft_seq
         if self._gate is not None:
@@ -661,14 +763,18 @@ class Conversation:
                     await chat.ask(approval.text, approval.id, thread=True)
                 else:
                     await chat.ask(approval.text, approval.id)
-            self._gate.set_asker(ask_owner)
             # For the second reader of what is about to leave (review.py): the owner's words, and the exchanges before them.
-            self._gate.new_task("\n\n".join([f"The owner said: {said}\nYou replied: {reply}" for said, reply in self._recent]
-                                              + [f"The owner said: {self._words(prompt)}"]))
+            request = "\n\n".join(([] if bg else [f"The owner said: {said}\nYou replied: {reply}" for said, reply in self._recent])
+                                  + [f"The owner said: {self._words(prompt)}"])
+            if hasattr(self._gate, "begin_task"):
+                self._gate.begin_task(key, ask_owner, request)
+            else:
+                self._gate.set_asker(ask_owner)
+                self._gate.new_task(request)
         started = time.monotonic()
         last_draft = 0.0
         # The first words are kept so that, after a restart, the owner can be told what was interrupted.
-        self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80])
+        self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80], **({"background": True} if bg else {}))
 
         async def on_text(text_so_far: str) -> None:
             nonlocal last_draft
@@ -683,32 +789,34 @@ class Conversation:
 
         stamp = f"\n\n[{self._now().strftime('%A %d %B %Y, %H:%M')}]"
         if self._gate is not None and getattr(self._gate, "taint", None) is not None:
-            self._gate.taint.start_task()            # nothing other people wrote has been read in this task yet...
+            if alone:                                # with another task running, what it has read stays on the record
+                self._gate.taint.start_task()        # nothing other people wrote has been read in this task yet...
             if material:
                 self._gate.taint.saw(material)       # ...unless the message itself carries a file or a picture
             else:
                 self._gate.taint.owner_said(prompt)  # the owner's own words are theirs to send anywhere
-        if self._memory is not None:
-            self._memory.pop_changes()   # anything pending is not from this task
-        if self._schedule is not None:
-            self._schedule.pop_changes()
-        if self._watches is not None:
-            self._watches.pop_changes()
-        if self._apps is not None:
-            self._apps.pop_changes()
-        if self._browser is not None:
-            self._browser.pop_changes()
-            self._browser.pop_cost()
-        if self._anyapp is not None:
-            self._anyapp.pop_changes()
-            self._anyapp.pop_links()
-        if self._attio is not None:
-            self._attio.pop_changes()
-        for service in self._services:
-            service.pop_changes()
+        if alone:       # with another task running, what is waiting to be reported is that task's, and must not be thrown away
+            if self._memory is not None:
+                self._memory.pop_changes()   # anything pending is not from this task
+            if self._schedule is not None:
+                self._schedule.pop_changes()
+            if self._watches is not None:
+                self._watches.pop_changes()
+            if self._apps is not None:
+                self._apps.pop_changes()
+            if self._browser is not None:
+                self._browser.pop_changes()
+                self._browser.pop_cost()
+            if self._anyapp is not None:
+                self._anyapp.pop_changes()
+                self._anyapp.pop_links()
+            if self._attio is not None:
+                self._attio.pop_changes()
+            for service in self._services:
+                service.pop_changes()
         trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",)) if self._tracing is not None else None
         traced = trace.__enter__() if trace is not None else None
-        why = self._fresh_reason()
+        why = "" if bg else self._fresh_reason()     # a job in the background has no conversation to begin again
         if why:
             # Close the old conversation before leaving it: a summary to carry forward, and facts worth saving put to the owner.
             summary, facts = "", []
@@ -727,24 +835,30 @@ class Conversation:
                 except Exception:
                     self._offers.pop(offer, None)
         try:
-            if images:
-                outcome: Outcome = await self._runner.run(prompt + stamp, on_text, self._preamble, images=images)
+            if bg:
+                await runner.forget_session()       # each job in the background starts clean
+                outcome: Outcome = await runner.run(prompt + stamp, on_text, self._bg_preamble)
+            elif images:
+                outcome = await runner.run(prompt + stamp, on_text, self._preamble, images=images)
             else:
-                outcome = await self._runner.run(prompt + stamp, on_text, self._preamble)
+                outcome = await runner.run(prompt + stamp, on_text, self._preamble)
         except BaseException:
             if trace is not None:
                 trace.__exit__(None, None, None)
             raise
         finally:
             if self._gate is not None:
-                self._gate.set_asker(None)   # between tasks nobody is being asked, so nothing can be approved
-                self._gate.cancel_all()
+                if hasattr(self._gate, "end_task"):
+                    self._gate.end_task(key)     # nobody stops being asked until the last task running has ended
+                else:
+                    self._gate.set_asker(None)
+                    self._gate.cancel_all()
             if self._anyapp is not None:
                 self._anyapp.end_task()      # an approval to change an app lasts for one task only
         browser_cost = self._browser.pop_cost() if self._browser is not None else 0.0
         # The ledger counts this from the line below: it is derived from the journal, and from nothing else.
         self._journal.write("task_end", status=outcome.status, cost_usd=outcome.cost_usd + browser_cost, browser_usd=browser_cost, turns=outcome.turns,
-                            detail=outcome.detail, seconds=round(time.monotonic() - started, 1))
+                            detail=outcome.detail, seconds=round(time.monotonic() - started, 1), **({"background": True} if bg else {}))
         if trace is not None:
             # Scores computed by code, so that the tasks worth reading can be found: the ones that did not end as "done",
             # cost the most or took the most steps.
@@ -759,10 +873,16 @@ class Conversation:
             "error": "Something went wrong and I could not finish. The details are in the log.",
         }
         body = outcome.text.strip()
-        self._recent.append((self._words(prompt), " ".join(body.split())[:RECAP_REPLY] or f"(no reply: {outcome.status})"))
+        exchange = (self._words(prompt), " ".join(body.split())[:RECAP_REPLY] or f"(no reply: {outcome.status})")
         if self._history is not None:
-            self._history.add(*self._recent[-1])
-        self._last_end = self._now()
+            self._history.add(*exchange)
+        if bg:
+            # Not part of the conversation, which went on meanwhile. The conversation's model is told of it with its next
+            # message, as it is told of what a routine sent, so that "tell me more about that deck" makes sense.
+            self.record_delivery(f"(A job done in the background.) {exchange[0]}\n{body[:1400]}")
+        else:
+            self._recent.append(exchange)
+            self._last_end = self._now()
         note = notes.get(outcome.status)
         if note:
             body = f"{body}\n\n{note}" if body else note

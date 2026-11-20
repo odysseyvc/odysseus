@@ -86,10 +86,14 @@ def synced_folder(path) -> str | None:
 def unfinished(journal: Journal) -> dict | None:
     """What was lost when the program last stopped, if anything: a task that had started and not ended, and any
     messages that were waiting behind it."""
-    open_task, waiting = None, {}
+    open_task, waiting, behind = None, {}, None
     for r in journal.read():
         if r["kind"] == "start":
-            open_task, waiting = None, {}       # an earlier restart: whatever was lost then has been reported already
+            open_task, waiting, behind = None, {}, None       # an earlier restart: whatever was lost then has been reported already
+        elif r["kind"] == "task_start" and r.get("background"):
+            behind = r.get("preview", "")           # a job in the background has its own beginning and end
+        elif r["kind"] == "task_end" and r.get("background"):
+            behind = None
         elif r["kind"] == "task_start":
             open_task = {"preview": r.get("preview", ""), "asked": False}
         elif r["kind"] == "task_end" and "routine" not in r and "brief" not in r:
@@ -104,9 +108,9 @@ def unfinished(journal: Journal) -> dict | None:
             open_task["asked"] = True
         elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
             open_task["asked"] = False
-    if open_task is None and not waiting:
+    if open_task is None and not waiting and behind is None:
         return None
-    return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values())}
+    return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values()), **({"background": behind} if behind is not None else {})}
 
 
 LOST_CONVERSATION = ("I was restarted and could not pick up our earlier conversation, so this is a new one. "
@@ -126,7 +130,9 @@ def restart_notice(task: dict, resumed: bool) -> str:
         n = len(waiting)
         text += (f" {n} message{'s' if n != 1 else ''} you sent {'were' if n != 1 else 'was'} waiting behind it and {'were' if n != 1 else 'was'} lost: "
                  + "; ".join(f'"{w}"' for w in waiting) + ".")
-    text += " Ask me again if you still want " + ("these" if waiting else "it") + " done."
+    if task.get("background") is not None:
+        text += " A job I was doing in the background was also cut off" + (f': "{task["background"]}"' if task["background"] else "") + "."
+    text += " Ask me again if you still want " + ("these" if waiting or task.get("background") is not None else "it") + " done."
     return text + ("" if resumed else " I also no longer have our earlier conversation, only what I remember about you.")
 
 
@@ -184,12 +190,17 @@ async def main() -> int:
         gate.set_second_reader(make_second_reader(journal, second_call,
                                                   settings.review_model or settings.background_model, gate.taint), OUTGOING)
     marks["gate"] = round(time.monotonic() - _BEGAN, 1)
-    runner = AgentRunner(settings, journal, make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser,
-                                                            anyapp=anyapp, watches=watches, on_watch=on_watch, attio=attio, services=services, history=history),
-                         gate=gate, system_prompt=conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
-                                                           with_files=ocr is not None, with_anyapp=anyapp is not None,
-                                                           with_watches=watches is not None, with_attio=attio is not None)
-                         + "".join(s.prompt() for s in services), persist=True)
+    instructions = conversation_prompt(apps is not None, browser is not None, settings.browser_ask_signed_in,
+                                       with_files=ocr is not None, with_anyapp=anyapp is not None,
+                                       with_watches=watches is not None, with_attio=attio is not None) + "".join(s.prompt() for s in services)
+
+    def tools_for_a_conversation():
+        return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
+                                on_watch=on_watch, attio=attio, services=services, history=history)
+    runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
+    # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
+    # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
+    workers = [AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions) for _ in range(settings.background_jobs)]
     marks["runner"] = round(time.monotonic() - _BEGAN, 1)
     # Optional: a readable record of every task in Langfuse. Every secret in the settings is removed from what is sent.
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
@@ -207,7 +218,7 @@ async def main() -> int:
     marks["pages"] = round(time.monotonic() - _BEGAN, 1)
     conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
-                                pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions,
+                                pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions, worker=workers,
                                 closer=make_closer(journal, second_call, settings.background_model),
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
@@ -265,7 +276,8 @@ async def main() -> int:
 
     interrupted = unfinished(journal)      # read before this run of the program writes anything
     marks["built"] = round(time.monotonic() - _BEGAN, 1)
-    await runner.start()   # connect the agent loop now, so the first message is not slow
+    # Connect the agent loops now, so the first message, and the first job in the background, are not slow.
+    await asyncio.gather(runner.start(), *(w.start() for w in workers))
     marks["loop"] = round(time.monotonic() - _BEGAN, 1)
     if interrupted is not None:
         # A task was running when the program last stopped. Say so: before this, it vanished without a word.
@@ -328,6 +340,8 @@ async def main() -> int:
             watching.cancel()
         await conversation.wait()
         await runner.close()
+        for w in workers:
+            await w.close()
         await run_routine.runner.close()
         if watcher is not None:
             watcher.stop()

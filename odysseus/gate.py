@@ -88,6 +88,11 @@ class Gate:
         self._escalate: Callable[..., Awaitable[str]] | None = None
         self._escalate_when: Callable[[str, dict[str, Any]], bool] | None = None
         self._unasked = 0                  # such changes so far in this task
+        # Several tasks may run at once: the owner's conversation, and jobs in the background (conversation.py). Whatever
+        # is kept "for the current task" is then kept for all of them together, and always in the stricter direction: the
+        # count of unasked changes goes on, what was asked is every request, nobody stops being asked until the last task
+        # ends, and an approval widened to a thread does not apply while more than one is running.
+        self._tasks: dict[str, str] = {}   # the tasks running now, each with what the owner asked in it
         # An approval the owner may widen, by their own tap, to later replies in the same thread to the same people until
         # midnight. Code holds the scope. Each such reply is still read by the second reader, which can send it back to
         # the owner but cannot let anything through that the scope does not cover.
@@ -145,6 +150,8 @@ class Gate:
         and read by the second reader with nothing to check. A reader that fails or is slow is a doubt."""
         if tool != self._thread_tool or self._thread_of is None or self._people_of is None or self._clean is None or self._asker is None:
             return False
+        if self.overlapping:
+            return False        # the reader would be judging this reply against two requests at once: ask, as usual
         try:
             thread, people = self._thread_of(args), self._people_of(args)
             grant = self._standing.get(thread)
@@ -174,6 +181,27 @@ class Gate:
     def set_escalator(self, check: Callable[..., Awaitable[str]] | None, when: Callable[[str, dict[str, Any]], bool] | None = None) -> None:
         """`when(tool, args)` says whether an allowed call is a change to look at again; `check` returns why to ask, or ""."""
         self._escalate, self._escalate_when = check, when
+
+    def begin_task(self, key: str, asker: Asker | None, request: str = "") -> None:
+        """A task is starting. `key` names it ("main", "background")."""
+        if not self._tasks:
+            self._unasked = 0               # a fresh count only when nothing else is running
+        self._tasks[key] = request
+        self._asker = asker
+        self.request = "\n\n---\n\n".join(r for r in self._tasks.values() if r)
+
+    def end_task(self, key: str) -> None:
+        """That task has ended. Only when it was the last one running does anybody stop being asked."""
+        self._tasks.pop(key, None)
+        if self._tasks:
+            self.request = "\n\n---\n\n".join(r for r in self._tasks.values() if r)
+        if not self._tasks:
+            self._asker = None              # between tasks nobody is being asked, so nothing can be approved
+            self.cancel_all()
+
+    @property
+    def overlapping(self) -> bool:
+        return len(self._tasks) > 1
 
     def new_task(self, request: str = "") -> None:
         """The conversation is starting a task: what the owner asked, and a fresh count of changes made unasked."""

@@ -37,7 +37,7 @@ async def test_the_program_assembles_with_everything_connected(tmp_path, monkeyp
     monkeypatch.setattr(entry, "build_dispatcher", lambda bot, conversation: FakeDispatcher())
     monkeypatch.setattr(entry.AgentRunner, "start", fake_start)
     assert await entry.main() == 0
-    assert len(started) == 1
+    assert len(started) == 3, "the conversation's agent and two for jobs in the background"
     opts = started[0].options()
     # Browser runs and searches go through the gate each time: it allows them unless they carry details read from the accounts.
     assert "mcp__odysseus__browse" not in opts.allowed_tools and "mcp__odysseus__web_search" not in opts.allowed_tools

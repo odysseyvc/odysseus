@@ -41,7 +41,9 @@ class History:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with self._path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"ts": round(self._clock(), 1), "said": said, "reply": reply}, ensure_ascii=False) + "\n")
+                # Cut, never rounded up: a time rounded up could fall after the moment a conversation was closed, and the
+                # exchange would then be counted again as part of the next one.
+                f.write(json.dumps({"ts": int(self._clock() * 1000) / 1000, "said": said, "reply": reply}, ensure_ascii=False) + "\n")
             if self._path.stat().st_size > KEEP * (SAID + REPLY):     # far beyond what KEEP exchanges need: trim
                 rows = self.all()[-KEEP:]
                 self._path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")

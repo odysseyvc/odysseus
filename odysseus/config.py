@@ -25,6 +25,7 @@ class Settings:
     composio_api_key: str = ""   # optional: without it, mail and calendar are simply not there
     browser_use_api_key: str = ""  # optional: without it, there is no browser
     browser_ask_signed_in: bool = True    # ask the owner before a browser run that is signed in as them; 0 turns it off
+    background_jobs: int = 2              # how many jobs may run in the background at once (a deck sent by itself, a filing you approved) while you go on talking; 0: one thing at a time
     capture_at: str = "08:30"             # when each day to ask about people met or heard from who are not in the database; "off": never
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
     viewer_email: str = ""                # the address given to a document site that asks who is viewing. Empty: the connected mailbox's
@@ -80,6 +81,18 @@ def read_env_file(path: Path) -> dict[str, str]:
     return out
 
 
+def _how_many(value: str, default: int = 2, most: int = 6) -> int:
+    """A count from a setting: empty is the default, "off" and the like are none, and it is never more than `most`."""
+    v = value.strip().lower()
+    if not v:
+        return default
+    if v in ("off", "false", "no"):
+        return 0
+    try:
+        return max(0, min(most, int(v)))
+    except ValueError:
+        return default
+
 def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) -> Settings:
     merged = {**read_env_file(env_file), **(os.environ if env is None else env)}
     required = ["TELEGRAM_BOT_TOKEN", "OWNER_TELEGRAM_ID", "ANTHROPIC_API_KEY", "EXA_API_KEY"]
@@ -110,6 +123,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),
         langfuse_full_content=merged.get("LANGFUSE_FULL_CONTENT", "").strip().lower() in ("1", "true", "yes", "on"),
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() not in ("0", "false", "no", "off"),
+        background_jobs=_how_many(merged.get("ODYSSEUS_BACKGROUND_JOBS", "")),
         capture_at=(merged.get("ODYSSEUS_CAPTURE_AT", "") or "08:30").strip().lower(),
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),
         viewer_email=merged.get("ODYSSEUS_VIEWER_EMAIL", "").strip(),
