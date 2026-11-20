@@ -87,6 +87,7 @@ class Conversation:
         self._reading: asyncio.Task | None = None      # a DocSend document being read in the background
         self._view_next: deque = deque(maxlen=3)       # links that arrived while one was being read
         self._connector = None       # set by the program once it can restart itself: connect.py
+        self._inbox = None           # the assistant's own email address, if there is a key for one: mailbox.py
         self._deckview = deckview    # reads a DocSend document in a browser, giving the owner's address: deckview.py
         self._links = links          # fetches a PDF from a link in the owner's own message: links.py
         self._pages = pages          # looks at a short PDF's pages in a run of its own: pages.py
@@ -277,7 +278,7 @@ class Conversation:
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/checkins shows the people I remind you to keep in touch with. "
-                            "/files shows the files you sent that I am keeping. "
+                            "/files shows the files you sent that I am keeping. /address shows my own email address. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
@@ -289,6 +290,20 @@ class Conversation:
             entry_id = command[len("/forget"):].strip()
             old = self._memory.forget(entry_id, by="owner") if entry_id else None
             await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
+            return
+        # The assistant's own email address: shown, or made the first time. No model is involved.
+        if command.split()[0] == "/address":
+            self._journal.write("command", name="/address", with_argument=len(command.split()) > 1)
+            if self._inbox is None:
+                await chat.send("An address of my own is not set up here: there is no mailbox key in my settings.")
+                return
+            try:
+                await self._inbox.make(command.split()[1] if len(command.split()) > 1 else "")
+            except Exception as e:
+                self._journal.write("error", where="mailbox.make", error=type(e).__name__)
+                await chat.send(f"I could not get an address: {e}.")
+                return
+            await chat.send(self._inbox.describe())
             return
         # The files the owner sent, listed, handed back or deleted by the owner directly. No model is involved.
         if command.split()[0] == "/files":
@@ -529,9 +544,9 @@ class Conversation:
             prompt, material, chat = self._offers.pop(approval_id)
             self._journal.write("offer", accepted=approved)
             if not approved:
-                return "Left as they are."
+                return "Left alone."
             asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material, background=True))
-            return "Approved. Filing them now."
+            return "Approved. Working on it now."
         if approval_id in self._offers:
             # A fact from a closed conversation, offered for saving (closing.py). Saved only by this tap.
             fact = self._offers.pop(approval_id)

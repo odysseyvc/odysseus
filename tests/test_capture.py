@@ -122,7 +122,7 @@ async def test_approve_runs_the_filing_as_a_task_with_the_list_as_other_peoples_
     (question, offer), = c.chat.asks
     assert question == "3 people are not in Attio yet" and c.clients == [], "nothing runs until the tap"
     assert await c.conv.handle_decision(999, offer, True) == "" and c.clients == [], "a tap from anyone but the owner is nothing"
-    assert await c.conv.handle_decision(OWNER, offer, True) == "Approved. Filing them now."
+    assert await c.conv.handle_decision(OWNER, offer, True) == "Approved. Working on it now."
     import asyncio
     for _ in range(100):
         if c.clients and c.clients[0].prompts:
@@ -134,4 +134,4 @@ async def test_approve_runs_the_filing_as_a_task_with_the_list_as_other_peoples_
     assert await c.conv.handle_decision(OWNER, offer, True) == "This request is no longer waiting."
     d = conv_rig(tmp_path / "declined")
     await d.conv.offer_task(d.chat, "q", "p", MATERIAL)
-    assert await d.conv.handle_decision(OWNER, d.chat.asks[0][1], False) == "Left as they are." and d.clients == []
+    assert await d.conv.handle_decision(OWNER, d.chat.asks[0][1], False) == "Left alone." and d.clients == []

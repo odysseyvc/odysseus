@@ -55,6 +55,8 @@ from .checkins import CheckinLoop, Checkins
 from .decisions import Decisions, PassWatch
 from .door import Door
 from .files import Shelf, deliver
+from .mailbox import MATERIAL as INBOX_MATERIAL
+from .mailbox import AgentMail, Mailbox
 from .leads import Leads
 from dataclasses import replace
 from types import SimpleNamespace
@@ -225,6 +227,22 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     checkins = Checkins(settings.data_dir / "checkins.json", today=lambda: now().date())      # people to keep in touch with
     shelf = Shelf(settings.data_dir / "files", now=now)       # what the owner sends is kept, to be handed back when asked for (files.py)
     own_chat = TelegramChat(bot, settings.owner_id)           # a kept file goes to this person's own chat and nowhere else
+    # An email address of the assistant's own (mailbox.py), if there is a key. It is made when the person sends /address.
+    late: dict = {}          # the conversation, once it exists: the mailbox and its tools are made before it
+    inbox = inbox_tools = None
+    if settings.agentmail_api_key:
+        async def own_addresses() -> set:
+            mine = set(settings.owner_emails) if host else set()
+            if apps is not None:
+                try:
+                    mine.add(await apps.my_address())
+                except Exception as e:
+                    journal.write("error", where="mailbox.owner_address", error=type(e).__name__)
+            return mine
+        inbox = Mailbox(AgentMail(settings.agentmail_api_key), settings.data_dir / "mailbox.json", journal, own_addresses,
+                        run=lambda prompt: late["c"].handle(settings.owner_id, prompt, own_chat, material=INBOX_MATERIAL, background=True),
+                        offer=lambda question, prompt: late["c"].offer_task(own_chat, question, prompt, INBOX_MATERIAL),
+                        tell=own_chat.send, label=f"odysseus-{settings.owner_id}")
     if apps is not None and settings.review_model.lower() != "off":
         # What reaches other people is read once more before the owner is asked. The reader can add a warning; it cannot approve.
         gate.set_second_reader(make_second_reader(journal, second_call,
@@ -251,10 +269,14 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                            model=settings.model)
         leads = Leads(leads_runner, journal, ledger, settings.daily_usd, known=already_known, state_file=settings.data_dir / "leads.json")
 
+    if inbox is not None:
+        inbox_tools = inbox.handlers(lambda: late["c"].reader, Fetcher(), gate.taint,
+                                     lambda data, name, mime, text, origin: late["c"]._keep(data, name, mime, len(data), "", text, source="mail", origin=origin))
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
-                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat))
+                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -274,6 +296,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 closer=make_closer(journal, second_call, settings.background_model), files=shelf,
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
+    late["c"] = conversation
+    conversation._inbox = inbox
+    if inbox is not None:
+        me.tasks.append(asyncio.create_task(inbox.run_forever()))
     mark("conversation")
     if apps is not None:
         apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
@@ -435,7 +461,7 @@ async def main() -> int:
     bot = Bot(settings.telegram_token)
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
-                               settings.browser_use_api_key, settings.mistral_api_key, settings.whatsapp_token,
+                               settings.browser_use_api_key, settings.mistral_api_key, settings.agentmail_api_key, settings.whatsapp_token,
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     second_call = anthropic_call(settings.anthropic_api_key)

@@ -328,6 +328,29 @@ and, for the bank's message, its header followed by the hidden-line notice in pl
 </ol>
 <p>On Decline the model is told "The owner declined. It was not done. Do not try again unless the owner asks." On a timeout at step 5 it is told the reply may or may not have been sent, and to check first.</p>
 
+<h2 id="own-address">An address of the assistant's own</h2>
+<p>Everything above is the owner's mailbox, which the assistant reads with the owner's permission. An assistant in a chat has a second gap: nobody but its owner can write to it. A partner wants to copy it on a thread, and wants a founder to be able to send a deck straight to it.</p>
+<p>The address is rented from a mailbox service made for agents. Building mail delivery is a company's worth of work (sender reputation, spam, verification of senders), and nothing here would do it better ({{ch:build-or-buy}}). One key serves the whole copy; each person gets an inbox of their own the first time they send <code>/address</code>.</p>
+<p>An address is the first door in this program that anyone on the internet can knock on. The chat drops strangers without a reply. Mail cannot be dropped, since a founder's deck is the point. So the question is what a message may cause by arriving.</p>
+<div class="tbl"><table>
+<thead><tr><th>Who wrote</th><th>What happens</th><th>What it costs before the owner acts</th></tr></thead>
+<tbody>
+<tr><th>The owner</th><td>Dealt with at once, in the background, as a forwarded email is: read, and filed if it is about a company</td><td>One task</td></tr>
+<tr><th>Anyone else</th><td>The owner gets one message with two buttons, written by code from the envelope: who wrote, the subject, the names of the attachments</td><td>Nothing. No model reads it until the tap</td></tr>
+<tr><th>The twenty-first stranger of the day</th><td>Counted and held. The owner is told once</td><td>Nothing</td></tr>
+</tbody>
+</table></div>
+<p>"The owner" needs care, because the From line of an email is typed by the sender. A message counts as the owner's only if its sender is one of the owner's addresses and the mailbox service reports that the message passed the sending domain's own policy check (DMARC), which is what ties a From line to the domain it names. A forged From line fails that check and is treated as a stranger's.</p>
+<pre><code>def from_owner(message: dict[str, Any], owner_addresses: set[str]) -> bool:
+    """Whether this message is the owner's own: sent from one of their addresses, with the From line verified."""
+    passed = str((message.get("authentication_results") or {}).get("dmarc") or "").lower() == "pass"
+    return passed and address_of(message.get("from", "")) in owner_addresses</code></pre>
+<p class="src"><code>odysseus/mailbox.py</code></p>
+<p>Even the owner's own message is material and not instruction. A forwarded thread is mostly other people's words, so the task the model gets carries the message's id and not its text, and the model reads it through a tool whose result is labelled as written by someone else and recorded as read ({{ch:untrusted-content}}). There are three such tools: list the inbox, read a message, read one attachment. An attachment that is read is kept with the owner's files ({{ch:files-pictures-and-voice}}). The gate treats the task as it treats any other, so the worst a hostile deck can do is what a hostile deck sent by the owner could already do ({{ch:the-gate}}).</p>
+<p>New mail is found by asking the service once a minute. The service can call the program when mail arrives, which is faster and needs a public address; asking works on a laptop and costs nothing. The service leaves out spam and mail whose sender could not be verified unless asked for them, and this program does not ask.</p>
+<p>The assistant cannot send from its address. Sending as itself raises a question the rest of the program has not had to answer, whose name a message goes out under, and it waits for a real need.</p>
+<p><span class="g u">Not tested</span> live: no account with the service existed when this was written. Six unit tests against a stand-in built from the service's published interface (<code>tests/test_mailbox.py</code>) cover making the address once, the owner's mail against a stranger's, a forged From line, the daily limit, a failed delivery being tried again, and the three tools. Whether the real service's answers match its documentation is unknown until a key is in the settings.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A partial list reported as the whole.</strong> Mail search once returned at most ten messages without saying there were more. Asked to archive the week's promotions, the agent archived the ones it could see and reported the job done. A tool that cuts a list short must say so. <span class="g v">Verified</span> in the test world, after the change.</p>
 <p><strong>The error that said nothing.</strong> In the first full run of the evaluation, 7 of 25 failures had one cause: a failed call reached the model as the name of an error class, so it stopped and asked the owner what to do. After the changes above, the same 567 runs failed 11 times instead of 25, and runs with tool faults in a moving world passed 14 of 14 instead of 10 of 14 <span class="g v">Verified</span>. That was measured on the errands that prompted the changes; on a sealed set of other seeds and rewordings, tool faults caused no failures.</p>

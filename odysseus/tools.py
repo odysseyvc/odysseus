@@ -225,6 +225,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(_name("checkin_list"), ALLOW)
     # The owner's own files, found in the owner's own index and sent to the owner's own chat (files.py): nothing leaves.
     gate.rule(_name("files_find"), ALLOW)
+    # The assistant's own inbox (mailbox.py): reading only. What is read is recorded as other people's words.
+    for n in ("inbox_list", "inbox_read", "inbox_attachment"):
+        gate.rule(_name(n), ALLOW)
     gate.rule(_name("files_send"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
@@ -311,7 +314,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
-                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None):
+                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -524,6 +527,9 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                  "anyone else, say that this is not possible yet.",
                  {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]})(files_send),
         ]
+    if inbox:
+        from . import mailbox as mailbox_mod
+        tools += [tool(n, mailbox_mod.SCHEMAS[n][0], mailbox_mod.SCHEMAS[n][1])(inbox[n]) for n in mailbox_mod.SCHEMAS]
     if leads is not None:
         from . import leads as leads_mod
 
