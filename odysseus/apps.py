@@ -400,7 +400,7 @@ class Apps:
     async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
         # Reading is safe to repeat, so a failed read is tried again before the model hears of it. A failed write is
         # never repeated by code: the service may have done it and lost the answer, and a second try would do it twice.
-        reading = tool in ("mail_search", "mail_read", "calendar_list", "mail_attachment")
+        reading = tool in ("mail_search", "mail_read", "calendar_list", "mail_attachment", "calendar_busy")
         for attempt in range(3 if reading else 1):
             try:
                 data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments), CALL_TIMEOUT_S)
@@ -469,6 +469,13 @@ class Apps:
         """Send one email whose every word the program wrote. For code only (checkins.py: a reminder the owner approved
         once, when it was set up). Never repeated on failure, like every write."""
         await self._call("mail_send_by_code", "GMAIL_SEND_EMAIL", {"recipient_email": to, "subject": subject, "body": body, "is_html": False})
+
+    async def busy_between(self, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+        """When the owner is busy in a stretch of time, and nothing else: the calendar service's own free/busy answer,
+        which carries no title, guest or place. For code (peers.py: a colleague's assistant asking for common free times)."""
+        from .peers import parse_busy
+        return parse_busy(await self._call("calendar_busy", "GOOGLECALENDAR_FREE_BUSY_QUERY", {
+            "timeMin": start.isoformat(), "timeMax": end.isoformat(), "items": [{"id": "primary"}]}))
 
     async def events_between(self, start: datetime, end: datetime) -> list[dict[str, Any]]:
         """The calendar's events in a stretch of time, as the service gives them. For code (brief.py), not for the model."""

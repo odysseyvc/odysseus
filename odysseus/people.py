@@ -44,6 +44,8 @@ WELCOME = ("You're in. I'm an assistant, and this chat is yours alone: nobody el
            "for your tap.\n\n"
            "One thing to know: I run on a machine kept by the person who invited you. What you send me and what I read "
            "from your accounts is stored there, and they could read it.\n\n"
+           "The assistants of your colleagues here can look up when you are free, to find a time for a meeting. They are "
+           "given busy and free times only, never what a meeting is or who it is with. /trust shows this and turns it off.\n\n"
            "If your firm keeps its contacts and deals in Attio, send /connect attio to sign in to it.\n\n"
            "Send /help for the commands.")
 CONNECT = "To let me read your mail and calendar, sign in to each. Then just send me a message."
@@ -124,8 +126,9 @@ class House:
     """
 
     def __init__(self, host_id: int, people: People, journal: Journal, assemble: Callable[[int], Awaitable[Any]],
-                 link: Callable[[str], Awaitable[str]], most: int = 10, clock: Callable[[], float] = time.time):
+                 link: Callable[[str], Awaitable[str]], most: int = 10, clock: Callable[[], float] = time.time, board: Any = None):
         self._host, self._people, self._journal, self._assemble, self._link = host_id, people, journal, assemble, link
+        self._board = board                       # the one way between two people's assistants (peers.py), if there is one
         self._most, self._clock = most, clock
         self._at: dict[int, Any] = {}             # the assistant of each person who may speak
         self._tries: dict[int, list[float]] = {}
@@ -204,6 +207,8 @@ class House:
                 await chat.send("Send /remove followed by an id from /people. You cannot remove yourself.")
                 return True
             self._people.remove(uid)
+            if self._board is not None:
+                self._board.remove(uid)             # no colleague's assistant can ask theirs anything from now on
             gone = self._at.pop(uid, None)
             if gone is not None:
                 try:
@@ -286,6 +291,15 @@ class House:
         if user_id in self._rebuilding:
             await chat.send("One moment: I am picking up what you just connected. Send that again in a few seconds.")
             return
+        if self._board is not None:
+            desk = self._board.desk(user_id)
+            if desk is not None and not desk.name and getattr(chat, "who", ""):
+                desk.name = clean_name(chat.who)        # the host never joined by a link, so their name is learned here
+            # What colleagues' assistants may ask this person's: shown and changed by the person, in code. No model.
+            if stripped.lower().split()[:1] == ["/trust"]:
+                self._journal.write("command", name="/trust", user_id=user_id)
+                await chat.send(self._board.trust_command(user_id, stripped))
+                return
         if user_id == self._host and stripped.startswith("/") and await self._hosting(stripped, chat):
             return
         await a.conversation.handle(user_id, text, chat, **more)

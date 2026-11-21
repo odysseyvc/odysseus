@@ -280,10 +280,21 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         code_tools = CodeRunner(E2B(settings.e2b_api_key), journal, ledger, settings.daily_usd, gate.taint).handlers(
             shelf, lambda entry: deliver(shelf, entry, own_chat))
 
+    # Asking a colleague's assistant (peers.py): this person's desk at the switchboard, and the tool that uses it.
+    peer_tools = None
+    board = getattr(shared, "board", None)
+    if board is not None:
+        from .peers import Desk, Trust
+        board.register(Desk(settings.owner_id, shared.name_of(settings.owner_id), Trust(settings.data_dir / "trust.json"), journal,
+                            busy=apps.busy_between if apps is not None else None, tell=own_chat.send))
+        if apps is not None:
+            peer_tools = board.handlers(settings.owner_id, now, settings.tz)
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
-                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools)
+                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
+                                peers=peer_tools)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -473,21 +484,29 @@ async def main() -> int:
                                settings.whatsapp_app_secret), full_content=settings.langfuse_full_content)
     marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     second_call = anthropic_call(settings.anthropic_api_key)
+    # The people the host has invited, each with an assistant of their own (people.py), and the one way between two
+    # people's assistants (peers.py). A colleague is found by the name Telegram gave when they joined.
+    people = People(settings.data_dir / "people.json")
+    from .peers import Switchboard
+    from .people import clean_name
+    try:
+        host_name = clean_name((await bot.get_chat(settings.owner_id)).full_name)
+    except Exception:
+        host_name = ""         # learned from the host's first message instead (people.py)
+    board = Switchboard()
     shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
-                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=door, rebuild=lambda user_id: None)
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=door, rebuild=lambda user_id: None, board=board,
+                             name_of=lambda user_id: host_name if user_id == settings.owner_id else people.members.get(str(user_id), {}).get("name", ""))
     host = await assemble(settings, shared, True, marks)
     if service:
         host.journal.write("warning", where="data_dir", note=f"inside a {service} folder")
     asyncio.get_running_loop().run_in_executor(None, second_call.warm)      # load the reader's library now, off the main path
 
-    # The people the host has invited, each with an assistant of their own (people.py).
-    people = People(settings.data_dir / "people.json")
-
     async def link(code: str) -> str:
         return f"https://t.me/{(await bot.get_me()).username}?start={code}"
     def build(user_id: int):
         return assemble(settings, shared, True) if user_id == settings.owner_id else assemble(member_settings(settings, user_id), shared, False)
-    house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max)
+    house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max, board=board)
     house.add(settings.owner_id, host)
     shared.rebuild = house.rebuild_soon
     for user_id in people.ids()[:settings.people_max - 1]:

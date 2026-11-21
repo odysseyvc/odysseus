@@ -283,7 +283,8 @@ class Conversation:
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/checkins shows the people I remind you to keep in touch with. "
                             "/files shows the files you sent that I am keeping. /address shows my own email address. "
-                            "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser.")
+                            "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
+                            "/trust shows what colleagues' assistants may ask mine.")
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
         if self._memory is not None and command == "/memory":

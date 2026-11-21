@@ -290,6 +290,34 @@
 <p><span class="g v">Verified</span>, live (<code>scripts/live_public_sign_in.py</code>): the real database server registered the program with an https return address and issued a link that returns to it with a mark and a proof key; an address with another mark was refused and the sign-in went on waiting. Two unit tests, one of them over a real local port. <span class="g u">Not tested</span>: the program on a server with this switched on, and a person approving, so a real code has not been exchanged through the page.</p>
 <p><span class="g v">Verified</span>, live, as far as it can go without a second person: the real database server issued a sign-in link for an invited person, asking for the permissions the program names and returning to the fixed address; an address carrying the wrong mark was refused by the real library and nothing was saved. Three unit tests against a stand-in server (<code>tests/test_connect.py</code>). <span class="g u">Not tested</span>: a real person completing it from a phone, so the exchange of a real code has only run against the stand-in.</p>
 
+<h2 id="between">One assistant asking another</h2>
+<p>Once several people each have an assistant on one copy, the next request is obvious: "find an hour with the others this week". Each assistant can see one calendar. Something has to pass between them, and whatever passes is one person's private data arriving in a colleague's chat.</p>
+<p>The products this book measures itself against have reached the same point. <span class="g s">Secondary</span> Instinct lets a personal agent talk directly to the agents of people on a list its owner keeps, joined by an invitation link the owner approves, and has a separate agent for group chats that cannot read anyone's personal account (<a href="https://techcrunch.com/2026/10/05/instinct-brings-its-ai-agent-to-group-chats-even-for-friends-without-an-account/">TechCrunch</a>, quoting its founder). What one agent may reveal to another without asking its owner is not documented. The one open standard for agents of different organisations, A2A, defines a task with named states and typed parts, and has no rule that what a peer sends is data and not instruction (<a href="https://a2a-protocol.org/latest/specification/">specification</a>). So neither gives a design to copy for the part that matters.</p>
+<p>Measurements of agents that converse on their owners' behalf say where the danger is.</p>
+<div class="tbl"><table>
+<thead><tr><th>Finding</th><th>Measured</th><th>Source</th></tr></thead>
+<tbody>
+<tr><th>Agents told to keep things private still disclose them in ordinary cooperative tasks</th><td>Up to 35% and 51% of sensitive items, for two leading models</td><td><a href="https://arxiv.org/abs/2510.15186">MAGPIE</a></td></tr>
+<tr><th>Agents arranging meetings pass one person's availability to a third</th><td>19% of direct messages</td><td><a href="https://arxiv.org/html/2605.09823v1">CalBench</a></td></tr>
+<tr><th>Leaks rise when an agent must explain why a time is costly</th><td>Observed, not counted</td><td>CalBench</td></tr>
+<tr><th>Choosing what may leave in a separate step, before any conversation, holds under attack</th><td>97% protected, against 45% for the conversing agent alone</td><td><a href="https://arxiv.org/abs/2405.05175">AirGapAgent</a> (figure from its abstract)</td></tr>
+<tr><th>People approve nearly every prompt they are shown</th><td>93% accepted</td><td><a href="https://anthropic.com/engineering/claude-code-auto-mode">Anthropic</a></td></tr>
+</tbody>
+</table></div>
+<p>The disclosure happens in the conversation, a guard on actions never sees it, and asking the owner more often is not a fix. What held was deciding in code what may leave before a model says anything. So the first kind of request between assistants here has no conversation at all (<code>odysseus/peers.py</code>).</p>
+<ol>
+<li>The switchboard. One per process, and the only way from one person's assistant to another's. A colleague is found in the register of who is here, from a name the owner used. No model supplies an id, and no name from the register is shown to a model: a name is something a stranger chose.</li>
+<li>The answering side is code. It asks the calendar service for its free/busy answer, which holds busy blocks and no title, guest or place, and widens each block to the quarter hour. The list of events is never read.</li>
+<li>Only the intersection comes back. The switchboard combines everyone's blocks with the asker's own and gives the asking model the stretches when all are free. It never sees one colleague's calendar, and no reason for a busy time exists to be passed on.</li>
+<li>Trust is a list each person owns. <code>/trust</code> shows it and turns a colleague off; either side saying no stops both directions. It is on to begin with, and the welcome says so.</li>
+<li>Limits. Ten lookups of one colleague by another in a day, a window of at most fourteen days, and the first time each day a colleague's assistant looks, the person is sent a line saying who looked and what was given.</li>
+<li>Booking is not part of it. The asking assistant creates the event as it always did, with its owner's approval, and colleagues get an ordinary invitation.</li>
+</ol>
+<p>An exchange is recorded in both people's logs with the same id, its kind and how it ended, and never its content. Its states carry the standard's names, so an adapter for other organisations can be put at the edge later without changing what is inside.</p>
+<p>This does not hide when a person is busy from a colleague who asks for narrow windows. That is what free/busy is in any shared calendar; the count and the daily line bound it and do not remove it.</p>
+<p><span class="g v">Verified</span>, live, with the owner's real calendar standing in as the colleague who is asked and no model called (<code>scripts/live_peers.py</code>, 9 of 9): the service's free/busy answer came through the switchboard in 6 seconds; no title or guest address of any event in the week was in what the asking model is given; no time offered as free overlapped a meeting, checked against the list of events read separately; turning it off meant the calendar was not read; neither side spent anything. The week held two meetings, so this is a small sample. Eleven unit tests (<code>tests/test_peers.py</code>). <span class="g u">Not tested</span>: two real people; the model choosing the tool in a conversation and booking from its answer; all-day events and events marked as free, which are left to the calendar service's own judgement of what is busy; people in different time zones, since one copy has one zone. The count of lookups is kept in memory and starts again when the program restarts.</p>
+<p>Questions in words between assistants ("has anyone met this founder?") are designed and not built: a draft written on the answering side with read-only tools, shown to the answering person exactly as it will leave, and sent only on their tap.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p>Most of the faults found are already described above: a stranger able to fill the disk through the door, a message delivered hours late carried out as new, a platform fetching a private link, and a sticker met with silence. One deserves its own statement. A reminder refused by WhatsApp was once described as "logged, never silent". For the owner it was silent: it was written to a log they do not read, deleted, and never sent. "Never silent" has to mean a message reached the owner, or the program is still trying; hence the raised error, the fallback and the retries. Behind all of these sits the failure the door exists to prevent: drop the signature check "for testing" and anyone who learns the address is obeyed as the owner.</p>
 
@@ -309,6 +337,7 @@
 <li>Treat platform rules as constraints with planned answers: the 24-hour window (default to Telegram, fall back, retry), link previews (off), late deliveries (report, do not act).</li>
 <li>Split long approval questions and put the buttons last; a button carries only an id.</li>
 <li>One program serves one owner; several people get several copies.</li>
+<li>Between two people's assistants, decide in code what may leave before any model converses. For meeting times that is busy blocks in and common free time out, with no conversation at all.</li>
 </ul></div>
 
 <div class="box exercises"><div class="label">Exercises</div>
