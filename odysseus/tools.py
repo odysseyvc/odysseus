@@ -447,7 +447,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             tool(
                 "schedule",
                 "Schedule something for later. kind=reminder sends the owner a fixed message at that time, exactly as "
-                "written in `text`; use it for 'remind me to ...'. kind=routine runs you at that time with nobody "
+                "written in `text`; use it for 'remind me to ...'. Write a reminder's `text` as the thing to be reminded of, in the owner's "
+                "own words and language, with nothing added that they did not say, and without the word Reminder: it is added when it is sent. kind=routine runs you at that time with nobody "
                 "watching, able only to read (the web, your memory, and whichever of the owner's mail, calendar, Attio and other services are connected), and sends the owner what you produce; `text` is "
                 "then the instructions for that run, written so they make sense with no other context, in at most 600 characters. If a routine "
                 "should speak only when something is true, say so in its instructions. Work out `when` from the time "

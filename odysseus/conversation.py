@@ -114,6 +114,7 @@ class Conversation:
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
         self._proposed: set[str] = set()
+        self.alone = None            # set at start-up: whether this person is the only one on this copy (peers.py)
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
         self._files = files                # what the owner sent, kept to be handed back: files.py
@@ -797,6 +798,9 @@ class Conversation:
         if blank or self._memory.version != self._shown_version:
             self._shown_version = self._memory.version
             out += f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        if blank and self.alone is not None and self.alone():
+            out += ("Nobody else uses this assistant yet. times_find, colleague_ask and colleague_file reach only colleagues who do, so "
+                    "do not offer them: for anyone else, the owner's own calendar and an email are the way.\n\n")
         if self._delivered:
             # So that "tell me more about that" makes sense after a reminder or a routine's message.
             sent, self._delivered = self._delivered, []

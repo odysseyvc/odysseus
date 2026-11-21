@@ -77,10 +77,15 @@ class AgentMail:
                 await http.aclose()
         if r.status_code >= 400:
             try:
-                why = str((r.json() or {}).get("message") or (r.json() or {}).get("name") or "")[:200]
+                said = r.json() or {}
+                why, code = str(said.get("message") or said.get("name") or "")[:200], str(said.get("code") or "")
             except Exception:
-                why = ""
-            raise MailboxError(f"the mailbox service answered {r.status_code}" + (f": {why}" if why else ""))
+                why, code = "", ""
+            if code == "missing_permission":
+                # The key in the settings was made to read only. Nothing the model or the owner can do in the chat changes that.
+                raise MailboxError("the key for the mailbox service in my settings is not allowed to do this (it can read, not send). "
+                                   "The owner has to make a key with the message_send permission in the AgentMail console and put it in the settings")
+            raise MailboxError(f"the mailbox service answered {r.status_code}" + (f": {why}" if why else "") + (f" ({code})" if code else ""))
         try:
             return r.json()
         except Exception:

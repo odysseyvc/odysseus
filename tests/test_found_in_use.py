@@ -200,3 +200,105 @@ async def test_a_failure_notice_that_could_not_be_sent_is_said_when_a_message_ne
     x.clock.advance(minutes=1)
     await x.sched.tick()
     assert x.sched._unsaid == [] and "failed and was not carried out" in working.sent[0], "silence never means failure"
+
+
+# --- found by using it as a person would, in the chat ------------------------------------------------------------------
+
+async def test_the_group_command_typed_in_a_private_chat_is_answered_by_code_and_reaches_no_model(tmp_path):
+    from test_people import HOST, Chat, invite
+    from test_people import rig as house_rig
+    x = house_rig(tmp_path)
+    chat = Chat()
+    await x.house.handle(HOST, "/firm on", chat)
+    assert "for a group chat, not for this one" in chat.sent[-1] and "Nothing was switched on here" in chat.sent[-1]
+    assert x.host.conversation.heard == [], "a model shown this command answered that a mode was on; there is no such mode"
+    code = await invite(x)
+    await x.house.handle(7, f"/start {code}", Chat(who="Tara Menon"))
+    member = Chat()
+    await x.house.handle(7, "/firm on", member)
+    assert "person who runs this assistant" in member.sent[-1] and x.built[7].conversation.heard == []
+
+
+def test_a_reminder_is_stored_without_the_word_that_is_added_when_it_is_sent(tmp_path):
+    from odysseus.schedule import ScheduleStore
+    from test_schedule import Clock
+    store = ScheduleStore(tmp_path / "s.db", now=Clock())
+    assert store.add("reminder", "Reminder: check the term sheet", "2026-11-17T10:00").text == "check the term sheet"
+    assert store.add("reminder", "reminder - Reminder: call the bank", "2026-11-17T10:05").text == "call the bank"
+    assert store.add("reminder", "Call about the reminder: it lapsed", "2026-11-17T10:10").text == "Call about the reminder: it lapsed"
+    assert store.add("routine", "Reminder: summarise the news", "2026-11-17T10:15").text == "Reminder: summarise the news", "a routine's instructions are left alone"
+    import inspect
+    from odysseus import tools
+    assert "without the word Reminder" in inspect.getsource(tools.make_tool_server) and "nothing added that they did not say" in inspect.getsource(tools.make_tool_server)
+
+
+async def test_a_mailbox_key_that_may_not_send_is_explained_in_words_the_owner_can_act_on():
+    from odysseus.mailbox import AgentMail, MailboxError
+
+    class Refusing:
+        async def request(self, method, url, **kw):
+            return SimpleNamespace(status_code=403, json=lambda: {"name": "ForbiddenError", "code": "missing_permission", "message": "Forbidden"})
+
+    class Odd:
+        async def request(self, method, url, **kw):
+            return SimpleNamespace(status_code=409, json=lambda: {"name": "Conflict", "code": "already_exists", "message": "Inbox exists"})
+    with pytest.raises(MailboxError) as e:
+        await AgentMail("k", Refusing()).send("inbox-1", ["a@b.example"], [], "s", "t")
+    assert "can read, not send" in str(e.value) and "message_send" in str(e.value)
+    with pytest.raises(MailboxError) as e:
+        await AgentMail("k", Odd()).send("inbox-1", ["a@b.example"], [], "s", "t")
+    assert str(e.value) == "the mailbox service answered 409: Inbox exists (already_exists)"
+
+
+def test_an_ordinary_search_with_its_purpose_is_not_put_to_the_owner_and_a_paragraph_or_a_long_number_still_is(tmp_path):
+    from odysseus.taint import NEW_WORDS_A_SEARCH
+    from odysseus.tools import SEARCH_TOOL, make_gate
+    gate = make_gate(Journal(tmp_path / "j.jsonl"), taint_file=tmp_path / "t.bin")
+    gate.taint.add("A message about the weekly sync and other things besides, from a colleague.")
+    research = {"query": "climate hardware funds in northern Europe that lead first rounds, partners, typical cheque, recent investments",
+                "objective": "Find venture funds known for leading first rounds in climate hardware companies in Scandinavia and the Baltics "
+                             "(for example Corvid Ventures, Nimbus Capital, Helio Partners, Zentrix Fund, Palmgrove Seed). Need partner names, "
+                             "typical first cheque sizes, and three recent deals each. Prefer fund sites, registries, and the business press."}
+    assert 30 < len(gate.taint.new_words(f"{research['query']} {research['objective']}")) <= NEW_WORDS_A_SEARCH
+    assert gate.decide(SEARCH_TOOL, research) == "allow", "this was put to the owner, who had typed nothing private"
+    paragraph = {"query": " ".join(f"word{chr(97 + i % 26)}{chr(97 + i // 26)}" for i in range(NEW_WORDS_A_SEARCH + 5)), "objective": ""}
+    assert gate.decide(SEARCH_TOOL, paragraph) == "ask"
+    assert gate.decide(SEARCH_TOOL, {"query": "company with registration 4188392077", "objective": ""}) == "ask"
+
+
+async def test_a_read_that_asks_for_more_than_a_tool_allows_is_given_the_most_it_allows(tmp_path):
+    from odysseus.apps import within_bounds
+    from odysseus.attio import Attio
+    schema = {"type": "object", "properties": {"limit": {"type": "number", "minimum": 1, "maximum": 50}, "object": {"type": "string"}, "deep": {"type": "boolean"}}}
+    assert within_bounds({"object": "deals", "limit": 100, "deep": True}, schema) == ({"object": "deals", "limit": 50, "deep": True}, ["limit 100 to 50"])
+    assert within_bounds({"limit": 0}, schema) == ({"limit": 1}, ["limit 0 to 1"]) and within_bounds({"limit": 20}, schema) == ({"limit": 20}, [])
+    assert within_bounds("not a dict", schema) == ("not a dict", []) and within_bounds({"limit": 100}, None) == ({"limit": 100}, [])
+    calls = []
+
+    class Backend:
+        async def list_tools(self):
+            return [{"name": "list-records", "title": "List records", "labels": {"read_only_hint": True}, "description": "List.", "inputs": schema},
+                    {"name": "create-record", "title": "Create a record", "labels": {}, "description": "Create.", "inputs": schema}]
+
+        async def call(self, name, arguments):
+            calls.append((name, arguments))
+            return "{}"
+    attio = Attio(Backend(), Journal(tmp_path / "j.jsonl"))
+    run = attio.handlers()["attio_run"]
+    await attio.handlers()["attio_find"]({})
+    out = await run({"tool": "list-records", "arguments": {"object": "deals", "limit": 100}})
+    assert calls[-1] == ("list-records", {"object": "deals", "limit": 50}) and "limit 100 to 50" in out["content"][0]["text"]
+    await run({"tool": "create-record", "arguments": {"object": "deals", "limit": 100}})
+    assert calls[-1] == ("create-record", {"object": "deals", "limit": 100}), "a change runs with exactly what the owner was shown"
+
+
+async def test_with_nobody_else_on_the_copy_the_model_is_told_not_to_offer_a_colleagues_assistant(tmp_path):
+    from test_fresh import rig as fresh_rig, say
+    x = fresh_rig(tmp_path)
+    x.conv.alone = lambda: True
+    await say(x, "Who knows the founder of Corvid Freight?")
+    assert "Nobody else uses this assistant yet" in x.clients[0].prompts[0]
+    y = fresh_rig(tmp_path / "y")
+    y.conv.alone = lambda: False
+    await say(y, "Who knows the founder of Corvid Freight?")
+    assert "Nobody else uses this assistant" not in y.clients[0].prompts[0]

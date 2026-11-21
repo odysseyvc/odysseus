@@ -336,6 +336,8 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation
     conversation._inbox = inbox
+    if board is not None:
+        conversation.alone = lambda: not board.colleagues(settings.owner_id)
     conversation.own_chat = own_chat        # where work offered before a restart reports, once approved
     if inbox is not None:
         me.tasks.append(asyncio.create_task(inbox.run_forever()))

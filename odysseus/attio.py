@@ -275,7 +275,7 @@ async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]
 # carrying details from the owner's mail: looking a correspondent up in the firm's own database is the point of it,
 # and Attio labels every tool as staying inside the workspace.
 
-from .apps import CALL_TIMEOUT_S, AppError, hide_secrets, near_tools, same_tool  # noqa: E402
+from .apps import CALL_TIMEOUT_S, AppError, hide_secrets, near_tools, same_tool, within_bounds  # noqa: E402
 from .gate import ALLOW, ASK, Gate  # noqa: E402
 from .journal import Journal  # noqa: E402
 
@@ -529,7 +529,12 @@ class Attio:
             if name not in tools:
                 raise AppError(f"Attio has no tool called {name}.{near_tools(name, tools)} Call attio_find to see what exists.")
             what = kind(name, tools[name]["labels"])
+            adjusted: list[str] = []
+            if what == "read":      # only a read: a change runs with exactly the inputs the owner was shown
+                inputs, adjusted = within_bounds(inputs, tools[name].get("inputs"))
             text = await self._call(self._b.call(name, inputs))
+            if adjusted:
+                text = f"[Attio allows less than was asked for, so this was run with: {'; '.join(adjusted)}. Ask again with an offset for more.]\n" + text
             self._journal.write("tool", name="attio_run", ok=True, tool=name, action=what)
             if name in RESHAPES:
                 self._layout = None         # the shape has changed: read it again before describing it

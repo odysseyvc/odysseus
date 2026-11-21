@@ -206,6 +206,27 @@ def format_events(data: Any) -> str:
 
 # --- the questions the owner is shown ----------------------------------------------
 
+def within_bounds(inputs: Any, schema: Any) -> tuple[Any, list[str]]:
+    """Inputs with each top-level number brought inside what the tool's own description allows, and what was changed.
+    For a read: asking for 100 where 50 is the most should return 50, not an error."""
+    props = (schema or {}).get("properties") if isinstance(schema, dict) else None
+    if not isinstance(inputs, dict) or not isinstance(props, dict):
+        return inputs, []
+    out, changed = dict(inputs), []
+    for key, value in inputs.items():
+        spec = props.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not isinstance(spec, dict):
+            continue
+        low, high = spec.get("minimum"), spec.get("maximum")
+        if isinstance(high, (int, float)) and value > high:
+            out[key] = high
+            changed.append(f"{key} {value} to {high}")
+        elif isinstance(low, (int, float)) and value < low:
+            out[key] = low
+            changed.append(f"{key} {value} to {low}")
+    return out, changed
+
+
 def same_tool(name: str, names: Any) -> str:
     """The tool a model meant when it wrote a name with the wrong joiner (search_records for search-records). Empty if none."""
     plain = re.sub(r"[-_\s]+", "", str(name).lower())

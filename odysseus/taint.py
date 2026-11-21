@@ -65,8 +65,12 @@ _ANY_WORD = re.compile(r"[^\W_]+")      # a word in any script: a check that saw
 # How much a search may carry that the owner did not say (spill). Set from the real searches on record, with room to
 # spare: of 253, the middle one carried 14 new words and one carried more than 30. An hour's allowance is about twenty
 # ordinary searches.
-NEW_WORDS_A_SEARCH = 30
-NEW_WORDS_AN_HOUR = 300
+# A search is a query and a sentence or two saying what it is for, and both go to the search company. The limit was 30 when a
+# search was a query alone; with the purpose added, an ordinary research request ran to 35 and was put to the owner, who had
+# typed nothing private. 60 lets a query and its purpose through and still stops a paragraph. A long number or an encoded
+# string is stopped at any length, and what was recognised from the owner's accounts is stopped whatever the count.
+NEW_WORDS_A_SEARCH = 60
+NEW_WORDS_AN_HOUR = 600
 LONG_NUMBER = 5          # digits; a year or a round count is shorter
 LONG_WORD = 24           # characters; longer than any ordinary word, as an encoded string is
 # Words a search uses whatever it is about. They carry almost nothing about what was read, so they are not counted.

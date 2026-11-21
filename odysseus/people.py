@@ -126,6 +126,8 @@ FIRM_ON = ("I am now this group's assistant. Mention me or reply to one of my me
            "The host can send /firm attio on to let me read the firm's database here, and /firm off to switch me off.")
 FIRM_ATTIO_ON = ("I can now read the firm's database here, signed in as the host. Anything I would add or change there is put to this "
                  "group first, and any member here can approve it. /firm attio off takes this away.")
+FIRM_HERE = ("/firm is for a group chat, not for this one. Add me to the group, then send /firm on in the group itself. "
+             "Nothing was switched on here." )
 FIRM_ATTIO_OFF = "I can no longer reach the firm's database from this group."
 
 
@@ -425,6 +427,10 @@ class House:
                 self._journal.write("command", name="/edit", user_id=user_id)
                 await chat.send(await self._board.edit(user_id, stripped))
                 return
+        if stripped.lower().split()[:1] == ["/firm"]:
+            # A command for a group chat. Here it reaches no model, which would only guess at what it means.
+            await chat.send(FIRM_HERE if user_id == self._host else "That is a command for the person who runs this assistant.")
+            return
         if user_id == self._host and stripped.startswith("/") and await self._hosting(stripped, chat):
             return
         await a.conversation.handle(user_id, text, chat, **more)

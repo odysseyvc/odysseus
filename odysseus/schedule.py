@@ -25,6 +25,7 @@ the same clock that stamps the owner's messages.
 from __future__ import annotations
 
 import asyncio
+import re
 import secrets
 import sqlite3
 from dataclasses import dataclass
@@ -103,6 +104,9 @@ class ScheduleStore:
 
     def add(self, kind: str, text: str, when: str, repeat: str = "once") -> Job:
         text = " ".join(str(text).split())
+        if kind == "reminder":
+            # The word is added when the message is sent. A model that writes it too would have the owner read it twice.
+            text = re.sub(r"^(?:(?:reminder|\u0930\u093f\u092e\u093e\u0907\u0902\u0921\u0930)\s*[:\-\u2013\u2014]\s*)+", "", text, flags=re.I).strip()
         if kind not in ("reminder", "routine"):
             raise ScheduleError("kind must be reminder or routine.")
         if not text:
