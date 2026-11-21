@@ -153,11 +153,14 @@ class Capture:
                 self._journal.write("error", where="capture.state", error=type(e).__name__)
 
     async def run_forever(self, every_s: float = CHECK_EVERY_S) -> None:
+        from .journal import Outage
+        outage = Outage(self._journal, "capture.tick")      # the network being down is recorded once, not as an error each time
         while True:
             try:
                 await self.tick()
+                outage.worked()
             except Exception as e:      # the loop must outlive a calendar or a database that cannot be reached
-                self._journal.write("error", where="capture.tick", error=type(e).__name__, message=str(e)[:300])
+                outage.failed(e)
             await asyncio.sleep(every_s)
 
     async def gather(self, since: datetime, until: datetime) -> list[dict[str, Any]]:
@@ -173,7 +176,9 @@ class Capture:
                 if await self._known(p["email"]):
                     continue
             except Exception as e:      # the database could not say: do not propose somebody who may be there already
-                self._journal.write("error", where="capture.known", error=type(e).__name__)
+                from .journal import looks_offline
+                self._journal.write("offline" if looks_offline(e) else "error", where="capture.known", error=type(e).__name__,
+                                    **({} if looks_offline(e) else {"message": str(e)[:200]}))
                 continue
             new.append(p)
         return new

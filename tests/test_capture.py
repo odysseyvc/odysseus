@@ -105,7 +105,7 @@ async def test_a_database_that_cannot_answer_proposes_nobody_and_a_quiet_day_say
         raise ConnectionError("down")
     x.capture._known = broken
     assert await x.capture.tick() == 0 and x.asked == [], "better silent than proposing someone who may be there already"
-    assert {r["where"] for r in x.journal.read() if r["kind"] == "error"} == {"capture.known"}
+    assert {(r["kind"], r["where"]) for r in x.journal.read() if r["kind"] in ("error", "offline")} == {("offline", "capture.known")}
     quiet = rig(tmp_path / "quiet", events=[], mails=[])
     assert await quiet.capture.tick() == 0 and quiet.asked == []
     assert [r["found"] for r in quiet.journal.read() if r["kind"] == "capture"] == [0]

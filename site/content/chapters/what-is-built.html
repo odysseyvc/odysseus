@@ -130,7 +130,7 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 <tbody>
 <tr><th>Evaluation of a person's errands</th><td>83 errands and scenarios in a world where time passes and tools fail; five conditions; invariants on every run</td><td>581 runs after repairs, 563 passed; do-nothing scored 0 of 81 on the earlier suite</td><td>Situations written by the builders; scripted other people; at most two simulated days; no adaptive attacker</td></tr>
 <tr><th>Evaluation of a partner's errands</th><td>14 errands against a stand-in database and meeting notes</td><td>112 runs, then 28, then 34, against the real model</td><td>As written only, two to four runs each; no rewording, no failing tools</td></tr>
-<tr><th>Traces</th><td>Every task sent to a trace store with keys removed and account text replaced by its length</td><td>One task read back from the store</td><td>A script groups real failures from the logs into kinds and lists the new ones (<code>scripts/review_log.py</code>); writing the test for each is still done by hand</td></tr>
+<tr><th>Traces</th><td>Every task sent to a trace store with keys removed and account text replaced by its length</td><td>One task read back from the store</td><td>A script groups real failures from the logs into kinds and lists the new ones (<code>scripts/review_log.py</code>). Its first reading found six causes, each now fixed with a test; writing the test for each kind is still done by hand</td></tr>
 <tr><th>Cost</th><td>A ledger with one definition: a function from a log line to a cost</td><td>Per-task costs recorded; most are the makers' own figures or estimates</td><td>Not checked against an invoice; the monthly cost is unknown</td></tr>
 </tbody></table></div>
 

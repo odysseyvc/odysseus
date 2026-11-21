@@ -31,10 +31,12 @@ async def _bounded(runner: AgentRunner, journal: Journal, prompt: str, seconds: 
     """Run one unattended task with a time limit. Nobody is there to send "stop" if a service hangs."""
     async def noop(text: str) -> None:
         pass
+    runner.timed_out = False
     try:
         return await asyncio.wait_for(runner.run(prompt, noop), seconds)
     except asyncio.TimeoutError:
         spent = runner.estimate
+        runner.timed_out = True         # read by the scheduler, which runs a routine once more when waiting was the reason
         journal.write("error", where=where, error="TimeoutError", message=f"no result after {seconds:.0f} s")
         await runner.reset()
         from .agent import Outcome

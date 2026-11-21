@@ -7,6 +7,13 @@ The log holds how each task ended, every error with where it happened, every too
 owner declined. This groups them into kinds (where and what, never the words), counts them, and remembers which
 kinds it has shown before, so a later run lists only what is new. A kind is new work: a test that reproduces it, then
 the fix. Nothing from a message, an email or a name is printed: only the program's own labels.
+
+Three things are counted apart, because they are not faults of the program:
+
+  an outage      the network or a service could not be reached. Listed with how often, never as a failure.
+  a retried read an attempt that code made again and that then worked. Not listed at all.
+  a refusal      the program telling the model no, as designed (too long, carries private details with nobody to ask,
+                 a tool name that does not exist). Listed, since many of one kind means the model was not told the rule.
 """
 from __future__ import annotations
 
@@ -29,10 +36,35 @@ def label(text: object) -> str:
     return " ".join(re.sub(r"\d+", "N", s).split()[:8])[:80]
 
 
+REFUSALS = ("too long", "not sent", "has no tool called", "must be a tool name", "the limit is", "not run:", "is already saved", "nobody is here")
+
+
 def kinds_in(records) -> tuple[Counter, dict, Counter]:
+    from odysseus.journal import looks_offline
+    records = list(records)
     found, last, ended = Counter(), {}, Counter()
-    for r in records:
+    for i, r in enumerate(records):
         kind, key = r.get("kind"), None
+        if kind == "tool" and r.get("ok") is False:
+            # An attempt that was made again and then worked is not a failure. Newer logs mark it; older ones are read ahead.
+            later = [n for n in records[i + 1:i + 8] if n.get("kind") == "tool" and n.get("name") == r.get("name") and n.get("ts", 0) - r.get("ts", 0) < 90]
+            if r.get("retrying") and any(n.get("ok") for n in later):
+                continue
+            if r.get("attempt") and not r.get("retrying") and later and later[0].get("ok") and int(r.get("attempt") or 0) < 3:
+                continue
+            if r.get("retrying"):
+                continue            # the last attempt of the same call is the one that counts
+        said = f"{r.get('error', '')} {r.get('message', '')} {r.get('detail', '')}"
+        if kind == "offline" or (kind in ("error", "tool") and (r.get("ok") is False or kind == "error") and looks_offline(said)):
+            key = ("an outage (not a fault)", str(r.get("where") or r.get("name")), "")
+            found[key] += 1
+            last[key] = r.get("ts", 0)
+            continue
+        if kind == "tool" and r.get("ok") is False and any(w in str(r.get("error", "")).lower() for w in REFUSALS):
+            key = ("the model was told no, as designed", str(r.get("name")), label(r.get("error")))
+            found[key] += 1
+            last[key] = r.get("ts", 0)
+            continue
         if kind == "task_end":
             ended[str(r.get("status"))] += 1
             if r.get("status") not in ("done", "stopped"):

@@ -124,7 +124,7 @@ async def test_a_calendar_that_cannot_be_read_does_not_stop_the_loop(tmp_path):
     await asyncio.sleep(0.05)
     assert not task.done(), "the loop is still running"
     task.cancel()
-    assert any(r["kind"] == "error" and r["where"] == "brief.tick" for r in x.journal.read())
+    assert [r["kind"] for r in x.journal.read() if r.get("where") == "brief.tick"] == ["offline"], "an outage is recorded once, and not as an error"
 
 
 async def test_a_brief_names_who_to_ask_the_guest_about_and_goes_out_without_them_if_that_fails(tmp_path):

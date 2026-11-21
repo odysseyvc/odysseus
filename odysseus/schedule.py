@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
 
-from .journal import Journal, Ledger
+from .journal import Journal, Ledger, looks_offline
 
 # "half-hourly" is the standing check: a routine that looks every thirty minutes and says nothing unless there is something
 # to say. It is a routine like any other: read-only, held to the day's budget, cancelled with one command.
@@ -188,6 +188,8 @@ class Scheduler:
         self._on_delivered = on_delivered or (lambda text: None)
         self._tick_s = tick_s
         self._fallback = fallback                        # a second channel, used when the first refuses a message
+        self._unsaid: list[str] = []                     # failures the owner has not been told of yet
+        self._unsaid_logged = False
         self._retries: dict[str, tuple[int, datetime]] = {}     # job id -> (tries so far, when it was first due)
         self._history_file = history_file                # what each routine sent the last few times, so it does not repeat itself
         try:
@@ -236,6 +238,8 @@ class Scheduler:
 
     async def tick(self) -> int:
         """Run every job that is due. Returns how many ran."""
+        if self._unsaid:
+            await self._say_unsaid()
         due = self._store.due()
         for job in due:
             await self._run(job)
@@ -256,6 +260,13 @@ class Scheduler:
                 outcome, detail, cost = await self._routine(job, suffix)
         except Exception as e:
             outcome, detail = "failed", f"{type(e).__name__}: {e}"
+        if outcome == "failed" and job.kind == "routine" and tries < 1 and looks_offline(detail):
+            # It could not reach something. Nobody is watching, and a daily routine would otherwise be lost until
+            # tomorrow: run it once more in five minutes. Only once, because each run costs.
+            self._retries[job.id] = (tries + 1, due)
+            self._store.postpone(job, self._now() + RETRY_AFTER[1])
+            self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome="retrying", detail=detail[:200], attempt=tries + 1, cost_usd=cost)
+            return
         if outcome == "failed" and job.kind == "reminder" and tries < len(RETRY_AFTER):
             # The message did not leave. Keep the reminder and try again shortly; do not delete it.
             self._retries[job.id] = (tries + 1, due)
@@ -269,10 +280,23 @@ class Scheduler:
         self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome=outcome, detail=detail[:200],
                             cost_usd=cost, late=late)
         if outcome == "failed":
-            try:    # silence must never mean failure
-                await self._send(f"A scheduled {job.kind} failed and was not carried out: \"{job.text[:120]}\". Reason: {detail or 'unknown'}.")
+            self._unsaid.append(f"A scheduled {job.kind} failed and was not carried out: \"{job.text[:120]}\". Reason: {detail or 'unknown'}.")
+        await self._say_unsaid()
+
+    async def _say_unsaid(self) -> None:
+        """Tell the owner of failures they have not heard of yet. Silence must never mean failure, so a notice that
+        could not be sent (the same outage that failed the job, usually) is kept and sent when a message next gets out."""
+        while self._unsaid:
+            try:
+                await self._send(self._unsaid[0])
             except Exception as e:
-                self._journal.write("error", where="scheduler.announce", error=type(e).__name__)
+                if not self._unsaid_logged:
+                    self._unsaid_logged = True
+                    self._journal.write("offline" if looks_offline(e) else "error", where="scheduler.announce", error=type(e).__name__, waiting=len(self._unsaid))
+                del self._unsaid[:-20]          # never an unbounded pile
+                return
+            self._unsaid.pop(0)
+            self._unsaid_logged = False
 
     async def _routine(self, job: Job, suffix: str) -> tuple[str, str, float]:
         if self._ledger.spent_today() >= self._daily_usd:
@@ -281,7 +305,8 @@ class Scheduler:
         self._journal.write("task_end", status=status, cost_usd=cost, routine=job.id)      # the ledger counts this line
         text = (text or "").strip()
         if status != "done":
-            return "failed", f"the routine ended as '{status}'", cost
+            took_too_long = status == "error" and getattr(self._run_routine, "runner", None) is not None and getattr(self._run_routine.runner, "timed_out", False)
+            return "failed", f"the routine ended as '{status}'" + (": it timed out waiting for a service" if took_too_long else ""), cost
         if not text:
             return "failed", "the routine produced nothing", cost
         if text.strip(" .\"'`").upper() == NO_REPLY:

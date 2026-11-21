@@ -206,6 +206,23 @@ def format_events(data: Any) -> str:
 
 # --- the questions the owner is shown ----------------------------------------------
 
+def same_tool(name: str, names: Any) -> str:
+    """The tool a model meant when it wrote a name with the wrong joiner (search_records for search-records). Empty if none."""
+    plain = re.sub(r"[-_\s]+", "", str(name).lower())
+    hits = [n for n in names if re.sub(r"[-_\s]+", "", str(n).lower()) == plain]
+    return hits[0] if len(hits) == 1 else ""
+
+
+def near_tools(name: str, names: Any, most: int = 4) -> str:
+    """A clause naming the tools closest to a name that does not exist, so the next call need not be a guess."""
+    import difflib
+    names, low = list(names), str(name).lower()
+    stem = re.sub(r"[-_\s]+", "", low)
+    hits = [n for n in names if stem and (stem in re.sub(r"[-_\s]+", "", n.lower()) or re.sub(r"[-_\s]+", "", n.lower()) in stem)]
+    hits += [n for n in difflib.get_close_matches(low, names, n=most, cutoff=0.6) if n not in hits]
+    return f" The closest names are: {', '.join(hits[:most])}." if hits else ""
+
+
 def _emails(value: Any) -> list[str]:
     if not value:
         return []
@@ -333,6 +350,10 @@ def add_rules(gate: Gate, now: Callable[[], datetime] = datetime.now, apps: "App
 
 # --- the tools -------------------------------------------------------------------
 
+# Calls that only read, and so are safe for code to make again when one fails. Two of them were missing: the search that code
+# itself makes for the daily look at who was met (mail_for_code), and the look-up of the owner's own address (mail_profile).
+# A dropped connection on either was reported as a write that "may or may not have taken effect".
+READS = frozenset({"mail_search", "mail_read", "calendar_list", "mail_attachment", "calendar_busy", "mail_for_code", "mail_profile"})
 CALL_TIMEOUT_S = 60      # a call to the connector that has not answered by then is treated as failed
 
 
@@ -400,12 +421,14 @@ class Apps:
     async def _call(self, tool: str, slug: str, arguments: dict[str, Any]) -> Any:
         # Reading is safe to repeat, so a failed read is tried again before the model hears of it. A failed write is
         # never repeated by code: the service may have done it and lost the answer, and a second try would do it twice.
-        reading = tool in ("mail_search", "mail_read", "calendar_list", "mail_attachment", "calendar_busy")
+        reading = tool in READS
         for attempt in range(3 if reading else 1):
             try:
                 data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments), CALL_TIMEOUT_S)
             except (Exception, asyncio.TimeoutError) as e:
-                self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", attempt=attempt + 1)
+                # `retrying` marks an attempt that is about to be made again: only the last one is the call's failure.
+                self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", attempt=attempt + 1,
+                                    **({"retrying": True} if reading and attempt < 2 else {}))
                 if reading and attempt < 2:
                     await asyncio.sleep(self.retry_wait_s * (attempt + 1))
                     continue

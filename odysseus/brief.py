@@ -139,11 +139,14 @@ class Briefer:
                 self._journal.write("error", where="brief.state", error=type(e).__name__)
 
     async def run_forever(self, every_s: float = CHECK_EVERY_S) -> None:
+        from .journal import Outage
+        outage = Outage(self._journal, "brief.tick")      # the network being down is recorded once, not as an error each time
         while True:
             try:
                 await self.tick()
-            except Exception as e:      # the loop must outlive a calendar that cannot be reached
-                self._journal.write("error", where="brief.tick", error=type(e).__name__, message=str(e)[:300])
+                outage.worked()
+            except Exception as e:      # the loop must outlive a calendar or a database that cannot be reached
+                outage.failed(e)
             await asyncio.sleep(every_s)
 
     async def tick(self) -> int:

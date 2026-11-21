@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Awaitable
 
 from .apps import CALL_TIMEOUT_S, AppError, hide_secrets
+from .apps import near_tools, same_tool  # noqa: E402
 from .attio import FileTokens, McpBackend, NotSignedIn, _leaves
 from .gate import ALLOW, ASK, Gate
 from .journal import Journal
@@ -249,7 +250,7 @@ def unattended(app: Any, run: Any, journal: Journal) -> Any:
             seen = app.unattended_seen = []
         if not own_store and taint is not None and taint.leaked(_foreign(args.get("arguments") or {}, seen)):
             return no(f"Not sent to {title}: the request contains details from the owner's mail, calendar or database, and nobody is here to "
-                      "approve sending them.")
+                      "approve sending them. Do not send it again in this run: say in your result that this could not be looked up.")
         left = getattr(app, "unattended_left", None)
         if left is not None:
             if left <= 0:
@@ -374,9 +375,11 @@ class McpApp:
                          f"{r['description'][:260]}" for r in tools.values()]
                 return (f"{self.title}'s tools. Call {self.slug}_find again with `tools` set to the names you need, to get their inputs, "
                         "before the first time you run one.\n\n" + "\n".join(lines))
+            wanted = [n if n in tools else (same_tool(n, tools) or n) for n in wanted]     # the same name with another joiner
             unknown = [n for n in wanted if n not in tools]
             if unknown:
-                raise AppError(f"{self.title} has no tool called {', '.join(unknown)}. Call {self.slug}_find with no names to see what exists.")
+                raise AppError(f"{self.title} has no tool called {', '.join(unknown)}.{near_tools(unknown[0], tools)} "
+                               f"Call {self.slug}_find with no names to see what exists.")
             return "\n\n".join(f"{n}\n  {tools[n]['description'][:2500]}\n  inputs: {json.dumps(tools[n]['inputs'], ensure_ascii=False)[:6000]}"
                                for n in wanted)
 
@@ -385,7 +388,7 @@ class McpApp:
             name, inputs = str(a["tool"]).strip(), a.get("arguments") or {}
             tools = await self._catalogue()
             if name not in tools:
-                raise AppError(f"{self.title} has no tool called {name}. Call {self.slug}_find to see what exists.")
+                raise AppError(f"{self.title} has no tool called {name}.{near_tools(name, tools)} Call {self.slug}_find to see what exists.")
             what = self._kind(tools[name])
             text = await self._call(self._b.call(name, inputs))
             cost = estimate(self.spec, name, text)

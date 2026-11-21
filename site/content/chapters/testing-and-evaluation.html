@@ -238,6 +238,23 @@ class Errand:
     assert "approved" in invariants(Ctx(crm, granola, ids, "Noted.", [], []), errand("file_existing"), "done", before)</code></pre>
 <p>An errand in which the owner declines an addition could no longer happen, so it was replaced by one declining a correction. Under the new rule 28 of 28 passed, and the owner was asked in 6 runs where before it had been 16. <span class="g v">Verified</span>, $0.60 With the three deck errands the suite reached seventeen errands; run twice each, all 34 passed, for $0.92. <span class="g v">Verified</span> In the evaluation a deck is given as recognised text, so nothing there tests what the model sees on a page.</p>
 
+<h2 id="from-use">Tests that come from use</h2>
+<p>An evaluation tests situations its builders thought of. Real use produces the ones they did not. The program's own log already holds them: how each task ended, every error with where it happened, every tool call that failed. A script reads it and groups the failures into kinds, by the program's labels and never by anything a person wrote (<code>scripts/review_log.py</code>). It remembers which kinds it has listed, so a later run shows only what is new. Each kind is then a piece of work: a test that reproduces it, and the fix.</p>
+<p>The first reading, of a few days of one person's use, listed seventeen kinds. Sorting them was most of the value, because only six causes lay behind them, and the largest was not a fault:</p>
+<div class="tbl"><table>
+<thead><tr><th>Cause</th><th>What the log showed</th><th>What holds now</th></tr></thead>
+<tbody>
+<tr><th>The network being down</th><td>Three loops that run unwatched each wrote an error every time a laptop lost its connection. Read back, the log said the program was failing when it was waiting</td><td>An outage is one line when it begins and one, with its length, when it ends. Anything else is still an error every time</td></tr>
+<tr><th>A read that was tried again</th><td>An attempt that code was about to repeat was written exactly like the call's failure</td><td>It is marked as an attempt, and only the last one counts</td></tr>
+<tr><th>Two reads treated as writes</th><td>A dropped connection on them was reported as something that "may or may not have taken effect"</td><td>They are repeated like any read</td></tr>
+<tr><th>A guessed tool name</th><td>The model asked for a tool by a name close to the real one: an underscore where the service uses a hyphen, or a shorter form</td><td>The other joiner is understood when looking a tool up; a wrong name is answered with the nearest real ones</td></tr>
+<tr><th>A limit the model could not see</th><td>Instructions for a routine were refused for length only after the call was made</td><td>The limit is in the tool's own description</td></tr>
+<tr><th>A failure nobody heard of</th><td>A routine timed out during an outage, and the message saying so failed to send in the same outage</td><td>A routine that timed out is run once more, five minutes later. A notice that cannot be sent is kept and sent when a message next gets out</td></tr>
+</tbody>
+</table></div>
+<p>Nine tests reproduce these with stand-ins (<code>tests/test_found_in_use.py</code>). The script now counts three things apart from failures: outages, attempts that were repeated and then worked, and refusals the program made by design. Many refusals of one kind is still worth reading, since it means the model was not told a rule.</p>
+<p>Two limits. The grouping is by label, so two different faults that raise the same error in the same place are one kind. And writing the test for a kind is still done by hand: the script finds the work, it does not do it.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>The check is wrong.</strong> In the private-person suite's first runs, two failures were the check's fault; in the larger evaluation of {{ch:a-changing-world}}, about a third have been. A failure is evidence about the agent or about the check.</p>
 <p><strong>The check and the product share a blind spot.</strong> The Northwind double passed because both compared exact names.</p>

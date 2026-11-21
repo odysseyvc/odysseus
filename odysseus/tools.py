@@ -31,7 +31,7 @@ from .gate import ALLOW, ASK, Gate
 from . import history as history_mod
 from .journal import Journal
 from .memory import MEMORY_NOTE, MemoryError_, MemoryStore
-from .schedule import REPEATS, ScheduleError, ScheduleStore, parse_when
+from .schedule import MAX_TEXT, REPEATS, ScheduleError, ScheduleStore, parse_when
 from .search import SERVER, SearchSpec, make_search_handler
 from .taint import Taint
 from .watch import WatchError, WatchStore, describe_watch
@@ -455,7 +455,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                 {"type": "object",
                  "properties": {
                      "kind": {"type": "string", "enum": ["reminder", "routine"]},
-                     "text": {"type": "string", "description": "The reminder's message, or the routine's instructions."},
+                     "text": {"type": "string", "maxLength": MAX_TEXT, "description": f"The reminder's message, or the routine's instructions. At most {MAX_TEXT} characters: longer is refused."},
                      "when": {"type": "string", "description": "Local date and time of the first run, like 2026-11-18T09:00. No zone."},
                      "repeat": {"type": "string", "enum": list(REPEATS), "description": "Default once."}},
                  "required": ["kind", "text", "when"]},

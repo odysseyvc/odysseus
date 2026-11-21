@@ -285,15 +285,17 @@ class Mailbox:
         return len(fresh)
 
     async def run_forever(self, every_s: float = CHECK_EVERY_S) -> None:
-        failed = 0
+        from .journal import Outage, looks_offline
+        outage, failed = Outage(self._journal, "mailbox.tick"), 0
         while True:
             try:
                 await self.tick()
                 failed = 0
+                outage.worked()
             except Exception as e:      # the loop must outlive a service that cannot be reached
                 failed += 1
-                if failed in (1, 30):   # once at first, and once more if it has lasted half an hour
-                    self._journal.write("error", where="mailbox.tick", error=type(e).__name__, message=str(e)[:200])
+                if looks_offline(e) or failed in (1, 30):   # an outage once; anything else once, and again if it has lasted half an hour
+                    outage.failed(e)
             await asyncio.sleep(every_s)
 
     # --- what the model may do with it -----------------------------------------------------------------------------

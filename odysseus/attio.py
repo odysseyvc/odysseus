@@ -275,7 +275,7 @@ async def session(tokens: FileTokens, show_link: Callable[[str], Awaitable[None]
 # carrying details from the owner's mail: looking a correspondent up in the firm's own database is the point of it,
 # and Attio labels every tool as staying inside the workspace.
 
-from .apps import CALL_TIMEOUT_S, AppError, hide_secrets  # noqa: E402
+from .apps import CALL_TIMEOUT_S, AppError, hide_secrets, near_tools, same_tool  # noqa: E402
 from .gate import ALLOW, ASK, Gate  # noqa: E402
 from .journal import Journal  # noqa: E402
 
@@ -478,7 +478,7 @@ class Attio:
     def describe(self, args: dict[str, Any]) -> str:
         name = str(args.get("tool", "")).strip()
         if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
-            raise AppError("`tool` must be a tool name from attio_find, like create-note.")
+            raise AppError("`tool` must be a tool name from attio_find, like create-note. Attio's names are joined with hyphens, not underscores.")
         inputs = args.get("arguments") or {}
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
@@ -515,9 +515,10 @@ class Attio:
                          "Do not list objects, lists or attributes yourself unless Attio refuses a field named here.\n\n" + shape) if shape else ""
                 return ("Attio's tools. Call attio_find again with `tools` set to the names you need, to get their inputs, "
                         "before the first time you run one.\n\n" + "\n".join(lines) + about)
+            wanted = [n if n in tools else (same_tool(n, tools) or n) for n in wanted]     # search_records is search-records
             unknown = [n for n in wanted if n not in tools]
             if unknown:
-                raise AppError(f"Attio has no tool called {', '.join(unknown)}. Call attio_find with no names to see what exists.")
+                raise AppError(f"Attio has no tool called {', '.join(unknown)}.{near_tools(unknown[0], tools)} Call attio_find with no names to see what exists.")
             return "\n\n".join(f"{n}\n  {tools[n]['description'][:1500]}\n  inputs: {json.dumps(tools[n]['inputs'], ensure_ascii=False)[:6000]}"
                                for n in wanted)
 
@@ -526,7 +527,7 @@ class Attio:
             name, inputs = str(a["tool"]).strip(), a.get("arguments") or {}
             tools = await self._catalogue()
             if name not in tools:
-                raise AppError(f"Attio has no tool called {name}. Call attio_find to see what exists.")
+                raise AppError(f"Attio has no tool called {name}.{near_tools(name, tools)} Call attio_find to see what exists.")
             what = kind(name, tools[name]["labels"])
             text = await self._call(self._b.call(name, inputs))
             self._journal.write("tool", name="attio_run", ok=True, tool=name, action=what)

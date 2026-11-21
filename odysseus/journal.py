@@ -175,3 +175,38 @@ class Ledger:
             except Exception:
                 pass
         return self.recorded_today() + running
+
+
+# --- when the network is down ------------------------------------------------------------------------------------------
+#
+# The loops that run with nobody watching (new mail at the assistant's address, the brief before a meeting, people to
+# add to the database) each ask a service something every minute or so. On a laptop the network comes and goes, and
+# each of them wrote an "error" every time it did. Read back, the log then said the program was failing when it was
+# only waiting. So an outage is recorded as what it is: one "offline" line when it begins and one "online" line, with
+# how long it lasted, when the same loop next succeeds. Anything else that goes wrong is still an error, every time.
+
+OFFLINE_WORDS = ("connecterror", "connectionerror", "connection error", "apiconnectionerror", "timeout", "timed out", "networkerror",
+                 "could not be reached", "did not answer in time", "temporary failure", "name resolution", "getaddrinfo", "network is unreachable")
+
+
+def looks_offline(error: Any) -> bool:
+    """Whether a failure reads like the network or a service being unreachable, and not like something being wrong."""
+    said = f"{type(error).__name__ if isinstance(error, BaseException) else ''} {error}".lower()
+    return any(w in said for w in OFFLINE_WORDS)
+
+
+class Outage:
+    def __init__(self, journal: Journal, where: str, clock: Callable[[], float] = time.time):
+        self._journal, self._where, self._clock, self._since = journal, where, clock, None
+
+    def failed(self, error: BaseException) -> None:
+        if not looks_offline(error):
+            self._journal.write("error", where=self._where, error=type(error).__name__, message=str(error)[:300])
+        elif self._since is None:
+            self._since = self._clock()
+            self._journal.write("offline", where=self._where, error=type(error).__name__)
+
+    def worked(self) -> None:
+        if self._since is not None:
+            self._journal.write("online", where=self._where, after_s=round(self._clock() - self._since))
+            self._since = None

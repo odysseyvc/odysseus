@@ -166,7 +166,8 @@ async def test_a_reminder_that_cannot_be_sent_is_kept_and_tried_again_before_it_
         await x.sched.tick()
     assert outcomes(x) == ["failed"] and "ConnectionError" in x.store.runs()[0]["detail"] and x.store.jobs() == []
     kinds = [(r["kind"], r.get("outcome")) for r in x.journal.read()]
-    assert kinds.count(("scheduled_run", "retrying")) == 4 and ("error", None) in kinds, "the failed announcement is logged too"
+    assert kinds.count(("scheduled_run", "retrying")) == 4 and kinds.count(("offline", None)) == 1, "the notice that could not be sent is logged, once"
+    assert len(x.sched._unsaid) == 1, "and it is kept, to be said when a message next gets out"
 
 
 async def test_a_reminder_that_fails_once_is_delivered_on_the_next_try_and_says_it_is_late(tmp_path):
