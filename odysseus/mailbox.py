@@ -85,7 +85,7 @@ class AgentMail:
     async def messages(self, inbox_id: str, after: str = "", limit: int = MOST_NEW_AT_ONCE) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit, "ascending": "true"}
         if after:
-            params["after"] = after
+            params["after"] = zulu(after)
         return [m for m in (await self._call("GET", f"/inboxes/{inbox_id}/messages", params=params)).get("messages") or [] if isinstance(m, dict)]
 
     async def message(self, inbox_id: str, message_id: str) -> dict[str, Any]:
@@ -93,6 +93,12 @@ class AgentMail:
 
     async def attachment(self, inbox_id: str, message_id: str, attachment_id: str) -> dict[str, Any]:
         return await self._call("GET", f"/inboxes/{inbox_id}/messages/{message_id}/attachments/{attachment_id}")
+
+
+def zulu(when: str) -> str:
+    """A time as the service accepts it: UTC, to the second, ending in Z. It answers 400 to an offset such as +00:00."""
+    t = datetime.fromisoformat(str(when).replace("Z", "+00:00"))
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def address_of(sender: str) -> str:

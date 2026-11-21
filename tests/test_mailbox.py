@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from odysseus.files import Shelf
 from odysseus.journal import Journal
-from odysseus.mailbox import MATERIAL, MOST_OFFERS_A_DAY, NOTE, Mailbox, MailboxError, address_of, from_owner, question, task
+from odysseus.mailbox import MATERIAL, MOST_OFFERS_A_DAY, NOTE, Mailbox, MailboxError, address_of, from_owner, question, task, zulu
 from odysseus.taint import Taint
 
 OWNER = "partner@firm.example"
@@ -110,6 +110,7 @@ async def test_the_owners_own_mail_runs_at_once_and_anyone_elses_is_put_to_the_o
     log = str(x.journal.read())
     assert "corvid" not in log.lower() and "Deck" not in log and OWNER not in log, "no address or subject in the log"
     assert "second look" in question(mail(9, agent_armor={"status": "complete", "verdict": "review"}), "a@b") and "second look" not in q
+    assert zulu("2026-11-21T14:32:00.214284+05:30") == "2026-11-21T09:02:00Z" == zulu("2026-11-21T09:02:00Z"), "the service refuses an offset"
     assert address_of("x") == "" and not from_owner(mail(1, sender=OWNER, auth={}), {OWNER}) and "cannot reply" in task(mail(1), True)
 
 
