@@ -23,10 +23,19 @@ NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 class TelegramChat:
-    def __init__(self, bot: Bot, chat_id: int, who: str = ""):
+    def __init__(self, bot: Bot, chat_id: int, who: str = "", message_id: int | None = None):
         self._bot = bot
         self._chat_id = chat_id
         self.who = who          # the sender's name as Telegram gives it; used only when someone joins (people.py)
+        # The message this chat object was made for. When that message had to wait behind another task, its answer is
+        # sent as a reply to it (`quote`, set by the conversation), so that several answers arriving together can be told apart.
+        self._message_id, self.quote = message_id, False
+
+    def _quoting(self) -> dict:
+        if not (self.quote and self._message_id):
+            return {}
+        from aiogram.types import ReplyParameters
+        return {"reply_parameters": ReplyParameters(message_id=self._message_id, allow_sending_without_reply=True)}
 
     async def links(self, text: str, links: list[tuple[str, str]]) -> None:
         """A message with one button per address. Each button opens its address in the person's own browser."""
@@ -53,11 +62,11 @@ class TelegramChat:
         # No link previews: to make one Telegram fetches the link, and some links the program sends (a sign-in link) are
         # meant to be opened once, by the owner.
         try:
-            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW)
+            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW, **self._quoting())
         except TelegramRetryAfter as e:
             # Telegram says it is being sent too much, and how long to wait. Wait that long, once, and send again.
             await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
-            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW)
+            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW, **self._quoting())
 
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
@@ -96,6 +105,17 @@ def addressed_to(text: str, username: str, is_reply_to_me: bool) -> tuple[str, b
 def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     dp = Dispatcher()
     told_late = [0.0]
+    # Telegram hands over several messages at once and the library starts on all of them together, so three messages typed
+    # quickly were taken up in whatever order their first pause ended: "3+3" was answered after "6+6". One person's messages
+    # are now let in one at a time, in the order they were received. A tap on a button does not wait in this line: it has
+    # to be able to answer a question while a message is being dealt with.
+    turns: dict[int, asyncio.Lock] = {}
+
+    def in_turn(user_id: int) -> asyncio.Lock:
+        if len(turns) > 500:
+            for known in [u for u, lock in turns.items() if not lock.locked()][:250]:
+                del turns[known]
+        return turns.setdefault(user_id, asyncio.Lock())
 
     async def late(message: Message) -> bool:
         """True if this message was sent long before it arrived (the program was not running). Telegram holds messages
@@ -115,10 +135,12 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     # Private chats only: a bot added to a group would otherwise hear other people.
     @dp.message(F.chat.type == "private", F.text)
     async def on_text(message: Message) -> None:
-        if await late(message):
-            return
         user_id = message.from_user.id if message.from_user else 0
-        await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, who=message.from_user.full_name if message.from_user else ""))
+        async with in_turn(user_id):
+            if await late(message):
+                return
+            await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, who=message.from_user.full_name if message.from_user else "",
+                                                                                message_id=message.message_id))
 
     # One group, if the host switched the firm's assistant on in it (people.House.handle_group). Text only. Whether a
     # message is addressed to the assistant is decided here, from what Telegram says: a mention of its name, or a reply
@@ -155,8 +177,9 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
                 data = buffer.read() if buffer else None
             except Exception:
                 data = None
-        await conversation.handle_file(user_id, data, name, mime, size, message.caption or "", chat,
-                                       handle=item.file_id, kind="photo" if message.photo else "document")
+        async with in_turn(user_id):
+            await conversation.handle_file(user_id, data, name, mime, size, message.caption or "", chat,
+                                           handle=item.file_id, kind="photo" if message.photo else "document")
 
     # Voice notes and audio files. Fetched only for the owner, and never kept.
     @dp.message(F.chat.type == "private", F.voice | F.audio)
@@ -174,7 +197,8 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
                 data = buffer.read() if buffer else None
             except Exception:
                 data = None
-        await conversation.handle_voice(user_id, data, name, size, seconds, TelegramChat(bot, message.chat.id))
+        async with in_turn(user_id):
+            await conversation.handle_voice(user_id, data, name, size, seconds, TelegramChat(bot, message.chat.id))
 
     # Anything else the owner sends (a sticker, a video, a location) is answered, so that silence never has to be interpreted.
     @dp.message(F.chat.type == "private")

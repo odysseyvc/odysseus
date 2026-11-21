@@ -296,6 +296,11 @@ class Conversation:
         if self._memory is not None and command.startswith("/forget"):
             entry_id = command[len("/forget"):].strip()
             old = self._memory.forget(entry_id, by="owner") if entry_id else None
+            if old:
+                # The model may have this in the conversation it is in the middle of, and went on using a fact its owner had
+                # just removed. It is told with the owner's next message.
+                self._carry += (f'THE OWNER HAS JUST REMOVED THIS FROM MEMORY: "{old.text}". Treat it as no longer true or no longer wanted, '
+                                "even though it appears earlier in this conversation. Do not rely on it or mention it.\n\n")
             await chat.send(f'Forgotten: "{old.text}"' if old else "Send /forget followed by an id from /memory.")
             return
         # The assistant's own email address: shown, or made the first time. No model is involved.
@@ -403,10 +408,16 @@ class Conversation:
                 await chat.send(f"I already have {MAX_WAITING} messages waiting behind the current task. Send stop to drop them all.")
                 return
             self._queue_seq += 1
+            first = not self._waiting
             self._waiting.append((text, chat, images, material, self._queue_seq))
             # Written down, so that after a restart the owner can be told which messages were lost while waiting.
             self._journal.write("queued", waiting=len(self._waiting), q=self._queue_seq, preview=" ".join(text.split())[:80])
-            await chat.send("Noted. I'll do this as soon as the current task is finished. Send stop to end everything.")
+            # Said once for a run of waiting messages, not after each: five identical lines told the owner nothing more.
+            if first:
+                await chat.send("Noted. I'll do this, and anything else you send meanwhile, in order, as soon as the current task is finished. "
+                                "Send stop to end everything.")
+            if hasattr(chat, "quote"):
+                chat.quote = True       # its answer is sent as a reply to this message, so answers that arrive together can be told apart
             return
 
         # 4. The daily budget is checked before any model call is made.

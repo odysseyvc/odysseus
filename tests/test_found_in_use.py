@@ -302,3 +302,63 @@ async def test_with_nobody_else_on_the_copy_the_model_is_told_not_to_offer_a_col
     y.conv.alone = lambda: False
     await say(y, "Who knows the founder of Corvid Freight?")
     assert "Nobody else uses this assistant" not in y.clients[0].prompts[0]
+
+
+async def test_messages_sent_quickly_are_taken_in_the_order_they_were_received(tmp_path):
+    """The library starts on several messages at once. Each handler pauses for a different time before it reaches the
+    conversation, as a download or a slow send does; the conversation must still hear them in order."""
+    from datetime import datetime, timezone
+    from odysseus.telegram import build_dispatcher
+    heard = []
+
+    class Conv:
+        def is_owner(self, user_id):
+            return True
+
+        async def handle(self, user_id, text, chat, **more):
+            await asyncio.sleep({"one": 0.03, "two": 0.0, "three": 0.01}[text])
+            heard.append(text)
+    dp = build_dispatcher(SimpleNamespace(), Conv())
+    on_text = next(h.callback for h in dp.message.handlers if h.callback.__name__ == "on_text")
+
+    def message(i, text):
+        return SimpleNamespace(from_user=SimpleNamespace(id=1, full_name="Owner"), date=datetime.now(timezone.utc), text=text, message_id=i,
+                               chat=SimpleNamespace(id=1))
+    await asyncio.gather(*(on_text(message(i, t)) for i, t in enumerate(("one", "two", "three"))))
+    assert heard == ["one", "two", "three"]
+
+
+async def test_a_burst_of_waiting_messages_is_acknowledged_once_and_each_answer_replies_to_its_message(tmp_path):
+    from test_slice import OWNER, call, make, result
+
+    class Quoting(FakeChat):
+        def __init__(self):
+            super().__init__()
+            self.quote = False
+    x = make(tmp_path, [[result(text="first")], [result(text="second")], [result(text="third")]])
+    x.clients_gate = asyncio.Event()
+    chats = [Quoting(), Quoting(), Quoting()]
+    x.conv.busy_for_test = True
+    task = asyncio.create_task(x.conv.handle(OWNER, "one", chats[0]))
+    await asyncio.sleep(0)
+    await x.conv.handle(OWNER, "two", chats[1])
+    await x.conv.handle(OWNER, "three", chats[2])
+    await task
+    await x.conv.wait()
+    said = [m for c in chats for m in c.sent if m.startswith("Noted.")]
+    assert len(said) == 1 and "in order" in said[0], "one line for the run of waiting messages"
+    assert [c.quote for c in chats] == [False, True, True], "an answer to a message that waited is sent as a reply to it"
+    assert any("second" in m for m in chats[1].sent) and any("third" in m for m in chats[2].sent)
+
+
+async def test_a_fact_the_owner_forgets_is_withdrawn_from_the_conversation_in_progress(tmp_path):
+    from test_fresh import OWNER, rig as fresh_rig, say
+    x = fresh_rig(tmp_path)
+    await say(x, "Hello")
+    entry = x.conv._memory.profile()[0]
+    await x.conv.handle(OWNER, f"/forget {entry.id}", x.chat)
+    await say(x, "When should I schedule the call?")
+    prompt = x.clients[0].prompts[-1]
+    assert "THE OWNER HAS JUST REMOVED THIS FROM MEMORY" in prompt and entry.text in prompt and "Do not rely on it" in prompt
+    await say(x, "And the next one?")
+    assert "JUST REMOVED" not in x.clients[0].prompts[-1], "said once"
