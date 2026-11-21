@@ -360,7 +360,18 @@ and, for the bank's message, its header followed by the hidden-line notice in pl
 <tr><th>The mailbox service</th><td>Free at this size</td></tr>
 </tbody>
 </table></div>
-<p><span class="g u">Not tested</span> live: a stranger's message from arrival to the owner's tap (the script checks only that such a message is judged a stranger's), a forged From line sent for real, the daily limit, and a second person's inbox. The unit tests cover each (<code>tests/test_mailbox.py</code>).</p>
+<p>Then a stranger's message, once. A short note with no attachment was sent from an address the program had never seen, asking for a meeting.</p>
+<div class="tbl"><table>
+<thead><tr><th>Step</th><th>What the log shows</th></tr></thead>
+<tbody>
+<tr><th>Arrival</th><td>Found 12 seconds after it was sent and judged not the owner's. No model was called and nothing was spent</td></tr>
+<tr><th>The question</th><td>Put to the owner in the chat. It sat unanswered for about two and a half minutes, and nothing ran in that time</td></tr>
+<tr><th>After the tap</th><td>One tool call, reading the message. A reply to the owner 10.5 seconds later, for $0.052</td></tr>
+<tr><th>Anything else</th><td>None: no search, no record written, nothing sent</td></tr>
+</tbody>
+</table></div>
+<p>The run shows that an unknown sender's message costs nothing until the owner asks for it to be read. It does not show how the model behaves when such a message tries to give it orders, since this one did not try.</p>
+<p><span class="g u">Not tested</span> live: a stranger's message with an attachment, a message written to mislead the model, a forged From line sent for real, the daily limit, and a second person's inbox. The unit tests cover the last three (<code>tests/test_mailbox.py</code>).</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A partial list reported as the whole.</strong> Mail search once returned at most ten messages without saying there were more. Asked to archive the week's promotions, the agent archived the ones it could see and reported the job done. A tool that cuts a list short must say so. <span class="g v">Verified</span> in the test world, after the change.</p>
