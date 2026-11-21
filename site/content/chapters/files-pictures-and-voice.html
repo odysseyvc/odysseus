@@ -284,6 +284,33 @@ return file_block(name, result, sights)</code></pre>
 <p>Keeping files changes what the program holds. A deck is a confidential document, and it now sits on the machine the program runs on for as long as the owner leaves it there, where before it passed through. On a copy that serves several people the host could read it, as the welcome says ({{ch:channels}}).</p>
 <p><span class="g v">Verified</span>, one live run with the real start-up code and model (<code>scripts/live_files.py</code>). A person sent a five-page deck under an unhelpful file name and a picture, each with "keep it", started a new conversation, and asked for each in their own words. The deck came back from its copy and the picture by its id, both to that person's chat. Asked for a deck that was never sent, the model said it had none and listed the two it had. Asked to email the deck to someone, it said it could not. Eight checks, about 8 cents, and 3 to 4 seconds a request once the agent was connected. The real bot then sent a file to the owner from its bytes and again from the id Telegram returned, and the second arrived whole. Nine unit tests (<code>tests/test_files.py</code>). Keeping an attachment and a viewing-link document is covered by unit tests only: <span class="g u">not tested</span> live. Also not tested: an id that is months old, and many files, where word matching will return the wrong deck sooner or later.</p>
 
+<h2 id="code">Running code on a file</h2>
+<p>A model adds badly and cannot open a spreadsheet at all. A cap table arrives as a file of rows; a deck states growth figures that may not agree with each other. Given somewhere to run code, the model can write a few lines that add the rows or draw the chart, and read what they print. The somewhere cannot be the machine the program runs on, which holds every key and file the owner has. So it is rented: a small virtual machine from a sandbox company, started for one run and destroyed after it (<code>odysseus/sandbox.py</code>).</p>
+<p>A long-lived process is the wrong thing to put on such a service, and a single run is the right thing: the service limits how long one machine may run, bills by the second, and a paused machine does nothing. The same facts that rule it out as a home for the program make it fit for this.</p>
+<div class="tbl"><table>
+<thead><tr><th>Question</th><th>Answer, held by code</th></tr></thead>
+<tbody>
+<tr><th>What can the code reach?</th><td>The kept files the model named by id, at most five, and nothing else of the owner's</td></tr>
+<tr><th>Where can it send them?</th><td>Nowhere: the machine is created with outbound access off</td></tr>
+<tr><th>What survives the run?</th><td>What was printed, cut to a length, and at most three files written to one folder, which are kept and sent to the owner's chat only</td></tr>
+<tr><th>How long may it run?</th><td>Two minutes; the machine cannot outlive that by more than a minute</td></tr>
+<tr><th>Who else sees the file?</th><td>The sandbox company, as the text-recognition company already does</td></tr>
+<tr><th>Is the owner asked?</th><td>No. It is not offered to unattended runs</td></tr>
+</tbody>
+</table></div>
+<p>It runs unasked because of the second row. A deck can talk the model into writing code the owner would not want; with no way out, that code can waste two minutes and print something false, and nothing more. What it prints is recorded as derived from the file, so the rules for what other people wrote apply to it: a save to memory after it is asked about, and a search carrying its figures is asked about ({{ch:untrusted-content}}).</p>
+<p>Run against the real service (<code>scripts/live_sandbox.py</code>, 9 of 9 checks, no model called). The first run of the check failed, usefully. With outbound access off, a connection to a numeric address still opened. A closer probe showed why: the company's own filter accepts the connection and passes nothing on. A web request to a numeric address got no reply, an encrypted one was cut, and names could not be looked up. The check now tests whether anything comes back and not whether a connection opens.</p>
+<div class="tbl"><table>
+<thead><tr><th>Measured</th><th>Result</th></tr></thead>
+<tbody>
+<tr><th>A sum, from call to answer</th><td>About 7 seconds, of which the machine existed for 3 to 4</td></tr>
+<tr><th>A table read with pandas, a chart and a spreadsheet written back</th><td>About 5 seconds</td></tr>
+<tr><th>Cost of five runs, at the list price</th><td>$0.003, an estimate</td></tr>
+<tr><th>Machines left running afterwards</th><td>None</td></tr>
+</tbody>
+</table></div>
+<p><span class="g u">Not tested</span>: the model choosing to use the tool in a real conversation, and whether its code is right; a real cap table; code written under the influence of a hostile file. That nothing leaves the machine one way, without a reply, rests on the company's word: proving it needs a listening server of one's own. The cost is from the list price and has not been checked against an invoice.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A confident misreading.</strong> If the service turns 1,842 into 1,342, the wrong figure arrives as clean text and the model reports it with confidence. Nothing in the design catches this. Numbered pages help the owner check; the model is told to say when something is unclear, which helps only when the text looks unclear. The reader's notes are labelled "by eye" for the same reason.</p>
 <p><strong>A picture with nothing to read.</strong> Sending every picture to text recognition made a photograph of a room or a parcel a blank. Pictures in the common formats sent in the chat are therefore shown to the model. A picture made in code, red above and blue below with no writing, was sent with "Which two colours are in this picture, and which one is on top?" to a copy with no text-recognition key. The reply: "The picture has red on top and blue on the bottom." <span class="g v">Verified</span>. A picture in another format, or one attached to an email, still goes to text recognition and comes back blank if it has no writing.</p>
@@ -306,6 +333,7 @@ return file_block(name, result, sights)</code></pre>
 <li>Text recognition drops what is drawn. A file in a kept conversation is paid for with every later message; a separate reader is paid for once.</li>
 <li>The page reader has no tools, by two locks (an empty list and an empty server), so a hostile page can at most make it describe the page wrongly.</li>
 <li>A file is the owner's request but someone else's writing: nothing is removed, and nothing in it is an instruction.</li>
+<li>Code runs on a rented machine with no way out, destroyed after each run; its output is treated as derived from the file it was given.</li>
 <li>A voice note is shown back as "Heard:" before it is acted on; names are what speech recognition gets wrong.</li>
 <li>Reading a file lives in one place, the reader, for a file sent in the chat, fetched from a link or attached to an email. Only a link in the owner's own message is fetched, and only by code. The log keeps sizes, never contents.</li>
 </ul></div>

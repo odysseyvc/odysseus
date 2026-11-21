@@ -237,6 +237,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     # The assistant's own inbox (mailbox.py): reading only. What is read is recorded as other people's words.
     for n in ("inbox_list", "inbox_read", "inbox_attachment"):
         gate.rule(_name(n), ALLOW)
+    # Code run on a throwaway machine with no internet (sandbox.py): it can reach nothing of the owner's but the kept
+    # files it is handed, and can send them nowhere. What it makes goes to the owner's own chat. So it runs unasked.
+    gate.rule(_name("run_code"), ALLOW)
     gate.rule(_name("files_send"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
@@ -323,7 +326,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
-                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None):
+                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -547,6 +550,9 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     if inbox:
         from . import mailbox as mailbox_mod
         tools += [tool(n, mailbox_mod.SCHEMAS[n][0], mailbox_mod.SCHEMAS[n][1])(inbox[n]) for n in mailbox_mod.SCHEMAS]
+    if code:
+        from . import sandbox as sandbox_mod
+        tools += [tool(n, sandbox_mod.SCHEMAS[n][0], sandbox_mod.SCHEMAS[n][1])(code[n]) for n in sandbox_mod.SCHEMAS]
     if leads is not None:
         from . import leads as leads_mod
 

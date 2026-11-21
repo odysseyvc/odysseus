@@ -111,6 +111,8 @@ reminders fire in UTC.
   domain), or by the server's address. You approve on the service's own page, in a browser on the machine the program runs on. Tools the server
   labels read-only run unasked; everything else asks. Only you can do this; the assistant cannot connect anything.
 - Your messages, mail and files pass through the vendors whose keys you supply.
+- With `E2B_API_KEY` set, the assistant can run Python on a rented machine that has no internet access and is destroyed
+  after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.
 - With `AGENTMAIL_API_KEY` set, `/address` gives the assistant an email address of its own. Mail from you is dealt
   with at once; mail from anyone else is put to you with one tap before any model reads it. It cannot send from it.
 - Files you send in the chat, attachments it reads in your mail and the text of DocSend documents it reads are kept in

@@ -36,6 +36,7 @@ class Settings:
     ask_every_change: bool = False        # 1: ask before every change, as before 19 Nov 2026. Default: small changes run and are reported
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
     agentmail_api_key: str = ""  # optional: with it, each person can give the assistant an email address of its own (mailbox.py)
+    e2b_api_key: str = ""        # optional: with it, the assistant can run code on a throwaway machine (sandbox.py)
     owner_emails: tuple = ()     # the host's other addresses, besides the connected mailbox's: mail from these to the assistant is the host's own
     # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
     whatsapp_token: str = ""          # a permanent access token for the Meta app
@@ -120,6 +121,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         browser_use_api_key=merged.get("BROWSER_USE_API_KEY", ""),
         mistral_api_key=merged.get("MISTRAL_API_KEY", ""),
         agentmail_api_key=merged.get("AGENTMAIL_API_KEY", "").strip(),
+        e2b_api_key=merged.get("E2B_API_KEY", "").strip(),
         owner_emails=tuple(a.strip().lower() for a in merged.get("ODYSSEUS_OWNER_EMAILS", "").split(",") if "@" in a),
         whatsapp_token=merged.get("WHATSAPP_TOKEN", ""),
         whatsapp_phone_id=merged.get("WHATSAPP_PHONE_ID", ""),

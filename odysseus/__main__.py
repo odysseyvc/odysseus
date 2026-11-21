@@ -273,10 +273,17 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         inbox_tools = inbox.handlers(lambda: late["c"].reader, Fetcher(), gate.taint,
                                      lambda data, name, mime, text, origin: late["c"]._keep(data, name, mime, len(data), "", text, source="mail", origin=origin))
 
+    # Code, run on a rented machine that is thrown away after each run, if there is a key for one (sandbox.py).
+    code_tools = None
+    if settings.e2b_api_key:
+        from .sandbox import E2B, CodeRunner
+        code_tools = CodeRunner(E2B(settings.e2b_api_key), journal, ledger, settings.daily_usd, gate.taint).handlers(
+            shelf, lambda entry: deliver(shelf, entry, own_chat))
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
-                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools)
+                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
