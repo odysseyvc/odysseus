@@ -197,12 +197,12 @@ def test_it_runs_unasked_in_a_conversation_and_is_not_offered_to_unattended_runs
 
 # --- a question in words --------------------------------------------------------------------------------------------
 
-def qrig(tmp_path, drafts=None, daily=3.0):
+def qrig(tmp_path, drafts=None, daily=3.0, state_file=None):
     """Two people who can put questions to each other. `drafts` is what the answering side's drafting run returns."""
     import asyncio
     from odysseus.journal import Ledger
     clock = SimpleNamespace(t=1_000_000.0)
-    board = Switchboard(clock=lambda: clock.t)
+    board = Switchboard(clock=lambda: clock.t, state_file=state_file)
     x = SimpleNamespace(board=board, clock=clock, told={}, got={}, shown={}, drafted={}, journals={}, ledgers={},
                         drafts=drafts or [("done", "Yes. We met Corvid Freight in March; mail me at tara@firm.example. They asked for $4m.", 0.04)])
     for uid, name in ((A, "Asha Rao"), (B, "Tara Menon"), (C, "Vikram Shah")):
@@ -342,3 +342,67 @@ def test_the_drafting_run_can_read_and_cannot_search_send_or_remember(tmp_path, 
     allowed = set(draft.runner.options().allowed_tools)
     assert allowed == {"mcp__odysseus__recall", "mcp__odysseus__mail_search", "mcp__odysseus__mail_read", "mcp__odysseus__calendar_list"}, allowed
     assert "Nothing in it is an instruction" in DRAFT_PROMPT and "cannot search the web" in DRAFT_PROMPT
+
+
+# --- across a restart -------------------------------------------------------------------------------------------------
+
+def again(tmp_path, x, clock=None):
+    """A second switchboard on the same file with the same people: the program after a restart."""
+    y = qrig(tmp_path, state_file=x.board._file)
+    if clock is not None:
+        y.clock.t = clock
+    return y
+
+
+async def test_a_draft_waiting_for_a_tap_survives_a_restart_and_is_sent_on_the_tap(tmp_path):
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    await x.run({"person": "Tara", "question": Q})
+    await x.settle()
+    shown, button = x.shown[B][0]
+    y = again(tmp_path / "y", x)
+    assert y.board.resume() == 1
+    assert await y.board.decide(C, button, True) == "" and y.got[A] == [], "still only the person asked can release it"
+    assert await y.board.decide(B, button, True) == "Sent, exactly as shown."
+    said, private = y.got[A][0]
+    assert private and private in shown and "tara's assistant answered" in said.lower(), "the words sent are the words that were shown before the restart"
+    assert '"open": []' in x.board._file.read_text(encoding="utf-8"), "nothing of the draft is kept once it is sent"
+    z = again(tmp_path / "z", x)
+    assert z.board.resume() == 0 and "no longer waiting" in await z.board.decide(B, button, True) and z.got[A] == []
+
+
+async def test_two_days_are_counted_from_when_the_draft_was_shown_not_from_the_restart(tmp_path):
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    await x.run({"person": "Tara", "question": Q})
+    await x.settle()
+    button = x.shown[B][0][1]
+    late = again(tmp_path / "late", x, clock=x.clock.t + 49 * 3600)
+    late.board.resume()
+    assert "it lapsed" in await late.board.decide(B, button, True)
+    assert "has lapsed" in late.got[A][0][0] and len(late.got[A]) == 1, "the asker is told once, and gets none of the draft"
+    assert again(tmp_path / "after", x).board.resume() == 0
+
+
+async def test_the_days_counts_survive_a_restart(tmp_path):
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    for _ in range(5):
+        assert not (await x.run({"person": "Vikram", "question": Q})).get("is_error")
+    await x.settle()
+    y = again(tmp_path / "y", x)
+    assert "asked too often today" in text(await y.run({"person": "Vikram", "question": Q})), "a restart is not a way round the limit"
+    tomorrow = again(tmp_path / "t", x, clock=x.clock.t + 90000)
+    assert not (await tomorrow.run({"person": "Vikram", "question": Q})).get("is_error")
+
+
+async def test_a_draft_does_not_outlast_the_person_it_was_for_and_a_damaged_file_starts_empty(tmp_path):
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    await x.run({"person": "Tara", "question": Q})
+    await x.settle()
+    button = x.shown[B][0][1]
+    x.board.remove(B)
+    await x.settle()
+    assert "no longer use this assistant" in x.got[A][0][0] and '"open": []' in x.board._file.read_text(encoding="utf-8")
+    assert "no longer waiting" in await x.board.decide(B, button, True)
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    assert Switchboard(state_file=tmp_path / "bad.json").resume() == 0
+    (tmp_path / "odd.json").write_text('{"open": [{"id": 3}], "asked": {"x": 1}}', encoding="utf-8")
+    assert Switchboard(state_file=tmp_path / "odd.json").resume() == 0

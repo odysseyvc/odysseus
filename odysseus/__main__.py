@@ -509,7 +509,7 @@ async def main() -> int:
         host_name = clean_name((await bot.get_chat(settings.owner_id)).full_name)
     except Exception:
         host_name = ""         # learned from the host's first message instead (people.py)
-    board = Switchboard()
+    board = Switchboard(state_file=settings.data_dir / "switchboard.json")
     shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
                              search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=door, rebuild=lambda user_id: None, board=board,
                              name_of=lambda user_id: host_name if user_id == settings.owner_id else people.members.get(str(user_id), {}).get("name", ""))
@@ -532,6 +532,9 @@ async def main() -> int:
             host.journal.write("error", where="people.start", user_id=user_id, error=type(e).__name__, message=str(e)[:200])
     if people.ids():
         host.journal.write("people", serving=len(people.ids()) + 1)
+    waiting = board.resume()        # drafts that were waiting for a colleague's tap when the program last stopped
+    if waiting:
+        host.journal.write("exchange", resumed=waiting)
     async def park_the_idle() -> None:
         # An invited person who has said nothing for a while keeps their assistant and loses only its processes.
         while settings.park_after_min > 0:

@@ -31,6 +31,11 @@ Two kinds exist:
                    people's writing and fingerprinted, so it cannot be passed on to a search or a third person unasked.
                    The asker's budget pays for the drafting.
 
+What survives a restart: the counts of the day, who has been told, and every draft waiting for a tap, with the moment
+it was shown (one file in the host's data folder, beside the people's own folders; it holds the waiting drafts' words,
+and nothing once they are sent, declined or lapsed). The buttons under a draft carry its id, so a tap after a restart
+finds it.
+
 What bounds it: ten lookups and five questions of one colleague by another in a day, a window of at most fourteen
 days, a line sent to a person the first time each day a colleague's assistant looks, and a question that lapses if it
 is not answered in two days.
@@ -127,6 +132,7 @@ class Exchange:
     question: str = ""
     draft: str = ""
     called: str = ""              # what the asking model called the colleague: the only name it is ever shown
+    at: float = 0.0               # when the draft was shown to the answering person: it lapses two days after
 
 
 _LINK = re.compile(r"(?:https?://|www\.)\S+", re.I)
@@ -191,20 +197,97 @@ def free_stretches(busy: list[Block], start: datetime, end: datetime, zone: Any,
 
 
 class Switchboard:
-    def __init__(self, clock: Callable[[], float] = time.time):
+    def __init__(self, clock: Callable[[], float] = time.time, state_file: Path | None = None):
         self._desks: dict[int, Desk] = {}
         self._clock = clock
+        self._file = Path(state_file) if state_file else None
         self._asked: dict[tuple[int, int], deque] = {}       # (asker, answerer): when, in the last day
         self._told: dict[tuple[int, int], int] = {}          # (answerer, asker): the day the answerer was last told
         self._questions: dict[tuple[int, int], deque] = {}
         self._open: dict[str, Exchange] = {}                 # drafts waiting for the answering person's tap, by the buttons' id
         self._tasks: set = set()
+        self._watched: set[str] = set()                      # drafts that have a lapse timer in this process
+        self._load()
+
+    # --- what is kept across a restart ----------------------------------------------------------------------------
+    def _load(self) -> None:
+        try:
+            raw = json.loads(self._file.read_text(encoding="utf-8")) if self._file else {}
+        except (OSError, ValueError):
+            return
+        def pairs(d: Any) -> dict[tuple[int, int], Any]:
+            out = {}
+            for k, v in (d or {}).items() if isinstance(d, dict) else ():
+                try:
+                    a, b = (int(n) for n in str(k).split(":"))
+                except ValueError:
+                    continue
+                out[(a, b)] = v
+            return out
+        try:
+            self._asked = {k: deque(float(t) for t in v) for k, v in pairs(raw.get("asked")).items()}
+            self._questions = {k: deque(float(t) for t in v) for k, v in pairs(raw.get("questions")).items()}
+            self._told = {k: int(v) for k, v in pairs(raw.get("told")).items()}
+            for o in raw.get("open") or []:
+                x = Exchange(QUESTION, int(o["asker"]), int(o["answerer"]), id=str(o["id"]), state=INPUT_REQUIRED, question=str(o["question"]),
+                             draft=str(o["draft"]), called=str(o.get("called") or "the colleague"), at=float(o["at"]))
+                self._open["x" + x.id] = x
+        except (KeyError, TypeError, ValueError):
+            pass            # a file this program did not write: start empty, as before there was one
+
+    def _save(self) -> None:
+        if self._file is None:
+            return
+        since = self._clock() - 86400
+        state = {"asked": {f"{a}:{b}": [t for t in v if t >= since] for (a, b), v in self._asked.items() if v},
+                 "questions": {f"{a}:{b}": [t for t in v if t >= since] for (a, b), v in self._questions.items() if v},
+                 "told": {f"{a}:{b}": d for (a, b), d in self._told.items()},
+                 "open": [{"id": x.id, "asker": x.asker, "answerer": x.answerer, "question": x.question, "draft": x.draft,
+                           "called": x.called, "at": x.at} for x in self._open.values()]}
+        try:
+            self._file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(state), encoding="utf-8")
+            tmp.replace(self._file)
+        except OSError:
+            pass            # it still works for as long as the program runs
+
+    def _watch(self, x: Exchange) -> None:
+        """Lapse this draft two days after it was shown, counted from when it was shown and not from this start."""
+        if x.id in self._watched:
+            return
+        self._watched.add(x.id)
+        asyncio.get_running_loop().call_later(max(0.0, x.at + LAPSES_S - self._clock()),
+                                              lambda: self._tasks.add(asyncio.ensure_future(self._lapse(x))))
+
+    def resume(self) -> int:
+        """After a start, once everyone's desk is registered: take up the drafts that were waiting. Returns how many."""
+        for key, x in list(self._open.items()):
+            if x.asker not in self._desks or x.answerer not in self._desks:
+                del self._open[key]         # one of the two is no longer here
+            else:
+                self._watch(x)
+        self._save()
+        return len(self._open)
 
     def register(self, desk: Desk) -> None:
         self._desks[desk.user_id] = desk
 
     def remove(self, user_id: int) -> None:
         self._desks.pop(user_id, None)
+        gone = [k for k, x in self._open.items() if user_id in (x.asker, x.answerer)]
+        for key in gone:
+            x = self._open.pop(key)
+            x.state, x.why = CANCELED, "removed"
+            self._log(x)
+            if x.answerer == user_id:
+                try:
+                    self._tasks.add(asyncio.ensure_future(self._deliver(
+                        x, f"Your question to {x.called}'s assistant (\"{x.question}\") will not be answered: they no longer use this assistant.")))
+                except RuntimeError:
+                    pass        # no loop running: nothing to send with
+        if gone:
+            self._save()
 
     def desk(self, user_id: int) -> Desk | None:
         return self._desks.get(user_id)
@@ -229,6 +312,7 @@ class Switchboard:
         if len(seen) >= (LOOKUPS_A_DAY if kind == TIMES else QUESTIONS_A_DAY):
             return False
         seen.append(self._clock())
+        self._save()
         return True
 
     async def times(self, asker: int, answerer: int, start: datetime, end: datetime) -> Exchange:
@@ -258,6 +342,7 @@ class Switchboard:
         today = int(self._clock() // 86400)
         if x.state == COMPLETED and them.tell is not None and self._told.get((answerer, asker)) != today:
             self._told[(answerer, asker)] = today
+            self._save()
             try:
                 await them.tell(f"{me.name or 'A colleague'}'s assistant looked up when you are free. It was given busy and free times only, "
                                 "not what your meetings are or who they are with. I will not mention further lookups by them today. "
@@ -309,17 +394,19 @@ class Switchboard:
             x.draft = tidy(text)
             if status != "done" or not x.draft:
                 raise RuntimeError(f"drafting ended as {status}")
-            x.state = INPUT_REQUIRED
+            x.state, x.at = INPUT_REQUIRED, self._clock()
             self._open["x" + x.id] = x
+            self._save()            # before it is shown: a tap must never find nothing behind it
             holds = contains(x.draft, x.question)
             await them.ask_owner(f"Send this answer to {who}'s assistant?\n\nThey asked: \"{x.question}\"\n\nMy draft, from your records:\n\n{x.draft}\n\n"
                                  + (f"It contains: {holds}. " if holds else "")
                                  + "It goes exactly as shown, to them only. Decline sends nothing, and they are told you chose not to answer this way.",
                                  "x" + x.id)
             self._log(x, draft_chars=len(x.draft))
-            asyncio.get_running_loop().call_later(LAPSES_S, lambda: self._tasks.add(asyncio.ensure_future(self._lapse(x))))
+            self._watch(x)
         except Exception as e:
             self._open.pop("x" + x.id, None)
+            self._save()
             x.state, x.why = FAILED, "failed"
             them.journal.write("error", where="peers.answer", error=type(e).__name__, message=str(e)[:200])
             self._log(x)
@@ -341,6 +428,7 @@ class Switchboard:
     async def _lapse(self, x: Exchange) -> None:
         if self._open.pop("x" + x.id, None) is None:
             return
+        self._save()
         x.state, x.why = CANCELED, "lapsed"
         self._log(x)
         await self._deliver(x, f"Your question to {x.called}'s assistant (\"{x.question}\") was not answered in two days and has lapsed.")
@@ -349,10 +437,14 @@ class Switchboard:
         """The answering person tapped. None if these buttons are not a draft's; otherwise the line to show under them."""
         x = self._open.get(approval_id)
         if x is None:
-            return "This draft is no longer waiting: it lapsed, or the program restarted. Nothing was sent." if str(approval_id).startswith("x") else None
+            return "This draft is no longer waiting: it lapsed, or was already answered. Nothing was sent." if str(approval_id).startswith("x") else None
         if x.answerer != user_id:
             return ""
+        if self._clock() >= x.at + LAPSES_S:        # the timer has not fired yet, or the program was not running when it was due
+            await self._lapse(x)
+            return "This draft is no longer waiting: it lapsed. Nothing was sent."
         del self._open[approval_id]
+        self._save()
         if approved:
             x.state = COMPLETED
             self._log(x, sent_chars=len(x.draft))
