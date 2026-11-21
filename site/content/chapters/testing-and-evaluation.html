@@ -253,6 +253,26 @@ class Errand:
 </tbody>
 </table></div>
 <p>Nine tests reproduce these with stand-ins (<code>tests/test_found_in_use.py</code>). The script now counts three things apart from failures: outages, attempts that were repeated and then worked, and refusals the program made by design. Many refusals of one kind is still worth reading, since it means the model was not told a rule.</p>
+<h3>Using it as its owner would</h3>
+<p>The log shows what failed. It does not show what worked and was wrong. For that the program was used through its real chat, as a person with the job would use it: about forty messages of ordinary errands, then deliberate awkwardness (a command with no argument, a lone full stop, a reminder for yesterday, eight messages in a burst, a request to delete everything). Most held. Nine things did not, and none of them would have appeared in a log as a failure:</p>
+<div class="tbl"><table>
+<thead><tr><th>What happened</th><th>Why</th><th>What holds now</th></tr></thead>
+<tbody>
+<tr><th>A command meant for a group, typed in a private chat, was answered "that mode is on"</th><td>An unknown command went to the model, which guessed</td><td>Code answers it and says nothing was switched on</td></tr>
+<tr><th>Messages typed quickly were answered out of order</th><td>The chat library starts on several messages at once; each reached the conversation when its first pause ended</td><td>One person's messages are let in one at a time, in the order received. A tap on a button does not wait in that line</td></tr>
+<tr><th>Six answers arrived with nothing to say which question each was for</th><td>Each was sent as a new message</td><td>The answer to a message that waited is sent as a reply to it; the waiting is acknowledged once, not per message</td></tr>
+<tr><th>A reminder arrived as "Reminder: Reminder: ..." with a detail the owner never said</th><td>The model wrote the word that code adds, and elaborated</td><td>The word is removed when the reminder is stored, and the tool says to use the owner's own words</td></tr>
+<tr><th>An ordinary research request was put to the owner for approval</th><td>A search now carries a sentence on its purpose, counted against a limit set when a search was a few words</td><td>The limit covers a query and its purpose; a paragraph, a long number, or anything recognised from the owner's accounts still asks</td></tr>
+<tr><th>The model went on using a fact the owner had just removed from memory</th><td>It was still in the conversation in progress</td><td>The model is told, with the next message, that it was removed</td></tr>
+<tr><th>Sending from the assistant's own address failed with "Forbidden"</th><td>The key in the settings was made to read only</td><td>The refusal is explained in words the owner can act on. The send itself still needs a key that may send</td></tr>
+<tr><th>A read failed for asking for 100 records where 50 is the most</th><td>The model guessed a number</td><td>A read is given the most the tool allows, and told so. A change still runs with exactly what was shown</td></tr>
+<tr><th>The model offered to ask a colleague's assistant when nobody else used the copy</th><td>The tools were described without saying whether anyone was there</td><td>It is told when the owner is alone on the copy</td></tr>
+</tbody>
+</table></div>
+<p>Each has a test (<code>tests/test_found_in_use.py</code>). The first four were then tried again in the chat and held.</p>
+<p>One lesson is about the tester, not the program. A made-up founder's pitch, sent to see how filing behaved, was filed in the real database without a question, exactly as designed: additions run unasked and are reported. A test through the real chat acts on the real accounts. Anything that adds to a system that cannot delete should be tried against a copy made for testing, or not at all.</p>
+<p>What this could not reach from one account and a keyboard: a voice note and its spoken reply, a second person, and a group.</p>
+
 <p>Two limits. The grouping is by label, so two different faults that raise the same error in the same place are one kind. And writing the test for a kind is still done by hand: the script finds the work, it does not do it.</p>
 
 <h2 id="wrong">What goes wrong</h2>

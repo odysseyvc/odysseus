@@ -71,7 +71,7 @@ async def test_messages_sent_during_a_task_run_afterwards_in_the_order_they_arri
     await asyncio.sleep(0.02)
     await x.conv.handle(OWNER, "second", x.chat)
     await x.conv.handle(OWNER, "third", x.chat)
-    assert x.runner.started == ["first"] and x.chat.sent.count("Noted. I'll do this as soon as the current task is finished. Send stop to end everything.") == 2
+    assert x.runner.started == ["first"] and len([m for m in x.chat.sent if m.startswith("Noted.")]) == 1
     x.runner.release.set()
     await x.conv.wait()
     assert x.runner.started == ["first", "second", "third"]
