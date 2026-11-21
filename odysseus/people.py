@@ -118,6 +118,16 @@ class People:
         return gone
 
 
+GROUP_COMMANDS = ("/stop", "/status")
+FIRM_ON = ("I am now this group's assistant. Mention me or reply to one of my messages and I will answer here, for everyone to see. "
+           "I hear only people who have an assistant of their own with me, and only what is addressed to me. I keep my own notes for this "
+           "group and can search the web. I have nobody's mail or calendar, and nothing from anyone's private chat with me. "
+           "The host can send /firm attio on to let me read the firm's database here, and /firm off to switch me off.")
+FIRM_ATTIO_ON = ("I can now read the firm's database here, signed in as the host. Anything I would add or change there is put to this "
+                 "group first, and any member here can approve it. /firm attio off takes this away.")
+FIRM_ATTIO_OFF = "I can no longer reach the firm's database from this group."
+
+
 class House:
     """Stands where the one conversation stood. Each message goes to the assistant of the person who sent it.
 
@@ -126,8 +136,18 @@ class House:
     """
 
     def __init__(self, host_id: int, people: People, journal: Journal, assemble: Callable[[int], Awaitable[Any]],
-                 link: Callable[[str], Awaitable[str]], most: int = 10, clock: Callable[[], float] = time.time, board: Any = None):
+                 link: Callable[[str], Awaitable[str]], most: int = 10, clock: Callable[[], float] = time.time, board: Any = None,
+                 firm: Callable[[int, bool], Awaitable[Any]] | None = None, group_file: Any = None):
         self._host, self._people, self._journal, self._assemble, self._link = host_id, people, journal, assemble, link
+        # The firm's own assistant, in one group chat the host chose (see handle_group). `firm(chat_id, with_attio)` builds it.
+        self._firm_build, self._group_file, self._firm = firm, group_file, None
+        self._group: dict[str, Any] = {}
+        try:
+            saved = json.loads(group_file.read_text(encoding="utf-8")) if group_file is not None else {}
+            if isinstance(saved, dict) and isinstance(saved.get("id"), int):
+                self._group = {"id": saved["id"], "attio": bool(saved.get("attio"))}
+        except (OSError, ValueError):
+            pass
         self._board = board                       # the one way between two people's assistants (peers.py), if there is one
         self._most, self._clock = most, clock
         self._at: dict[int, Any] = {}             # the assistant of each person who may speak
@@ -280,6 +300,105 @@ class House:
         except Exception as e:
             self._journal.write("error", where="people.tell_host", error=type(e).__name__)
 
+    # --- the firm's assistant, in one group -----------------------------------------------------------------------
+    #
+    # Everything above is one person and one assistant. A group chat is several people, so it gets an assistant of its
+    # own: its own folder, memory and budget, no mail and no calendar, and none of any member's records. It is switched
+    # on by the host typing /firm on in the group, and there is only ever one such group.
+    #
+    # Who it hears: people who have an assistant here, and only in messages addressed to it (a mention, a reply to it,
+    # or a command). Anyone else in the group, and anything said to the room, is not passed to a model or logged.
+    # Its questions are put to the group, and any member here may answer them.
+
+    def _save_group(self) -> None:
+        if self._group_file is None:
+            return
+        try:
+            self._group_file.parent.mkdir(parents=True, exist_ok=True)
+            self._group_file.write_text(json.dumps(self._group), encoding="utf-8")
+        except OSError:
+            pass
+
+    async def start_firm(self) -> bool:
+        """At start-up: bring back the group assistant, if the host had switched one on."""
+        if not self._group or self._firm_build is None or self._firm is not None:
+            return False
+        try:
+            self._firm = await self._firm_build(self._group["id"], bool(self._group.get("attio")))
+            return True
+        except Exception as e:
+            self._journal.write("error", where="people.firm", error=type(e).__name__, message=str(e)[:200])
+            return False
+
+    async def _stop_firm(self) -> None:
+        firm, self._firm = self._firm, None
+        if firm is not None:
+            try:
+                await firm.close()
+            except Exception as e:
+                self._journal.write("error", where="people.firm_close", error=type(e).__name__)
+
+    async def _firm_command(self, chat_id: int, words: list[str], chat: Any) -> None:
+        what = " ".join(w.lower() for w in words) or "on"
+        if self._firm_build is None:
+            await chat.send("A group assistant is not available in this copy.")
+            return
+        here = bool(self._group) and self._group.get("id") == chat_id
+        if what == "off":
+            if not here:
+                await chat.send("I am not switched on in this group.")
+                return
+            await self._stop_firm()
+            self._group = {}
+            self._save_group()
+            self._journal.write("firm", outcome="off")
+            await chat.send("Off. I will not answer here any more. What I had noted for this group is kept in its folder on the host's machine.")
+            return
+        if what in ("on", "attio on", "attio off"):
+            if self._group and not here:
+                await chat.send("I already serve another group. Send /firm off there first: there is one group assistant.")
+                return
+            if what != "on" and not here:
+                await chat.send("Send /firm on here first.")
+                return
+            attio = (what == "attio on") if what != "on" else bool(self._group.get("attio"))
+            await self._stop_firm()
+            self._group = {"id": chat_id, "attio": attio}
+            self._save_group()
+            if not await self.start_firm():
+                await chat.send("I could not start here. The details are in the log.")
+                return
+            self._journal.write("firm", outcome=what)
+            await chat.send(FIRM_ATTIO_ON if what == "attio on" else FIRM_ATTIO_OFF if what == "attio off" else FIRM_ON)
+            return
+        await chat.send("Send /firm on, /firm off, /firm attio on or /firm attio off.")
+
+    async def handle_group(self, user_id: int, chat_id: int, text: str, chat: Any, addressed: bool = False) -> None:
+        stripped = (text or "").strip()
+        words = stripped.split()
+        command = words[0].lower().split("@")[0] if words and words[0].startswith("/") else ""
+        if command == "/firm":
+            if user_id == self._host:
+                await self._firm_command(chat_id, words[1:], chat)
+            return                                  # anyone else typing it gets no reply
+        if not self._group or chat_id != self._group.get("id") or self._firm is None or user_id not in self._at or not stripped \
+                or not (addressed or command):
+            return                                  # not this group, not a member, or not said to the assistant: never heard
+        if command and command not in GROUP_COMMANDS:
+            await chat.send("Commands work only in a private chat with me. Here, ask me in words, or send /stop or /status.")
+            return
+        self._heard[user_id] = self._clock()
+        name = (self._people.members.get(str(user_id), {}).get("name") or ("the host" if user_id == self._host else "a member"))
+        self._journal.write("firm", outcome="heard", user_id=user_id)
+        await self._firm.conversation.handle(chat_id, command or f"[In the firm's group chat. {clean_name(name)} says:]\n{stripped}", chat)
+
+    async def handle_group_decision(self, user_id: int, chat_id: int, approval_id: str, approved: bool, thread: bool = False) -> str:
+        """A tap on one of the group assistant's questions. Any member here may answer; nobody else's tap does anything."""
+        if not self._group or chat_id != self._group.get("id") or self._firm is None or user_id not in self._at:
+            return ""
+        self._journal.write("firm", outcome="approved" if approved else "declined", user_id=user_id)
+        return await self._firm.conversation.handle_decision(chat_id, approval_id, approved)
+
     # --- what the channel calls: the same names as one conversation has -----------------------------------------
     async def handle(self, user_id: int, text: str, chat: Any, **more: Any) -> None:
         a = self._at.get(user_id)
@@ -341,5 +460,6 @@ class House:
         return await a.conversation.handle_choice(user_id, *args, **more) if a is not None else ""
 
     async def close(self) -> None:
+        await self._stop_firm()
         for a in list(self._at.values()):
             await a.close()

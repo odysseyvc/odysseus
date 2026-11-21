@@ -201,7 +201,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     apps = me.apps = Apps(connector, journal, now, settings.tz) if connector else None
     anyapp = AnyApp(connector, journal) if connector else None      # every other app in the connector's catalogue
     # Attio, the firm's customer database, through Attio's own server. It exists once the owner has signed in (scripts/connect_attio.py).
-    attio_tokens = FileTokens(settings.data_dir / "attio.json")
+    attio_tokens = FileTokens(settings.attio_file or settings.data_dir / "attio.json")
     attio = Attio(McpBackend(attio_tokens), journal) if attio_tokens.signed_in() else None
     services = connected_services(settings.data_dir, journal)       # other services with a server of their own, once signed in to
     mark("services")
@@ -483,6 +483,14 @@ def member_settings(settings: Settings, user_id: int) -> Settings:
                    whatsapp_token="", whatsapp_phone_id="", whatsapp_app_secret="", owner_whatsapp="")
 
 
+def firm_settings(settings: Settings, chat_id: int, attio: bool) -> Settings:
+    """The host's settings as the group's assistant gets them: the group is who it answers, a folder of its own, a
+    member's daily limit, and no key for anybody's mail, calendar, apps, mailbox or browser. With `attio`, it reads the
+    firm's database through the host's sign-in: one sign-in, in one file, renewed in one place."""
+    return replace(member_settings(settings, chat_id), data_dir=settings.data_dir / "people" / "group", composio_api_key="",
+                   agentmail_api_key="", browser_use_api_key="", owner_emails=(), attio_file=(settings.data_dir / "attio.json") if attio else None)
+
+
 async def main() -> int:
     marks = {"imports": round(time.monotonic() - _BEGAN, 1)}      # seconds since the process began, at each stage of start-up
     try:
@@ -530,7 +538,12 @@ async def main() -> int:
         return f"https://t.me/{(await bot.get_me()).username}?start={code}"
     def build(user_id: int):
         return assemble(settings, shared, True) if user_id == settings.owner_id else assemble(member_settings(settings, user_id), shared, False)
-    house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max, board=board)
+    async def build_firm(chat_id: int, attio: bool):
+        # No way to or from any person's assistant: it is not on the switchboard, and connecting a service does not rebuild it.
+        apart = SimpleNamespace(**{**vars(shared), "board": None, "rebuild": lambda user_id: None})
+        return await assemble(firm_settings(settings, chat_id, attio), apart, False)
+    house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max, board=board,
+                  firm=build_firm, group_file=settings.data_dir / "group.json")
     house.add(settings.owner_id, host)
     shared.rebuild = house.rebuild_soon
     for user_id in people.ids()[:settings.people_max - 1]:
@@ -540,6 +553,8 @@ async def main() -> int:
             host.journal.write("error", where="people.start", user_id=user_id, error=type(e).__name__, message=str(e)[:200])
     if people.ids():
         host.journal.write("people", serving=len(people.ids()) + 1)
+    if await house.start_firm():
+        host.journal.write("firm", outcome="started")
     waiting = board.resume()        # drafts that were waiting for a colleague's tap when the program last stopped
     if waiting:
         host.journal.write("exchange", resumed=waiting)

@@ -92,7 +92,7 @@ def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False, re
     repeat = (args.get("repeat") or "once").strip().lower()
     if repeat not in REPEATS:
         raise ScheduleError("unknown repeat")
-    rhythm = {"once": "Once", "hourly": "Every hour", "daily": "Every day", "weekdays": "Every weekday", "weekly": "Every week"}[repeat]
+    rhythm = {"once": "Once", "half-hourly": "Every half hour", "hourly": "Every hour", "daily": "Every day", "weekdays": "Every weekday", "weekly": "Every week"}[repeat]
     first = when.strftime("%a %d %b %Y at %H:%M")
     text = " ".join(str(args.get("text", "")).split())
     return (f"Set up this routine?\n\n{rhythm}, {'on' if repeat == 'once' else 'starting'} {first}.\n"

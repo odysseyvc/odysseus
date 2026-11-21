@@ -435,3 +435,10 @@ async def test_the_routine_agent_is_told_what_it_sent_before_and_gets_a_fresh_al
     assert p.index("ROUTINE INSTRUCTIONS") < p.index("WHAT THIS ROUTINE SENT") and p.endswith("[Tuesday 17 November 2026, 10:00]")
     await run("Send the digest.")
     assert "WHAT THIS ROUTINE SENT" not in clients[1].prompts[0]
+
+
+def test_a_job_can_repeat_every_half_hour():
+    from odysseus.schedule import REPEATS
+    at = datetime(2026, 11, 20, 9, 0)
+    assert "half-hourly" in REPEATS and next_occurrence(at, "half-hourly", at) == datetime(2026, 11, 20, 9, 30)
+    assert next_occurrence(at, "half-hourly", datetime(2026, 11, 20, 11, 10)) == datetime(2026, 11, 20, 11, 30), "after a gap it resumes on its rhythm, once"

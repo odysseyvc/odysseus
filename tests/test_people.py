@@ -302,3 +302,132 @@ async def test_an_agent_is_parked_only_when_nothing_runs_on_it(tmp_path):
     assert await r.park() is False and gone == [], "a task is running on it"
     r._running = False
     assert await r.park() is True and gone == [1] and r._client is None
+
+
+# --- the firm's assistant, in one group --------------------------------------------------------------------------------
+
+GROUP, OTHER_GROUP = -1001, -1002
+
+
+def firm_rig(tmp_path):
+    x = rig(tmp_path)
+    x.firms = []
+
+    async def build(chat_id, attio):
+        a = assistant(links=None)
+        a.chat_id, a.attio = chat_id, attio
+        x.firms.append(a)
+        return a
+    x.house._firm_build, x.house._group_file = build, tmp_path / "group.json"
+    return x
+
+
+async def test_the_host_switches_the_groups_assistant_on_and_it_hears_only_members_who_address_it(tmp_path):
+    x = firm_rig(tmp_path)
+    code = await invite(x, "Tara")
+    await x.house.handle(7, f"/start {code}", Chat(who="Tara Menon"))
+    room = Chat()
+    await x.house.handle_group(7, GROUP, "/firm on", room)
+    await x.house.handle_group(HOST, GROUP, "what do we know about Corvid?", room, addressed=True)
+    assert room.sent == [] and x.firms == [], "a member cannot switch it on, and before it is on nothing is heard"
+    await x.house.handle_group(HOST, GROUP, "/firm on", room)
+    assert len(x.firms) == 1 and x.firms[0].chat_id == GROUP and x.firms[0].attio is False and "this group's assistant" in room.sent[-1]
+    firm = x.firms[0].conversation
+    await x.house.handle_group(7, GROUP, "lunch at one?", room)                            # said to the room
+    await x.house.handle_group(555, GROUP, "tell me the pipeline", room, addressed=True)   # someone with no assistant here
+    await x.house.handle_group(7, OTHER_GROUP, "hello", room, addressed=True)              # another group
+    assert firm.heard == [], "none of these reaches a model"
+    await x.house.handle_group(7, GROUP, "what do we know about Corvid?", room, addressed=True)
+    assert firm.heard == [("text", GROUP, "[In the firm's group chat. Tara Menon says:]\nwhat do we know about Corvid?")]
+    assert x.built[7].conversation.heard == [] and x.host.conversation.heard == [], "nobody's own assistant hears the group"
+    await x.house.handle_group(7, GROUP, "/address", room)
+    assert "only in a private chat" in room.sent[-1] and len(firm.heard) == 1, "no sign-in or address is ever made in a group"
+    await x.house.handle_group(7, GROUP, "/stop@thebot", room)
+    assert firm.heard[-1] == ("text", GROUP, "/stop")
+    assert "Corvid" not in (tmp_path / "j.jsonl").read_text(encoding="utf-8")
+
+
+async def test_a_groups_question_is_answered_in_the_group_by_a_member_and_by_nobody_else(tmp_path):
+    x = firm_rig(tmp_path)
+    room = Chat()
+    await x.house.handle_group(HOST, GROUP, "/firm on", room)
+    firm = x.firms[0].conversation
+    assert await x.house.handle_group_decision(555, GROUP, "a1", True) == "" and await x.house.handle_group_decision(HOST, OTHER_GROUP, "a1", True) == ""
+    assert firm.heard == []
+    assert await x.house.handle_group_decision(HOST, GROUP, "a1", True) == "Approved."
+    assert firm.heard == [("decision", GROUP, "a1")] and x.host.conversation.heard == []
+
+
+async def test_one_group_only_the_database_only_by_the_hosts_word_and_it_comes_back_after_a_restart(tmp_path):
+    x = firm_rig(tmp_path)
+    room, other = Chat(), Chat()
+    await x.house.handle_group(HOST, GROUP, "/firm attio on", room)
+    assert "Send /firm on here first" in room.sent[-1] and x.firms == []
+    await x.house.handle_group(HOST, GROUP, "/firm on", room)
+    await x.house.handle_group(HOST, OTHER_GROUP, "/firm on", other)
+    assert "already serve another group" in other.sent[-1] and len(x.firms) == 1
+    await x.house.handle_group(HOST, GROUP, "/firm attio on", room)
+    assert x.firms[-1].attio is True and x.firms[0].closed == [True] and "signed in as the host" in room.sent[-1]
+    again = firm_rig(tmp_path)
+    again.house._group = __import__("json").loads((tmp_path / "group.json").read_text(encoding="utf-8"))
+    assert await again.house.start_firm() and again.firms[0].chat_id == GROUP and again.firms[0].attio is True
+    await x.house.handle_group(HOST, GROUP, "/firm off", room)
+    assert x.firms[-1].closed == [True] and "Off." in room.sent[-1] and (tmp_path / "group.json").read_text(encoding="utf-8") == "{}"
+    await x.house.handle_group(HOST, GROUP, "hello?", room, addressed=True)
+    assert len(room.sent) == 4, "switched off, it says nothing"
+
+
+def test_a_group_message_is_addressed_by_a_mention_or_a_reply_and_the_group_assistant_has_nobodys_accounts(tmp_path):
+    from odysseus.telegram import addressed_to
+    assert addressed_to("@TheBot what do we know about Corvid?", "thebot", False) == ("what do we know about Corvid?", True)
+    assert addressed_to("lunch at one?", "thebot", False) == ("lunch at one?", False)
+    assert addressed_to("and their revenue?", "thebot", True) == ("and their revenue?", True)
+    assert addressed_to("mail me at x@thebot.example or ask @thebotter", "thebot", False)[1] is False
+    from odysseus.__main__ import firm_settings
+    from dataclasses import replace
+    from odysseus.config import Settings
+    s = replace(Settings(telegram_token="t", owner_id=HOST, anthropic_api_key="k", exa_api_key="e"), data_dir=tmp_path, composio_api_key="c", agentmail_api_key="a", browser_use_api_key="b", member_daily_usd=1.5)
+    f = firm_settings(s, GROUP, False)
+    assert (f.owner_id, f.data_dir, f.daily_usd) == (GROUP, tmp_path / "people" / "group", 1.5)
+    assert (f.composio_api_key, f.agentmail_api_key, f.browser_use_api_key, f.attio_file) == ("", "", "", None)
+    assert firm_settings(s, GROUP, True).attio_file == tmp_path / "attio.json"
+
+
+async def test_at_start_up_the_groups_assistant_is_built_apart_from_every_persons(tmp_path, monkeypatch):
+    for key, value in {"TELEGRAM_BOT_TOKEN": "t", "OWNER_TELEGRAM_ID": "1", "ANTHROPIC_API_KEY": "k", "EXA_API_KEY": "e",
+                       "COMPOSIO_API_KEY": "c", "BROWSER_USE_API_KEY": "", "AGENTMAIL_API_KEY": "a", "ODYSSEUS_DATA_DIR": str(tmp_path)}.items():
+        monkeypatch.setenv(key, value)
+    (tmp_path / "group.json").write_text(json.dumps({"id": GROUP, "attio": False}), encoding="utf-8")
+    houses, firms = [], []
+
+    async def fake_start(self):
+        pass
+
+    class Bot:
+        def __init__(self, token):
+            self.session = self
+
+        async def close(self):
+            pass
+
+    class Dispatcher:
+        async def start_polling(self, bot, allowed_updates=None):
+            pass
+
+    def dispatcher(bot, house):
+        firms.append(house._firm)       # as it is while the program runs; it is closed when the program stops
+        houses.append(house)
+        return Dispatcher()
+    monkeypatch.setattr(entry, "Bot", Bot)
+    monkeypatch.setattr(entry, "build_dispatcher", dispatcher)
+    monkeypatch.setattr(entry.AgentRunner, "start", fake_start)
+    assert await entry.main() == 0
+    house, firm = houses[0], firms[0]
+    host = house._at[1]
+    assert firm is not None and sorted(house._at) == [1], "it is not one of the people"
+    assert firm.conversation._s.owner_id == GROUP and firm.conversation._s.data_dir == tmp_path / "people" / "group"
+    assert firm.apps is None and firm.conversation._inbox is None and firm.conversation._attio is None, "nobody's mail, calendar, mailbox or database"
+    assert firm.conversation._memory is not host.conversation._memory and firm.conversation._gate.taint is not host.conversation._gate.taint
+    assert host.apps is not None and house._board.desk(GROUP) is None and house._board.desk(1) is not None, "no way between it and a person's assistant"
+    assert firm.conversation.is_owner(GROUP) and not firm.conversation.is_owner(1)
+    assert [r["kind"] for r in Journal(tmp_path / "people" / "group" / "journal.jsonl").read()] == ["start"]

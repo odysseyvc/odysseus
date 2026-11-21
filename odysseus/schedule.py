@@ -34,7 +34,9 @@ from typing import Any, Awaitable, Callable, Protocol
 
 from .journal import Journal, Ledger
 
-REPEATS = ("once", "hourly", "daily", "weekdays", "weekly")
+# "half-hourly" is the standing check: a routine that looks every thirty minutes and says nothing unless there is something
+# to say. It is a routine like any other: read-only, held to the day's budget, cancelled with one command.
+REPEATS = ("once", "half-hourly", "hourly", "daily", "weekdays", "weekly")
 MAX_JOBS = 50
 MAX_TEXT = 600
 NO_REPLY = "NO_REPLY"       # what a routine answers when there is nothing worth sending
@@ -80,7 +82,7 @@ def next_occurrence(after: datetime, repeat: str, now: datetime) -> datetime | N
     """The first time later than `now` on this job's rhythm, or None for a one-off."""
     if repeat == "once":
         return None
-    step = {"hourly": timedelta(hours=1), "daily": timedelta(days=1), "weekdays": timedelta(days=1),
+    step = {"half-hourly": timedelta(minutes=30), "hourly": timedelta(hours=1), "daily": timedelta(days=1), "weekdays": timedelta(days=1),
             "weekly": timedelta(days=7)}[repeat]
     t = after + step
     while t <= now or (repeat == "weekdays" and t.weekday() >= 5):

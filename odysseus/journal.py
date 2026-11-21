@@ -97,6 +97,7 @@ class Journal:
 # makers' public price lists, not measured, and should be checked against an invoice.
 OCR_USD_PER_PAGE = 0.002
 VOICE_USD_PER_MINUTE = 0.003
+SPEECH_USD_PER_CHAR = 13 / 1_000_000      # the maker's list price for text turned into speech
 
 
 def cost_of(rec: dict[str, Any]) -> float:
@@ -108,6 +109,7 @@ def cost_of(rec: dict[str, Any]) -> float:
                service such as X, estimated from how many items came back and the service's published prices
     file       a file read by the text-recognition service (estimated per page)
     voice      a voice note transcribed (estimated per minute)
+    speech     a reply spoken (estimated per character)
 
     The connector for mail, calendar and apps is billed by subscription, not per call, and is not counted.
     """
@@ -121,6 +123,8 @@ def cost_of(rec: dict[str, Any]) -> float:
             return float(rec["pages"]) * OCR_USD_PER_PAGE
         if kind == "voice" and rec.get("ok"):
             return float(rec.get("seconds") or 0) / 60 * VOICE_USD_PER_MINUTE
+        if kind == "speech" and rec.get("ok"):
+            return float(rec.get("chars") or 0) * SPEECH_USD_PER_CHAR
     except (TypeError, ValueError):
         pass
     return 0.0

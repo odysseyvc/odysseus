@@ -537,6 +537,21 @@ class Conversation:
         await chat.send(f'Heard: "{heard[:1500]}"')
         await self.handle(user_id, f"{voice_mod.VOICE_NOTE}\n\n{heard}", chat)
 
+    async def _speak(self, text: str, chat: Chat) -> None:
+        """Say the reply aloud as well. Never instead of the written one, and a failure here is only logged."""
+        say, send = getattr(self._voice, "say", None), getattr(chat, "send_voice", None)
+        words = voice_mod.speakable(text)
+        if say is None or send is None or getattr(self._s, "speak", "voice") == "off" or len(words) < 2 or self._ledger.spent_today() >= self._s.daily_usd:
+            return
+        try:
+            sound = await asyncio.wait_for(asyncio.to_thread(say, words), 60)
+            if not sound:
+                raise VoiceError("no sound came back")
+            await send(sound)
+            self._journal.write("speech", ok=True, chars=len(words), bytes=len(sound))
+        except Exception as e:
+            self._journal.write("speech", ok=False, chars=len(words), error=f"{type(e).__name__}: {str(e)[:120]}")
+
     async def _offer_facts(self, facts: list[str], chat: Chat, where: str) -> None:
         for fact in facts:
             if fact.lower() in self._proposed:
@@ -1080,6 +1095,8 @@ class Conversation:
                 await chat.send(part)
                 sent += 1
             self._journal.write("reply", parts=sent, chars=len(body))
+            if not bg and outcome.status == "done" and voice_mod.VOICE_NOTE in prompt:
+                await self._speak(outcome.text, chat)       # the owner spoke, so the reply is spoken too, after it is written
             await self._ask_verdict(outcome.text, chat)
             if not bg and getattr(runner, "compacted", False) is True:
                 # The conversation grew long enough to be condensed during this task. What the owner said about themselves

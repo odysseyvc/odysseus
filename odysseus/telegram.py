@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, F
@@ -40,6 +41,13 @@ class TelegramChat:
         else:
             await self._bot.send_document(self._chat_id, what, caption=caption[:1000] or None, parse_mode=None)
 
+    async def send_voice(self, data: bytes) -> None:
+        """A spoken reply. Telegram shows it as a voice note only if it is Opus in an Ogg file; anything else goes as a sound file."""
+        if data[:4] == b"OggS":
+            await self._bot.send_voice(self._chat_id, BufferedInputFile(data, filename="reply.ogg"))
+        else:
+            await self._bot.send_audio(self._chat_id, BufferedInputFile(data, filename="reply.opus"))
+
     async def send(self, text: str) -> None:
         # Plain text: no parse mode, so nothing the model writes is read as markup.
         # No link previews: to make one Telegram fetches the link, and some links the program sends (a sign-in link) are
@@ -77,6 +85,14 @@ def _choices(approval_id: str, options: list[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=o[:40], callback_data=f"ap:{approval_id}:c{i}")] for i, o in enumerate(options[:8])])
 
 
+def addressed_to(text: str, username: str, is_reply_to_me: bool) -> tuple[str, bool]:
+    """A group message with the assistant's own name taken out, and whether it was said to the assistant."""
+    mention = re.compile(rf"(?i)(?<![\w@])@{re.escape(username)}\b") if username else None
+    named = bool(mention and mention.search(text))
+    clean = " ".join(mention.sub(" ", text).split()) if named else text.strip()
+    return clean, named or is_reply_to_me
+
+
 def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     dp = Dispatcher()
     told_late = [0.0]
@@ -103,6 +119,22 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
             return
         user_id = message.from_user.id if message.from_user else 0
         await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, who=message.from_user.full_name if message.from_user else ""))
+
+    # One group, if the host switched the firm's assistant on in it (people.House.handle_group). Text only. Whether a
+    # message is addressed to the assistant is decided here, from what Telegram says: a mention of its name, or a reply
+    # to one of its own messages. Everything else said in the group is dropped there without being read or logged.
+    @dp.message(F.chat.type.in_({"group", "supergroup"}), F.text)
+    async def on_group_text(message: Message) -> None:
+        if not hasattr(conversation, "handle_group") or message.from_user is None or message.from_user.is_bot:
+            return
+        sent = message.date if message.date.tzinfo else message.date.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - sent).total_seconds() > STALE_AFTER_S:
+            return
+        me = await bot.me()
+        text, addressed = addressed_to(message.text or "", me.username or "",
+                                       bool(message.reply_to_message and message.reply_to_message.from_user
+                                            and message.reply_to_message.from_user.id == me.id))
+        await conversation.handle_group(message.from_user.id, message.chat.id, text, TelegramChat(bot, message.chat.id), addressed=addressed)
 
     # Photos and documents. The file is fetched only for the owner; conversation.py decides everything else.
     @dp.message(F.chat.type == "private", F.photo | F.document)
@@ -154,7 +186,13 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
     @dp.callback_query(F.data.startswith("ap:"))
     async def on_tap(callback: CallbackQuery) -> None:
         _, approval_id, answer = (callback.data or "::").split(":", 2)
-        if answer[:1] == "c" and answer[1:].isdigit():
+        where = callback.message.chat if callback.message is not None else None
+        if where is not None and where.type != "private":
+            # A question the group's assistant put to the group. It is answered there, by a member, and never reaches
+            # anyone's own assistant.
+            line = (await conversation.handle_group_decision(callback.from_user.id, where.id, approval_id, answer in ("y", "t"))
+                    if hasattr(conversation, "handle_group_decision") and answer in ("y", "n", "t") else "")
+        elif answer[:1] == "c" and answer[1:].isdigit():
             line = await conversation.handle_choice(callback.from_user.id, approval_id, int(answer[1:]))
         elif answer == "t":
             line = await conversation.handle_decision(callback.from_user.id, approval_id, True, thread=True)
