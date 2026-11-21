@@ -324,6 +324,11 @@ class House:
 
     async def handle_decision(self, user_id: int, *args: Any, **more: Any) -> str:
         a = self._at.get(user_id)
+        if a is not None and self._board is not None and args:
+            # A draft answer to a colleague's assistant, waiting for this person's tap (peers.py). Code sends it; no model.
+            line = await self._board.decide(user_id, str(args[0]), bool(args[1]) if len(args) > 1 else bool(more.get("approved")))
+            if line is not None:
+                return line
         return await a.conversation.handle_decision(user_id, *args, **more) if a is not None else ""
 
     async def handle_choice(self, user_id: int, *args: Any, **more: Any) -> str:

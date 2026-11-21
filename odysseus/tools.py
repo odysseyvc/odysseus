@@ -242,6 +242,16 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(_name("run_code"), ALLOW)
     # Common free times with colleagues (peers.py): code on both sides, busy blocks only, and only the intersection comes back.
     gate.rule(_name("times_find"), ALLOW)
+    # A question to a colleague's assistant (peers.py) leaves the owner's side. Like a search, it goes unasked unless it
+    # carries details recognised from the owner's accounts, or more that is not the owner's own words than may leave unasked.
+    def ask_question(a: dict[str, Any]) -> str:
+        found, q = taint.leaked(str(a.get("question", ""))), " ".join(str(a.get("question", "")).split())
+        return (f"Put this question to {str(a.get('person', '')).strip()}'s assistant? "
+                + (f"It contains details that came from your mail, calendar or apps: {', '.join(found)}." if found
+                   else f"I have read your mail, calendar or apps, and {taint.spill(q) or 'this is more than I send unasked'}.")
+                + f"\n\n{q}\n\nThey will see it exactly as shown.")
+    gate.rule(_name("colleague_ask"), lambda a: ASK if taint.leaked(str(a.get("question", ""))) or taint.spill(str(a.get("question", ""))) else ALLOW,
+              ask_question)
     gate.rule(_name("files_send"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:

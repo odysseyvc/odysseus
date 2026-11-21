@@ -281,14 +281,30 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
             shelf, lambda entry: deliver(shelf, entry, own_chat))
 
     # Asking a colleague's assistant (peers.py): this person's desk at the switchboard, and the tool that uses it.
-    peer_tools = None
+    peer_tools = drafter = None
     board = getattr(shared, "board", None)
     if board is not None:
         from .peers import Desk, Trust
+        from .peers import MATERIAL as PEER_MATERIAL
+        from .routines import make_draft_runner
+        # Drafting an answer to a colleague's question: an agent of its own that can read this person's records and
+        # nothing else. It becomes a process only when a question arrives.
+        drafter = make_draft_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
+                                                                         services=services),
+                                    memory, now, with_apps=apps is not None, services=services, attio=attio)
+
+        async def receive(text: str, private: str = "") -> None:
+            # A colleague's answer, or word that none is coming. It goes to this person's chat as written by code around
+            # the colleague's approved text, and the model is shown it later as other people's writing (record_delivery).
+            if private:
+                gate.taint.add(private, PEER_MATERIAL)
+            await own_chat.send(text)
+            late["c"].record_delivery(text)
         board.register(Desk(settings.owner_id, shared.name_of(settings.owner_id), Trust(settings.data_dir / "trust.json"), journal,
-                            busy=apps.busy_between if apps is not None else None, tell=own_chat.send))
-        if apps is not None:
-            peer_tools = board.handlers(settings.owner_id, now, settings.tz)
+                            busy=apps.busy_between if apps is not None else None, tell=own_chat.send,
+                            spent=ledger.spent_today, daily_usd=settings.daily_usd, receive=receive, draft=drafter, ask_owner=own_chat.ask))
+        peer_tools = board.handlers(settings.owner_id, now, settings.tz)
+        me.closers.append(drafter.runner.close)
 
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
@@ -445,7 +461,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         me.closers.append(leads_runner.runner.close)
     me.closers += [watch_runner.runner.close, runner.close, *(w.close for w in workers), run_routine.runner.close]
     me.gate = gate
-    me.agents = [runner, *workers, run_routine.runner, watch_runner.runner, *(r.runner for r in (brief_runner, leads_runner, triage) if r is not None)]
+    me.agents = [runner, *workers, run_routine.runner, watch_runner.runner, *(r.runner for r in (brief_runner, leads_runner, triage, drafter) if r is not None)]
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me
