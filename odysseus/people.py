@@ -51,7 +51,8 @@ WELCOME = ("You're in. I'm an assistant, and this chat is yours alone: nobody el
 CONNECT = "To let me read your mail and calendar, sign in to each. Then just send me a message."
 NO_ACCOUNTS = "Mail and calendar are not set up on this copy, so there is nothing to sign in to yet."
 HOST_HELP = ("Hosting: /invite makes a link for one new person (add a note to remember who it was for). /people lists who is here. "
-             "/remove and an id stops that person's assistant.")
+             "/remove and an id stops that person's assistant. To give a group chat an assistant of its own, add me to the group and send "
+             "/firm on there; /firm off switches it off.")
 
 
 def _hash(code: str) -> str:
