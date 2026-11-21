@@ -18,6 +18,7 @@ from .closing import SUMMARY_NOTE
 from .config import Settings
 from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
+from .offers import Offers
 from . import deckview as deckview_mod
 from .reading import Reader
 from . import links as links_mod
@@ -115,7 +116,10 @@ class Conversation:
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
         self._files = files                # what the owner sent, kept to be handed back: files.py
-        self._offers: dict[str, Any] = {}       # what the program has put to the owner, by the id on its buttons: a fact to save, or work to run
+        # What the program has put to the owner, by the id on its buttons: a fact to save, or work to run. Kept in a file,
+        # so that a question still waiting when the program restarts can still be answered (offers.py).
+        self._offers: dict[str, Any] = Offers(settings.data_dir / "offers.json")
+        self.own_chat: Any = None       # the owner's own chat, for work offered before a restart: set by the program
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
@@ -542,9 +546,12 @@ class Conversation:
             # A piece of work the program proposed (capture.py). It runs only on this tap, as an ordinary task, with what
             # the program found handed over as material that other people wrote.
             prompt, material, chat = self._offers.pop(approval_id)
-            self._journal.write("offer", accepted=approved)
+            chat = chat or self.own_chat        # offered before a restart: the chat it was offered in is not kept
+            self._journal.write("offer", accepted=approved, **({} if chat is not None else {"lost": True}))
             if not approved:
                 return "Left alone."
+            if chat is None:
+                return "I can no longer run this. Please ask me again."
             asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material, background=True))
             return "Approved. Working on it now."
         if approval_id in self._offers:
@@ -929,6 +936,9 @@ class Conversation:
                     await chat.ask(f'From our earlier conversation. Save this to memory?\n\n"{fact}"', offer)
                 except Exception:
                     self._offers.pop(offer, None)
+        # The day's budget is a ceiling on this task too, not only a threshold for starting it: the task is ended when
+        # what it has spent reaches what was left of the day when it began or since (agent.py).
+        runner.day_room = lambda: self._s.daily_usd - self._ledger.spent_today()
         try:
             if bg:
                 await runner.forget_session()       # each job in the background starts clean
@@ -964,6 +974,7 @@ class Conversation:
         notes = {
             "stopped": "Stopped.",
             "budget": f"I ended this task because it reached its budget of ${self._s.task_usd:.2f}.",
+            "day_budget": f"I ended this task because today's budget of ${self._s.daily_usd:.2f} is used up.",
             "turn_limit": f"I ended this task because it reached its limit of {self._s.max_turns} steps.",
             "error": "Something went wrong and I could not finish. The details are in the log.",
         }

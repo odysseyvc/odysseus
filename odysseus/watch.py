@@ -176,7 +176,7 @@ class ComposioTriggers:
     """The connector's triggers for one owner. Events arrive over a connection this program opens."""
 
     def __init__(self, api_key: str, user_id: str):
-        self._api_key, self._user_id, self._client = api_key, user_id, None
+        self._api_key, self._user_id, self._client, self._subscription = api_key, user_id, None, None
 
     def _c(self):
         if self._client is None:
@@ -189,12 +189,21 @@ class ComposioTriggers:
             self._c().triggers.create(slug, user_id=self._user_id)       # creating one that exists returns the existing one
 
     def listen(self, on_event: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
-        subscription = self._c().triggers.subscribe()
+        subscription = self._subscription = self._c().triggers.subscribe()
 
         @subscription.handle(user_id=self._user_id)
         def _(event):       # called on the library's own thread
             on_event(dict(event))
         return subscription.stop
+
+    def alive(self) -> bool:
+        """Whether the connection opened by listen() is still there. The library reconnects by itself after an ordinary
+        drop; this is False once it has given up, after which no event will ever arrive on it."""
+        s = self._subscription
+        return s is not None and not s.has_errored()
+
+
+DIED_TOLD_EVERY = timedelta(hours=6)     # how often, at most, the owner is told that the connection dropped and was reopened
 
 
 class Chat(Protocol):
@@ -219,6 +228,7 @@ class Watcher:
         self._unsent: list[str] = []        # messages that could not be sent, kept to try again
         self.retry_wait_s = 2.0
         self._failures, self._told_down = 0, False     # how many times running the listener has failed, and whether the owner knows
+        self._died_told: datetime | None = None        # when the owner was last told that an open connection had died
 
     async def _say(self, text: str) -> bool:
         """Send the owner a message, trying three times. Returns whether it left."""
@@ -243,11 +253,28 @@ class Watcher:
         once, and told again when it works.
         """
         while rounds is None or rounds > 0:
+            # A connection that opened and then died for good looked exactly like a quiet one: nothing arrived, and
+            # nothing said so. The backend is asked each round; a dead one is closed here and opened again below.
+            alive = getattr(self._backend, "alive", None)
+            died = False
+            if self._stop is not None and alive is not None:
+                try:
+                    died = not await asyncio.to_thread(alive)
+                except Exception:
+                    died = True
+                if died:
+                    self._journal.write("error", where="watch.stream", error="died")
+                    self.stop()
             if self._backend is not None and self._stop is None and self._store.watches():
                 try:
                     await asyncio.to_thread(self.activate)
                     await asyncio.to_thread(self.start, loop)
                     self._failures = 0
+                    if died and not self._told_down and (self._died_told is None or self._now() - self._died_told >= DIED_TOLD_EVERY):
+                        # Said at most once in a while: what arrived in the gap was not checked, and the owner should know.
+                        if await self._say("The connection that brings me new mail and calendar events dropped and I have opened it "
+                                           "again. Anything that arrived in the gap, up to a minute or so, was not checked against your watches."):
+                            self._died_told = self._now()
                     if self._told_down:
                         self._told_down = not await self._say("Watching is working again. Anything that arrived in the meantime was not checked.")
                 except Exception as e:

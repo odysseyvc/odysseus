@@ -204,7 +204,7 @@ tool_policy = make_policy(ALLOWED_TOOLS)
 
 @dataclass
 class Outcome:
-    status: str                 # done | stopped | budget | turn_limit | error
+    status: str                 # done | stopped | budget | day_budget | turn_limit | error
     text: str = ""
     cost_usd: float = 0.0
     turns: int = 0
@@ -254,6 +254,9 @@ class AgentRunner:
         self.lost_session = False    # a saved conversation existed and could not be picked up
         self.context_tokens = 0      # how much the model was sent on its last call: the size of the conversation
         self._calls: dict[str, float] = {}     # estimated cost of each model call in the task now running
+        # What is left of the day's budget, not counting the task now running: set by whoever runs tasks. A task is
+        # ended when its own estimated cost reaches it, so the daily figure is a ceiling and not only a threshold.
+        self.day_room: Callable[[], float] | None = None
 
     @property
     def estimate(self) -> float:
@@ -426,6 +429,8 @@ class AgentRunner:
                             self._limit = "turn_limit"
                         elif sum(calls.values()) >= self._s.task_usd:
                             self._limit = "budget"
+                        elif self.day_room is not None and sum(calls.values()) >= self.day_room():
+                            self._limit = "day_budget"
                         if self._limit:
                             self._journal.write("limit", which=self._limit, steps=len(calls),
                                                 estimated_usd=round(sum(calls.values()), 4))

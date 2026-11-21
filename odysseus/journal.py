@@ -3,26 +3,73 @@
 Every step the agent takes is appended to one file as a line of JSON. The
 ledger is derived from the same file and from nothing else, so what was spent
 can always be checked against what was done.
+
+The file the program reads at start-up holds the last few weeks only. When the
+program starts, lines older than that are moved, unchanged, into one compressed
+file per month beside it (journal-2026-10.jsonl.gz). Nothing is thrown away, and
+what the program reads when it starts no longer grows with its age.
 """
 from __future__ import annotations
 
+import gzip
 import json
+import os
 import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable
 
 
+KEEP_DAYS = 35      # how much of the log stays in the file read at start-up: enough for a month's spending and the last conversation
+
+
 class Journal:
     # Fields safe to copy to a hosting service's log: statuses and numbers, never contents.
     ECHO_FIELDS = ("status", "ok", "name", "verdict", "outcome", "where", "error", "cost_usd", "seconds", "turns", "parts", "chars", "pages")
 
-    def __init__(self, path: Path, clock: Callable[[], float] = time.time, echo: bool = False):
+    def __init__(self, path: Path, clock: Callable[[], float] = time.time, echo: bool = False, keep_days: int = KEEP_DAYS):
         self.path = path
         self._clock = clock
         self._echo = echo
         self.listeners: list[Callable[[dict[str, Any]], None]] = []     # told of every record as it is written (the ledger)
         path.parent.mkdir(parents=True, exist_ok=True)
+        if keep_days:
+            try:
+                self.archive(keep_days)
+            except OSError:
+                pass        # a log that could not be tidied is still a log
+
+    def archive(self, keep_days: int = KEEP_DAYS) -> int:
+        """Move lines older than `keep_days` into one compressed file per month. Returns how many were moved.
+
+        The old lines are written to their archives first and the shortened log replaces the old one in a single step
+        after that. A crash in between leaves lines in both places, never in neither."""
+        if not self.path.exists():
+            return 0
+        oldest = self._clock() - keep_days * 86400
+        keep: list[str] = []
+        months: dict[str, list[str]] = {}
+        with self.path.open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    ts = float(json.loads(line).get("ts"))
+                except (ValueError, TypeError, AttributeError):
+                    ts = None       # a half-written line: it stays where it is
+                if ts is None or ts >= oldest or keep:      # the log is in time order: once one line is kept, the rest are
+                    keep.append(line)
+                else:
+                    months.setdefault(datetime.fromtimestamp(ts).strftime("%Y-%m"), []).append(line)
+        moved = sum(len(v) for v in months.values())
+        if not moved:
+            return 0
+        for month, lines in months.items():
+            with gzip.open(self.path.with_name(f"{self.path.stem}-{month}.jsonl.gz"), "at", encoding="utf-8") as z:
+                z.writelines(lines)
+        tmp = self.path.with_suffix(".tmp")
+        with tmp.open("w", encoding="utf-8", newline="") as f:
+            f.writelines(keep)
+        os.replace(tmp, self.path)
+        return moved
 
     def write(self, kind: str, **fields: Any) -> None:
         record = {"ts": round(self._clock(), 3), "kind": kind, **fields}

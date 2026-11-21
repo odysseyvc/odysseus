@@ -112,11 +112,19 @@ def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -> fro
     return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset()) | frozenset(extra)
 
 
+def _sent(args: dict[str, Any]) -> str:
+    """Everything of a search that goes to the search company."""
+    return f"{args.get('query', '')} {args.get('objective', '')}"
+
+
 def describe_search(args: dict[str, Any], taint: Taint) -> str:
-    found = taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}")
-    return ("Search the web with this? It contains details that came from your mail, calendar or apps, and a search is "
-            f"sent to a search company.\n\nDetails recognised: {', '.join(found)}\n\nQuery: {str(args.get('query', '')).strip()}\n"
-            f"Purpose: {str(args.get('objective', '')).strip()}")
+    found = taint.leaked(_sent(args))
+    shown = f"Query: {str(args.get('query', '')).strip()}\nPurpose: {str(args.get('objective', '')).strip()}"
+    if found:
+        return ("Search the web with this? It contains details that came from your mail, calendar or apps, and a search is "
+                f"sent to a search company.\n\nDetails recognised: {', '.join(found)}\n\n{shown}")
+    return ("Search the web with this? I have read your mail, calendar or apps, a search is sent to a search company, and "
+            f"{taint.spill(_sent(args)) or 'this one is more than I send unasked'}.\n\n{shown}")
 
 
 def empty_server() -> Any:
@@ -186,8 +194,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
               lambda a: describe_memory(a, taint))
     gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text", ""))) else ALLOW,
               lambda a: describe_memory(a, taint, "Write this in my dated notes?"))
-    # A search is allowed unless it carries details read from the owner's accounts (taint.py); then the owner is asked.
-    gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(f"{a.get('query', '')} {a.get('objective', '')}") else ALLOW,
+    # A search is allowed unless it carries details recognised from the owner's accounts, or more that is not the owner's
+    # own words than may leave unasked (taint.py); then the owner is asked.
+    gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(_sent(a)) or taint.spill(_sent(a)) else ALLOW,
               lambda a: describe_search(a, taint))
 
     def schedule_decision(a: dict[str, Any]) -> str:
@@ -325,6 +334,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             found = search_handler
 
             async def search_handler(args: dict[str, Any]) -> dict[str, Any]:
+                if not taint.leaked(_sent(args)) and not taint.spill(_sent(args)):
+                    taint.spent(_sent(args))          # it is leaving unasked: counted against the hour's allowance
                 taint.saw("web search results")       # from here on in this task, the model has read what strangers wrote
                 return await found(args)
 
@@ -346,10 +357,16 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
 
         async def search_handler(args: dict[str, Any]) -> dict[str, Any]:
             taint = next((r.taint for r in readers if getattr(r, "taint", None) is not None), None)
-            if taint is not None and taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}"):
+            if taint is not None and taint.leaked(_sent(args)):
                 journal.write("tool", name="web_search", ok=False, error="carries details from the accounts")
                 return _err("Not searched: the query contains details from the owner's mail, calendar or other accounts, and nobody is here "
                             "to approve sending them.")
+            if taint is not None and taint.spill(_sent(args)):
+                journal.write("tool", name="web_search", ok=False, error="over the allowance for unasked searches")
+                return _err("Not searched: this search, or the searches of the last hour, carry more than may be sent without the owner "
+                            "seeing it, and nobody is here to approve it. Search with fewer words, or leave it for the owner.")
+            if taint is not None:
+                taint.spent(_sent(args))
             return await plain(args)
     search = tool("web_search", spec.description, spec.input_schema)(search_handler)
     recall = tool("recall", "Search your saved notes and entries, and what was said in earlier conversations, by keyword, for when the owner "
