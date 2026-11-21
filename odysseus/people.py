@@ -300,6 +300,11 @@ class House:
                 self._journal.write("command", name="/trust", user_id=user_id)
                 await chat.send(self._board.trust_command(user_id, stripped))
                 return
+            if stripped.lower().split()[:1] == ["/edit"]:
+                # Their own wording for an answer to a colleague's assistant (peers.py). It reaches no model.
+                self._journal.write("command", name="/edit", user_id=user_id)
+                await chat.send(await self._board.edit(user_id, stripped))
+                return
         if user_id == self._host and stripped.startswith("/") and await self._hosting(stripped, chat):
             return
         await a.conversation.handle(user_id, text, chat, **more)

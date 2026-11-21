@@ -140,6 +140,10 @@ class Ledger:
             self._zone = ZoneInfo(tz)
         self._today = today or (lambda: datetime.now(self._zone).date())
         self._by_day: dict[str, float] = {}
+        # Money being spent right now by tasks that have not finished, each as a function giving its estimate so far.
+        # A finished task has a record in the journal; a running one has none yet, and without this two tasks started
+        # close together each saw the day's budget as untouched by the other.
+        self.in_flight: list[Callable[[], float]] = []
         for rec in journal.read():
             self._count(rec)
         journal.listeners.append(self._count)
@@ -155,5 +159,15 @@ class Ledger:
         day = self._today().isoformat()
         self._by_day[day] = self._by_day.get(day, 0.0) + usd
 
-    def spent_today(self) -> float:
+    def recorded_today(self) -> float:
         return self._by_day.get(self._today().isoformat(), 0.0)
+
+    def spent_today(self) -> float:
+        """What is recorded for today, and what the tasks running now are estimated to have spent so far."""
+        running = 0.0
+        for estimate in self.in_flight:
+            try:
+                running += max(0.0, float(estimate()))
+            except Exception:
+                pass
+        return self.recorded_today() + running

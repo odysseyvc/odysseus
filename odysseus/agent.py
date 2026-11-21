@@ -257,6 +257,18 @@ class AgentRunner:
         # What is left of the day's budget, not counting the task now running: set by whoever runs tasks. A task is
         # ended when its own estimated cost reaches it, so the daily figure is a ceiling and not only a threshold.
         self.day_room: Callable[[], float] | None = None
+        self.compacted = False
+
+    @property
+    def in_flight(self) -> float:
+        """What the task running now is estimated to have spent so far; nothing when none is running."""
+        return sum(self._calls.values()) if self._running else 0.0
+
+    def within(self, ledger: Any, daily_usd: float) -> None:
+        """Hold this agent to the day's budget while it works, and let every other check see what it is spending.
+        The room left is the day's limit less everything recorded and everything other tasks are spending now."""
+        ledger.in_flight.append(lambda: self.in_flight)
+        self.day_room = lambda: daily_usd - (ledger.spent_today() - self.in_flight)
 
     @property
     def estimate(self) -> float:
@@ -309,6 +321,7 @@ class AgentRunner:
         # The SDK is about to condense the conversation. What was shown at the start may not
         # survive that, so the memory is shown again with the next message.
         self._blank = True
+        self.compacted = True       # the conversation reads this after the task, to offer for saving what the owner said (conversation.py)
         self._journal.write("compact")
         return {}
 

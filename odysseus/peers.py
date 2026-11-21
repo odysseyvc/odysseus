@@ -31,6 +31,11 @@ Two kinds exist:
                    people's writing and fingerprinted, so it cannot be passed on to a search or a third person unasked.
                    The asker's budget pays for the drafting.
 
+  file             one kept file, chosen by the sending person and approved by them with its name in the question, every
+                   time. No model on either side: code copies the bytes to the colleague's kept files, marked as sent by
+                   a colleague's assistant, and hands it to them in their chat. Their assistant has not read it; if
+                   it is later asked to, it reads it as it reads any file a stranger sent.
+
 What survives a restart: the counts of the day, who has been told, and every draft waiting for a tap, with the moment
 it was shown (one file in the host's data folder, beside the people's own folders; it holds the waiting drafts' words,
 and nothing once they are sent, declined or lapsed). The buttons under a draft carry its id, so a tap after a restart
@@ -63,8 +68,11 @@ from .journal import Journal
 SUBMITTED, WORKING, COMPLETED, FAILED, REJECTED = ("TASK_STATE_SUBMITTED", "TASK_STATE_WORKING", "TASK_STATE_COMPLETED",
                                                     "TASK_STATE_FAILED", "TASK_STATE_REJECTED")
 INPUT_REQUIRED, CANCELED = "TASK_STATE_INPUT_REQUIRED", "TASK_STATE_CANCELED"      # waiting for a person's tap; lapsed
-TIMES, QUESTION = "times", "ask"
-DEFAULT = {TIMES: True, QUESTION: True}      # what a kind is until its owner says otherwise
+TIMES, QUESTION, FILE = "times", "ask", "file"
+DEFAULT = {TIMES: True, QUESTION: True, FILE: True}      # what a kind is until its owner says otherwise
+FILES_A_DAY = 5
+FILE_MAX = 20 * 1024 * 1024
+COLLEAGUE_FILE = "mcp__odysseus__colleague_file"
 LOOKUPS_A_DAY = 10               # of one colleague, by one other
 QUESTIONS_A_DAY = 5
 QUESTION_MAX, DRAFT_MAX = 600, 1500      # characters
@@ -118,6 +126,9 @@ class Desk:
     receive: Callable[[str, str], Awaitable[Any]] | None = None
     draft: Callable[[str], Awaitable[tuple[str, str, float]]] | None = None
     ask_owner: Callable[[str, str], Awaitable[Any]] | None = None
+    # For a file: this person's kept files (files.Shelf), and a way to hand one of them to this person in their own chat.
+    files: Any = None
+    hand_over: Callable[[dict[str, Any]], Awaitable[Any]] | None = None
 
 
 @dataclass
@@ -204,6 +215,7 @@ class Switchboard:
         self._asked: dict[tuple[int, int], deque] = {}       # (asker, answerer): when, in the last day
         self._told: dict[tuple[int, int], int] = {}          # (answerer, asker): the day the answerer was last told
         self._questions: dict[tuple[int, int], deque] = {}
+        self._files: dict[tuple[int, int], deque] = {}
         self._open: dict[str, Exchange] = {}                 # drafts waiting for the answering person's tap, by the buttons' id
         self._tasks: set = set()
         self._watched: set[str] = set()                      # drafts that have a lapse timer in this process
@@ -227,6 +239,7 @@ class Switchboard:
         try:
             self._asked = {k: deque(float(t) for t in v) for k, v in pairs(raw.get("asked")).items()}
             self._questions = {k: deque(float(t) for t in v) for k, v in pairs(raw.get("questions")).items()}
+            self._files = {k: deque(float(t) for t in v) for k, v in pairs(raw.get("files")).items()}
             self._told = {k: int(v) for k, v in pairs(raw.get("told")).items()}
             for o in raw.get("open") or []:
                 x = Exchange(QUESTION, int(o["asker"]), int(o["answerer"]), id=str(o["id"]), state=INPUT_REQUIRED, question=str(o["question"]),
@@ -241,6 +254,7 @@ class Switchboard:
         since = self._clock() - 86400
         state = {"asked": {f"{a}:{b}": [t for t in v if t >= since] for (a, b), v in self._asked.items() if v},
                  "questions": {f"{a}:{b}": [t for t in v if t >= since] for (a, b), v in self._questions.items() if v},
+                 "files": {f"{a}:{b}": [t for t in v if t >= since] for (a, b), v in self._files.items() if v},
                  "told": {f"{a}:{b}": d for (a, b), d in self._told.items()},
                  "open": [{"id": x.id, "asker": x.asker, "answerer": x.answerer, "question": x.question, "draft": x.draft,
                            "called": x.called, "at": x.at} for x in self._open.values()]}
@@ -306,10 +320,10 @@ class Switchboard:
         return whole or [d.user_id for d in self.colleagues(asker) if want in d.name.lower().split()]
 
     def _may_ask(self, asker: int, answerer: int, kind: str = TIMES) -> bool:
-        seen = (self._asked if kind == TIMES else self._questions).setdefault((asker, answerer), deque())
+        seen = {TIMES: self._asked, QUESTION: self._questions, FILE: self._files}[kind].setdefault((asker, answerer), deque())
         while seen and seen[0] < self._clock() - 86400:
             seen.popleft()
-        if len(seen) >= (LOOKUPS_A_DAY if kind == TIMES else QUESTIONS_A_DAY):
+        if len(seen) >= {TIMES: LOOKUPS_A_DAY, QUESTION: QUESTIONS_A_DAY, FILE: FILES_A_DAY}[kind]:
             return False
         seen.append(self._clock())
         self._save()
@@ -349,6 +363,49 @@ class Switchboard:
                                 "/trust shows who can do this and turns it off.")
             except Exception as e:
                 them.journal.write("error", where="peers.tell", error=type(e).__name__)
+        return x
+
+    # --- a file ---------------------------------------------------------------------------------------------------
+    async def file(self, asker: int, answerer: int, file_id: str, called: str = "") -> Exchange:
+        """Copy one of the sender's kept files to a colleague's. Code only. The sender approved this file by name."""
+        x = Exchange(FILE, asker, answerer, called=called or "the colleague")
+        me, them = self._desks.get(asker), self._desks.get(answerer)
+        if me is None or them is None or asker == answerer:
+            x.state, x.why = REJECTED, "unknown"
+            return x
+        entry = me.files.get(file_id) if me.files is not None else None
+        data = me.files.data(entry) if entry is not None else None
+        if not (them.trust.allows(asker, FILE) and me.trust.allows(answerer, FILE)):
+            x.state, x.why = REJECTED, "off"
+        elif them.files is None:
+            x.state, x.why = REJECTED, "no_files"
+        elif entry is None:
+            x.state, x.why = REJECTED, "no_such_file"
+        elif data is None:
+            x.state, x.why = REJECTED, "not_kept"
+        elif len(data) > FILE_MAX:
+            x.state, x.why = REJECTED, "too_big"
+        elif not self._may_ask(asker, answerer, FILE):
+            x.state, x.why = REJECTED, "limit"
+        else:
+            who = me.name or "a colleague"
+            try:
+                got = them.files.add(data, str(entry.get("name") or "file"), str(entry.get("mime") or ""), text=str(entry.get("text") or ""),
+                                     source="colleague", origin=f"sent by {who}'s assistant; {who} chose it")
+                if got is None:
+                    raise RuntimeError("could not be kept")
+                x.state = COMPLETED
+                if them.tell is not None:
+                    await them.tell(f"{who.capitalize() if who == 'a colleague' else who}'s assistant sent you a file, which they chose and approved: "
+                                    f"{got.get('name')} ({max(1, len(data) // 1024)} KB). I have kept it with your files and have not read it. "
+                                    "/trust turns this off.")
+                if them.hand_over is not None:
+                    await them.hand_over(got)
+            except Exception as e:
+                if x.state != COMPLETED:
+                    x.state, x.why = FAILED, "failed"
+                them.journal.write("error", where="peers.file", error=type(e).__name__, message=str(e)[:200])
+        self._log(x, **({"bytes": len(data)} if data is not None and x.state == COMPLETED else {}))
         return x
 
     # --- a question in words --------------------------------------------------------------------------------------
@@ -397,11 +454,7 @@ class Switchboard:
             x.state, x.at = INPUT_REQUIRED, self._clock()
             self._open["x" + x.id] = x
             self._save()            # before it is shown: a tap must never find nothing behind it
-            holds = contains(x.draft, x.question)
-            await them.ask_owner(f"Send this answer to {who}'s assistant?\n\nThey asked: \"{x.question}\"\n\nMy draft, from your records:\n\n{x.draft}\n\n"
-                                 + (f"It contains: {holds}. " if holds else "")
-                                 + "It goes exactly as shown, to them only. Decline sends nothing, and they are told you chose not to answer this way.",
-                                 "x" + x.id)
+            await them.ask_owner(self._shown(x, who), "x" + x.id)
             self._log(x, draft_chars=len(x.draft))
             self._watch(x)
         except Exception as e:
@@ -416,6 +469,45 @@ class Switchboard:
                     await them.tell(f"I could not draft an answer to {who}'s assistant. Nothing was sent.")
                 except Exception:
                     pass
+
+    @staticmethod
+    def _shown(x: Exchange, who: str, yours: bool = False) -> str:
+        """The question put to the answering person: the exact words that would leave, and what code counted in them."""
+        holds = contains(x.draft, x.question)
+        return (f"Send this answer to {who}'s assistant?\n\nThey asked: \"{x.question}\"\n\n"
+                + ("Your wording:" if yours else "My draft, from your records:") + f"\n\n{x.draft}\n\n"
+                + (f"It contains: {holds}. " if holds else "")
+                + "It goes exactly as shown, to them only. Decline sends nothing, and they are told you chose not to answer this way. "
+                  "To change the wording, send /edit followed by the answer as you want it.")
+
+    async def edit(self, user_id: int, text: str) -> str:
+        """The answering person's own wording in place of the draft. No model: their words, tidied and counted by code,
+        shown to them again under new buttons. The old buttons stop working, so nothing can go that is not on screen."""
+        words = text.split(None, 1)
+        new = tidy(words[1]) if len(words) > 1 else ""
+        mine = [x for x in self._open.values() if x.answerer == user_id]
+        if not mine:
+            return "No draft is waiting for you, so there is nothing to change."
+        if not new:
+            return "Send /edit followed by the answer as you want it sent. It replaces my draft and is shown to you again before anything goes."
+        old = max(mine, key=lambda x: x.at)
+        them = self._desks.get(user_id)
+        if them is None or them.ask_owner is None:
+            return "I cannot show you a new version here. Nothing was changed or sent."
+        del self._open["x" + old.id]
+        x = Exchange(QUESTION, old.asker, old.answerer, state=INPUT_REQUIRED, question=old.question, draft=new, called=old.called, at=old.at)
+        self._open["x" + x.id] = x
+        self._watched.discard(old.id)
+        self._save()
+        asker = self._desks.get(x.asker)
+        self._log(x, draft_chars=len(x.draft), edited=True, replaces=old.id)
+        try:
+            self._watch(x)
+        except RuntimeError:
+            pass
+        await them.ask_owner(self._shown(x, (asker.name if asker else "") or "A colleague", yours=True), "x" + x.id)
+        return ("Changed. The new wording is below with its own buttons; the earlier ones no longer send anything."
+                + (" It still lapses two days after the first draft." if len(mine) == 1 else " I changed the most recent of your waiting drafts."))
 
     async def _deliver(self, x: Exchange, text: str, private: str = "") -> None:
         me = self._desks.get(x.asker)
@@ -471,16 +563,17 @@ class Switchboard:
             me.trust.set(found[0], on)
             me.journal.write("trust", peer=found[0], on=on)
             who = self._desks[found[0]].name or f"id {found[0]}"
-            return (f"On. {who}'s assistant and mine can look up each other's free times and put questions to each other again, if they allow it too." if on
-                    else f"Off. {who}'s assistant can no longer look up when you are free or put questions to mine, and mine will not ask theirs.")
+            return (f"On. {who}'s assistant and mine can look up each other's free times, put questions to each other and pass files again, if they allow it too." if on
+                    else f"Off. {who}'s assistant can no longer look up when you are free, put questions to mine or send you files, and mine will not ask theirs.")
         lines = []
         for d in others:
             mine, theirs = me.trust.allows(d.user_id), d.trust.allows(user_id)
             state = "on" if mine and theirs else "off (you turned it off)" if not mine else "off (they turned it off)"
             lines.append(f"- {d.name or 'no name given'} (id {d.user_id}): {state}")
-        return ("What a colleague's assistant and mine may ask each other. Two things: when you are free, given as busy and free "
+        return ("What a colleague's assistant and mine may ask each other. When you are free, given as busy and free "
                 "times only, never what a meeting is or who it is with; and a question in words, where I draft an answer from your "
-                "records and nothing is sent unless you approve the exact text.\n\n" + "\n".join(lines)
+                "records and nothing is sent unless you approve the exact text. A colleague can also have their assistant send you a "
+                "file they chose.\n\n" + "\n".join(lines)
                 + "\n\nTo change one, send /trust off or /trust on followed by a name or id. Off stops it in both directions.")
 
     # --- the tool the asking model has ----------------------------------------------------------------------------
@@ -570,7 +663,38 @@ class Switchboard:
                            "so the answer may take a while, or never come. If it comes it arrives in this chat by itself, as a message "
                            "to the owner. Tell the owner the question was put and that the colleague has to approve the answer. Do not wait, "
                            "and do not ask again.")
-        return {"times_find": times_find, "colleague_ask": colleague_ask}
+        async def colleague_file(args: dict[str, Any]) -> dict[str, Any]:
+            me = self._desks.get(user_id)
+            name, file_id = str(args.get("person") or "").strip(), str(args.get("id") or "").strip()
+            if me is None or not name or not file_id:
+                return _result("Give the colleague's name as the owner said it, and the file's id from files_find.", True)
+            found = self.find(user_id, name)
+            if len(found) != 1:
+                return _result(f"{name}: " + ("more than one person here has that name; ask the owner which." if found else
+                                              "nobody who uses this assistant matches that name. They may be someone to email instead."), True)
+            x = await self.file(user_id, found[0], file_id, called=name)
+            if x.state != COMPLETED:
+                why = {"off": "passing things between your assistants is turned off (/trust)", "limit": "five files have gone to them today, which is the most",
+                       "no_such_file": "there is no kept file with that id", "not_kept": "only the record of that file is kept, not the file itself",
+                       "too_big": "the file is larger than 20 MB", "no_files": "their assistant cannot keep files here",
+                       "failed": "it could not be kept on their side"}
+                return _result(f"Not sent: {why.get(x.why, 'not available')}.", True)
+            return _result(f"Sent to {name}'s assistant. It is kept with {name}'s files and they have been told. Their assistant has not read it.")
+        return {"times_find": times_find, "colleague_ask": colleague_ask, "colleague_file": colleague_file}
+
+
+def describe_file(args: dict[str, Any], shelf: Any = None) -> str:
+    """The question the sending person is shown: which file, by its name, and who gets it."""
+    from .apps import AppError
+    person, file_id = " ".join(str(args.get("person") or "").split()), str(args.get("id") or "").strip()
+    if not person or not file_id:
+        raise AppError("Sending a file needs the colleague's name and the file's id.")
+    entry = shelf.get(file_id) if shelf is not None else None
+    if shelf is not None and entry is None:
+        raise AppError(f"There is no kept file with the id {file_id}. Use files_find.")
+    what = (f"{entry.get('name')} ({max(1, int(entry.get('size') or 0) // 1024)} KB, kept {str(entry.get('at', ''))[:10]})" if entry else f"the kept file with id {file_id}")
+    return (f"Send this file to {person}'s assistant?\n\n{what}\n\nA copy goes to {person}, is kept with their files, and they are told it came "
+            "from you. It cannot be taken back.")
 
 
 def _result(text: str, failed: bool = False) -> dict[str, Any]:
@@ -615,4 +739,11 @@ SCHEMAS = {
                        "properties": {"person": {"type": "string", "description": "The colleague's name, as the owner said it."},
                                       "question": {"type": "string", "description": "One question, in a full sentence, at most 600 characters."}},
                        "required": ["person", "question"]}),
+    "colleague_file": ("Send one of the owner's kept files to a colleague who also uses this assistant, by its id from files_find. Use it "
+                       "when the owner asks you to pass a deck or document to a colleague at their own firm. The owner is shown the file's "
+                       "name and approves each time. For anyone outside the firm, say that the file has to be emailed.",
+                       {"type": "object",
+                        "properties": {"person": {"type": "string", "description": "The colleague's name, as the owner said it."},
+                                       "id": {"type": "string", "description": "The file's id, from files_find."}},
+                        "required": ["person", "id"]}),
 }

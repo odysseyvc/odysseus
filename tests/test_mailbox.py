@@ -196,3 +196,55 @@ async def test_the_owner_gets_an_address_with_a_command_and_no_model(tmp_path):
     c.conv._inbox = bad.box
     await c.conv.handle(OWNER_ID, "/address", chat)
     assert "I could not get an address" in chat.sent[-1] and "inbox limit" in chat.sent[-1]
+
+
+# --- sending from the assistant's own address --------------------------------------------------------------------------
+
+async def test_a_send_from_the_assistants_own_address_is_always_put_to_the_owner_in_full(tmp_path):
+    from odysseus.mailbox import INBOX_SEND, MOST_SENT_A_DAY, describe_own_send
+    from odysseus.tools import ROUTINE_TOOLS, make_gate, routine_tools
+    gate = make_gate(Journal(tmp_path / "g.jsonl"), taint_file=tmp_path / "t.bin")
+    new = {"to": ["rhea@nimbuscoldchain.example"], "cc": ["tara@firm.example"], "subject": "Tuesday", "body": "Could we move the call to 4pm?"}
+    assert gate.decide(INBOX_SEND, new) == "ask" and gate._rules[INBOX_SEND].constant == "ask", "no input and no setting lets one go unasked"
+    asked = gate._rules[INBOX_SEND].describe(new)
+    assert asked.startswith("Send this from my own address, not yours?") and "To: rhea@nimbuscoldchain.example" in asked
+    assert "Cc: tara@firm.example" in asked and "Subject: Tuesday" in asked and asked.endswith("Could we move the call to 4pm?")
+    assert "In reply to the message with id m3" in describe_own_send({"to": ["a@b.example"], "body": "Thanks.", "in_reply_to": "m3"})
+    for bad in ({"to": [], "body": "x"}, {"to": ["not an address"], "body": "x"}, {"to": ["a@b.example"], "body": ""},
+                {"to": ["a@b.example"], "body": "no subject"}, {"to": ["a@b.example"], "subject": "s", "body": "y" * 7000}):
+        try:
+            describe_own_send(bad)
+            raise AssertionError(bad)
+        except Exception as e:
+            assert type(e).__name__ == "AppError", "what cannot be shown as it would go is refused before the owner sees it"
+    assert INBOX_SEND not in ROUTINE_TOOLS | routine_tools(True), "an unattended run cannot send"
+
+    x = rig(tmp_path)
+    x.service.sent = []
+
+    async def send(inbox_id, to, cc, subject, text, in_reply_to=""):
+        x.service.sent.append((inbox_id, to, cc, subject, text, in_reply_to))
+        return {"message_id": "out1", "thread_id": "t9"}
+    x.service.send = send
+    tools = x.box.handlers(None, None)
+    assert "no address of your own yet" in (await tools["inbox_send"](new))["content"][0]["text"]
+    await x.box.make()
+    out = await tools["inbox_send"](new)
+    assert not out.get("is_error") and x.service.sent == [("inbox-1", new["to"], new["cc"], "Tuesday", new["body"], "")]
+    assert x.box.pop_changes() == ["sent an email from my own address to rhea@nimbuscoldchain.example, tara@firm.example"] and x.box.pop_changes() == []
+    await tools["inbox_send"]({"to": ["a@b.example"], "body": "Thanks.", "in_reply_to": "m3"})
+    assert x.service.sent[-1][-1] == "m3"
+    log = (tmp_path / "j.jsonl").read_text(encoding="utf-8")
+    assert "nimbuscoldchain" not in log and "4pm" not in log, "the log holds counts, never an address or the words"
+    for _ in range(MOST_SENT_A_DAY - 2):
+        await tools["inbox_send"](new)
+    over = await tools["inbox_send"](new)
+    assert over.get("is_error") and "the most in a day" in over["content"][0]["text"] and len(x.service.sent) == MOST_SENT_A_DAY
+
+    async def down(*a, **k):
+        raise MailboxError("the mailbox service answered 403: Message Rejected")
+    y = rig(tmp_path / "y")
+    y.service.send = down
+    await y.box.make()
+    failed = await y.box.handlers(None, None)["inbox_send"](new)
+    assert failed.get("is_error") and "Not sent" in failed["content"][0]["text"] and y.box.pop_changes() == []

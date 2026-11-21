@@ -10,6 +10,7 @@ Three kinds are kept, as the conversation holds them:
   a piece of work   (prompt, material, chat)   the chat is not kept; after a restart the owner's own chat is used
   a fact            a string
   a choice          a dict, for a question with its own buttons
+  a tidying         a list [entry id, its text, key]: a saved fact the program suggests forgetting (memory.py)
 
 An offer nobody answered in two weeks is dropped, and so is the oldest once there are too many: a button that old
 says so when tapped, which is what every button did after a restart before.
@@ -43,7 +44,8 @@ class Offers(dict):
                 continue
             if kind == "task" and isinstance(value, list) and len(value) == 2:
                 value = (str(value[0]), str(value[1]), None)
-            elif not ((kind == "fact" and isinstance(value, str)) or (kind == "choice" and isinstance(value, dict))):
+            elif not ((kind == "fact" and isinstance(value, str)) or (kind == "choice" and isinstance(value, dict))
+                      or (kind == "tidy" and isinstance(value, list) and len(value) == 3)):
                 continue
             super().__setitem__(key, value)
             self._when[key] = when
@@ -77,7 +79,7 @@ class Offers(dict):
             if isinstance(value, tuple):
                 row = {"kind": "task", "value": [value[0], value[1]]}
             else:
-                row = {"kind": "fact" if isinstance(value, str) else "choice", "value": value}
+                row = {"kind": "fact" if isinstance(value, str) else "tidy" if isinstance(value, list) else "choice", "value": value}
             rows[key] = {"when": self._when.get(key, 0.0), **row}
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)

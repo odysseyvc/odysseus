@@ -406,3 +406,96 @@ async def test_a_draft_does_not_outlast_the_person_it_was_for_and_a_damaged_file
     assert Switchboard(state_file=tmp_path / "bad.json").resume() == 0
     (tmp_path / "odd.json").write_text('{"open": [{"id": 3}], "asked": {"x": 1}}', encoding="utf-8")
     assert Switchboard(state_file=tmp_path / "odd.json").resume() == 0
+
+
+# --- the answering person's own wording -------------------------------------------------------------------------------
+
+async def test_the_answering_person_can_replace_the_draft_with_their_own_words(tmp_path):
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    assert "No draft is waiting" in await x.board.edit(B, "/edit anything")
+    await x.run({"person": "Tara", "question": Q})
+    await x.settle()
+    first, old = x.shown[B][0]
+    assert "send /edit followed by the answer" in first
+    assert "Send /edit followed by" in await x.board.edit(B, "/edit") and len(x.shown[B]) == 1
+    assert "No draft is waiting" in await x.board.edit(A, "/edit not mine to change"), "only the person asked can reword it"
+    said = await x.board.edit(B, "/edit We met them in March. See https://x.example and call 9820041773.")
+    assert said.startswith("Changed.")
+    shown, new = x.shown[B][1]
+    assert new != old and "Your wording:" in shown and "[link removed]" in shown and "1 figure or amount" in shown and "a link, which I removed" in shown
+    assert "no longer waiting" in await x.board.decide(B, old, True) and x.got[A] == [], "the first draft can no longer be sent"
+    y = again(tmp_path / "y", x)
+    y.board.resume()
+    assert await y.board.decide(B, new, True) == "Sent, exactly as shown."
+    assert y.got[A][0][1] == "We met them in March. See [link removed] and call 9820041773.", "their words, as shown, and nothing of the first draft"
+    assert "March" not in (tmp_path / f"q{B}.jsonl").read_text(encoding="utf-8")
+
+
+# --- a file ----------------------------------------------------------------------------------------------------------
+
+def frig(tmp_path):
+    from odysseus.files import Shelf
+    x = qrig(tmp_path, state_file=tmp_path / "board.json")
+    x.shelves, x.handed = {}, {A: [], B: [], C: []}
+    for uid in (A, B, C):
+        x.shelves[uid] = Shelf(tmp_path / f"files{uid}")
+        desk = x.board.desk(uid)
+        desk.files = x.shelves[uid]
+
+        async def hand(entry, uid=uid):
+            x.handed[uid].append(entry["name"])
+        desk.hand_over = hand
+    x.deck = x.shelves[A].add(b"%PDF-1.4 corvid deck bytes", "Corvid deck.pdf", "application/pdf", text="Corvid Freight seed deck")
+    x.send = x.board.handlers(A, lambda: NOW, "Asia/Kolkata")["colleague_file"]
+    return x
+
+
+async def test_a_file_the_owner_chose_is_copied_to_the_colleague_by_code_and_they_are_told(tmp_path):
+    x = frig(tmp_path)
+    out = await x.send({"person": "tara", "id": x.deck["id"]})
+    assert not out.get("is_error") and "Their assistant has not read it" in text(out)
+    got, = x.shelves[B].all()
+    assert got["name"] == "Corvid deck.pdf" and x.shelves[B].data(got) == b"%PDF-1.4 corvid deck bytes" and got["source"] == "colleague"
+    assert "Asha Rao's assistant" in got["origin"], "kept as something a colleague's assistant sent, not as the owner's own"
+    assert x.handed[B] == ["Corvid deck.pdf"] and x.shelves[C].all() == []
+    assert "Asha Rao's assistant sent you a file" in x.told[B][0] and "have not read it" in x.told[B][0]
+    for uid in (A, B):
+        rec = [r for r in x.journals[uid].read() if r["kind"] == "exchange"][-1]
+        assert rec["exchange"] == "file" and rec["state"] == "TASK_STATE_COMPLETED" and rec["bytes"] == 26 and "Corvid" not in str(rec)
+
+
+async def test_what_stops_a_file(tmp_path):
+    x = frig(tmp_path)
+    for args, why in (({"person": "Tara", "id": "nope"}, "no kept file with that id"), ({"person": "Priya", "id": x.deck["id"]}, "nobody who uses"),
+                      ({"person": "", "id": x.deck["id"]}, "file's id from files_find")):
+        out = await x.send(args)
+        assert out.get("is_error") and why in text(out), why
+    record_only = x.shelves[A].add(None, "Old deck.pdf", "application/pdf", handle="tg-file-1")
+    assert "only the record" in text(await x.send({"person": "Tara", "id": record_only["id"]}))
+    x.board.trust_command(B, "/trust off Asha")
+    assert "turned off" in text(await x.send({"person": "Tara", "id": x.deck["id"]})) and x.shelves[B].all() == []
+    for _ in range(5):
+        assert not (await x.send({"person": "Vikram", "id": x.deck["id"]})).get("is_error")
+    assert "the most" in text(await x.send({"person": "Vikram", "id": x.deck["id"]}))
+    y = again(tmp_path / "y", x)
+    y.board.desk(A).files, y.board.desk(C).files = x.shelves[A], x.shelves[C]
+    assert "the most" in text(await y.board.handlers(A, lambda: NOW, "Asia/Kolkata")["colleague_file"]({"person": "Vikram", "id": x.deck["id"]})), "the count survives a restart"
+
+
+def test_sending_a_file_is_always_put_to_the_owner_by_the_files_name(tmp_path):
+    from odysseus.files import Shelf
+    from odysseus.peers import COLLEAGUE_FILE, describe_file
+    gate = make_gate(Journal(tmp_path / "j.jsonl"), taint_file=tmp_path / "t.bin")
+    shelf = Shelf(tmp_path / "files")
+    deck = shelf.add(b"x" * 4096, "Corvid deck.pdf", "application/pdf")
+    args = {"person": "Tara", "id": deck["id"]}
+    assert gate.decide(COLLEAGUE_FILE, args) == "ask" and gate._rules[COLLEAGUE_FILE].constant == "ask"
+    asked = describe_file(args, shelf)
+    assert asked.startswith("Send this file to Tara's assistant?") and "Corvid deck.pdf (4 KB" in asked and "cannot be taken back" in asked
+    for bad in ({"person": "Tara", "id": "nope"}, {"person": "", "id": deck["id"]}):
+        try:
+            describe_file(bad, shelf)
+            raise AssertionError(bad)
+        except Exception as e:
+            assert type(e).__name__ == "AppError"
+    assert COLLEAGUE_FILE not in ROUTINE_TOOLS | routine_tools(True), "an unattended run cannot send anyone a file"

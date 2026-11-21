@@ -113,6 +113,7 @@ class Conversation:
         self._carry = ""
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
+        self._proposed: set[str] = set()
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
         self._files = files                # what the owner sent, kept to be handed back: files.py
@@ -536,6 +537,43 @@ class Conversation:
         await chat.send(f'Heard: "{heard[:1500]}"')
         await self.handle(user_id, f"{voice_mod.VOICE_NOTE}\n\n{heard}", chat)
 
+    async def _offer_facts(self, facts: list[str], chat: Chat, where: str) -> None:
+        for fact in facts:
+            if fact.lower() in self._proposed:
+                continue            # put to the owner once already in this run of the program
+            self._proposed.add(fact.lower())
+            offer = "m" + secrets.token_hex(4)
+            self._offers[offer] = fact
+            try:
+                await chat.ask(f'{where} Save this to memory?\n\n"{fact}"', offer)
+            except Exception:
+                self._offers.pop(offer, None)
+
+    async def _save_after_condensing(self, chat: Chat) -> None:
+        if self._history is None or self._closer is None or self._memory is None or self._ledger.spent_today() >= self._s.daily_usd:
+            return
+        try:
+            _, facts = await self._closer(self._history.since(self._thread_from), [e.text for e in self._memory.profile()])
+            self._journal.write("condensed", proposed=len(facts))
+            await self._offer_facts(facts, chat, "This conversation has grown long and was condensed.")
+        except Exception as e:
+            self._journal.write("error", where="conversation.condensed", error=type(e).__name__)
+
+    async def _offer_tidying(self, chat: Chat) -> None:
+        """Once a week, at the start of a conversation: saved facts that say the same thing twice, or are over a year old."""
+        try:
+            if self._memory is None or not self._memory.tidy_due():
+                return
+            for entry_id, text, why, key in self._memory.tidy_finds():
+                offer = "t" + secrets.token_hex(4)
+                self._offers[offer] = [entry_id, text, key]
+                try:
+                    await chat.ask(f'Tidying what I remember about you. {why}\n\nForget this one?\n\n"{text}"', offer)
+                except Exception:
+                    self._offers.pop(offer, None)
+        except Exception as e:
+            self._journal.write("error", where="conversation.tidy", error=type(e).__name__)
+
     async def handle_decision(self, user_id: int, approval_id: str, approved: bool, thread: bool = False) -> str:
         """The owner tapped Approve or Decline. Returns a short line to show on the button's message."""
         if user_id != self._s.owner_id:
@@ -555,6 +593,20 @@ class Conversation:
                 return "I can no longer run this. Please ask me again."
             asyncio.get_running_loop().create_task(self.handle(self._s.owner_id, prompt, chat, material=material, background=True))
             return "Approved. Working on it now."
+        if isinstance(self._offers.get(approval_id), list):
+            # A saved fact the weekly tidy-up suggested forgetting (memory.py). Forgotten only by this tap.
+            entry_id, text, key = self._offers.pop(approval_id)
+            self._journal.write("memory_tidy", forgotten=approved)
+            if self._memory is None:
+                return "Nothing was changed."
+            if not approved:
+                self._memory.keep(key)
+                return "Kept."
+            now = next((e for e in self._memory.profile() if e.id == entry_id), None)
+            if now is None or now.text != text:
+                return "That entry has changed since I asked. Nothing was forgotten."
+            self._memory.forget(entry_id, by="owner")
+            return "Forgotten."
         if approval_id in self._offers:
             # A fact from a closed conversation, offered for saving (closing.py). Saved only by this tap.
             fact = self._offers.pop(approval_id)
@@ -930,16 +982,12 @@ class Conversation:
             self._journal.write("fresh", reason=why, tokens=self._runner.context_tokens, kept=len(self._recent), summary=bool(summary), proposed=len(facts))
             self._carry = (f"{SUMMARY_NOTE}\n{summary}\nEND\n\n" if summary else "") + self._recap()
             await self._runner.forget_session()
-            for fact in facts:
-                offer = "m" + secrets.token_hex(4)
-                self._offers[offer] = fact
-                try:
-                    await chat.ask(f'From our earlier conversation. Save this to memory?\n\n"{fact}"', offer)
-                except Exception:
-                    self._offers.pop(offer, None)
+            await self._offer_facts(facts, chat, "From our earlier conversation.")
+            await self._offer_tidying(chat)
         # The day's budget is a ceiling on this task too, not only a threshold for starting it: the task is ended when
         # what it has spent reaches what was left of the day when it began or since (agent.py).
-        runner.day_room = lambda: self._s.daily_usd - self._ledger.spent_today()
+        if getattr(runner, "day_room", None) is None and hasattr(runner, "within"):         # set where the agents are assembled; this is for a runner made elsewhere
+            runner.within(self._ledger, self._s.daily_usd)
         try:
             if bg:
                 await runner.forget_session()       # each job in the background starts clean
@@ -1000,7 +1048,8 @@ class Conversation:
         if changes:
             body += "\n\nMemory: " + "; ".join(changes) + "."
         acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else []) \
-            + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()]
+            + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()] \
+            + (self._inbox.pop_changes() if self._inbox is not None and hasattr(self._inbox, "pop_changes") else [])
         # A connection link is added by code, exactly as the connector gave it. The model never handles it.
         for app_name, link in (self._anyapp.pop_links() if self._anyapp is not None else []):
             body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{link}"
@@ -1032,5 +1081,10 @@ class Conversation:
                 sent += 1
             self._journal.write("reply", parts=sent, chars=len(body))
             await self._ask_verdict(outcome.text, chat)
+            if not bg and getattr(runner, "compacted", False) is True:
+                # The conversation grew long enough to be condensed during this task. What the owner said about themselves
+                # in it may not survive that, so it is offered for saving now, as it is when a conversation closes.
+                runner.compacted = False
+                await self._save_after_condensing(chat)
         except Exception as e:
             self._journal.write("error", where="reply", error=type(e).__name__, message=str(e)[:300], parts_sent=sent, parts=len(parts))

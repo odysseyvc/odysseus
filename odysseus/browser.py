@@ -146,20 +146,32 @@ def describe_browse(args: dict[str, Any]) -> str:
             f"Task it will be given:\n{task}")
 
 
+TASK_NEW_WORDS = 40      # words that are not the owner's, in one task handed to the browser, before the owner is shown it
+
+
 def add_rules(gate: Gate, ask_signed_in: bool = True, taint: Any = None) -> None:
     """A browser run is asked about if it is signed in and the owner wants that, or if its task carries details
     read from the owner's accounts (taint.py): the task is handed to another company's agent and typed into websites."""
     def leak(a: dict[str, Any]) -> list[str]:
         return taint.leaked(str(a.get("task", ""))) if taint is not None else []
 
+    def spill(a: dict[str, Any]) -> str:
+        # Recognising misses a detail put in other words. So the task is also counted, as a search is (taint.spill).
+        return taint.spill(str(a.get("task", "")), most=TASK_NEW_WORDS) if taint is not None else ""
+
     def decide(a: dict[str, Any]) -> str:
-        return ASK if (ask_signed_in and a.get("signed_in")) or leak(a) else ALLOW
+        return ASK if (ask_signed_in and a.get("signed_in")) or leak(a) or spill(a) else ALLOW
 
     def describe(a: dict[str, Any]) -> str:
         found = leak(a)
+        task = " ".join(str(a.get("task", "")).split())
+        if not found and spill(a):
+            if not task:
+                raise ValueError("no task")
+            return ("Give this task to the browser? I have read your mail, calendar or apps, and "
+                    f"{spill(a)}. The browser may type it into websites.\n\nTask it will be given:\n{task}")
         if not found:
             return describe_browse(a)
-        task = " ".join(str(a.get("task", "")).split())
         if not task:
             raise ValueError("no task")
         return ("Give this task to the browser? It contains details that came from your mail, calendar or apps, and the "

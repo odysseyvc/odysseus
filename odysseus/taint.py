@@ -179,16 +179,22 @@ class Taint:
             seen[w] = None
         return list(seen)
 
-    def spill(self, text: str) -> str:
+    def spill(self, text: str, most: int | None = None) -> str:
         """Why `text` should not leave without the owner seeing it, judged by counting and not by recognising. Empty if
         it may. Nothing is counted until something has been read from the owner's accounts: before that there is
-        nothing to carry out."""
+        nothing to carry out.
+
+        `most` is for a task handed to the browser, which is instructions in sentences and not a query of a few words:
+        it is allowed that many words that are not the owner's, a long word in it is ordinary (an address, a site's
+        name), and it is not added to the hour's count of searches. A long number the owner did not type still asks."""
         if not self._known:
             return ""
         new = self.new_words(text)
-        dense = [w for w in new if (w.isdigit() and len(w) >= LONG_NUMBER) or len(w) >= LONG_WORD]
+        dense = [w for w in new if (w.isdigit() and len(w) >= LONG_NUMBER) or (most is None and len(w) >= LONG_WORD)]
         if dense:
             return f"it carries {dense[0][:40]}, which you did not type"
+        if most is not None:
+            return f"it carries {len(new)} words that are not yours, and {most} is the most I hand over unasked" if len(new) > most else ""
         if len(new) > NEW_WORDS_A_SEARCH:
             return f"it carries {len(new)} words that are not yours, and {NEW_WORDS_A_SEARCH} is the most I send unasked"
         now = self.clock()

@@ -302,7 +302,11 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
             late["c"].record_delivery(text)
         board.register(Desk(settings.owner_id, shared.name_of(settings.owner_id), Trust(settings.data_dir / "trust.json"), journal,
                             busy=apps.busy_between if apps is not None else None, tell=own_chat.send,
-                            spent=ledger.spent_today, daily_usd=settings.daily_usd, receive=receive, draft=drafter, ask_owner=own_chat.ask))
+                            spent=ledger.spent_today, daily_usd=settings.daily_usd, receive=receive, draft=drafter, ask_owner=own_chat.ask,
+                            files=shelf, hand_over=lambda entry: deliver(shelf, entry, own_chat)))
+        from .gate import ASK as _ASK
+        from .peers import COLLEAGUE_FILE, describe_file
+        gate.rule(COLLEAGUE_FILE, _ASK, lambda a: describe_file(a, shelf))      # the question names the file
         peer_tools = board.handlers(settings.owner_id, now, settings.tz)
         me.closers.append(drafter.runner.close)
 
@@ -462,6 +466,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     me.closers += [watch_runner.runner.close, runner.close, *(w.close for w in workers), run_routine.runner.close]
     me.gate = gate
     me.agents = [runner, *workers, run_routine.runner, watch_runner.runner, *(r.runner for r in (brief_runner, leads_runner, triage, drafter) if r is not None)]
+    # Every agent this person has, attended or not, is held to the day's budget while it works and is counted by the
+    # others while it runs: a routine, a brief or a draft for a colleague can no longer take the day past its limit.
+    for agent in me.agents:
+        agent.within(ledger, settings.daily_usd)
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me

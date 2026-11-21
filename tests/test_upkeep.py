@@ -134,3 +134,70 @@ async def test_recall_also_finds_what_was_said_before_and_marks_it_as_not_memory
     assert (await recall({"query": "zebra crossing"}))["content"][0]["text"] == "Nothing in memory or in earlier conversations matches."
     alone = make_memory_handlers(memory, journal)["recall"]
     assert "Priya" not in (await alone({"query": "Priya pilot utilities"}))["content"][0]["text"], "an unattended run's recall reads saved notes only"
+
+
+# --- the weekly tidy-up, and saving before a conversation is condensed -----------------------------------------------
+
+def test_the_tidy_up_finds_doubles_and_old_entries_by_code_and_removes_nothing(tmp_path):
+    from datetime import datetime
+    day = [datetime(2025, 1, 10, 9, 0)]
+    memory = MemoryStore(tmp_path / "m", now=lambda: day[0])
+    old = memory.remember("Is based in Pune")
+    day[0] = datetime(2026, 3, 1, 9, 0)
+    first = memory.remember("Prefers calls after 2pm on weekdays")
+    day[0] = datetime(2026, 3, 5, 9, 0)
+    memory.remember("Prefers calls after 2pm on weekdays only")
+    memory.remember("Invests in early-stage logistics companies")
+    assert memory.tidy_due()
+    finds = memory.tidy_finds()
+    assert [(f[0], f[1]) for f in finds] == [(first.id, first.text), (old.id, old.text)], "the older of two alike, then the one over a year old"
+    assert "much the same as a later one" in finds[0][2] and "over a year ago" in finds[1][2]
+    assert len(memory.profile()) == 4 and not memory.tidy_due(), "finding is not forgetting, and it is not done again this week"
+    memory.keep(finds[0][3])
+    memory.keep(finds[1][3])
+    day[0] = datetime(2026, 3, 13, 9, 0)
+    assert memory.tidy_due() and memory.tidy_finds() == [], "what the owner chose to keep is not asked about again"
+    assert next(e for e in memory.profile() if e.id == old.id).date == "2026-03-05", "an old entry the owner kept counts as confirmed that day"
+
+
+async def test_tidying_is_put_to_the_owner_at_the_start_of_a_conversation_and_only_their_tap_forgets(tmp_path):
+    x = closing_rig(tmp_path)
+    memory: MemoryStore = x.conv._memory
+    a = memory.remember("Prefers calls after 2pm on weekdays")
+    b = memory.remember("Prefers calls after 2pm on weekdays only")
+    memory.pop_changes()
+    await say(x, "Hello.")
+    x.clock.t += timedelta(hours=3)
+    await say(x, "Hello again.")
+    (text, offer), = x.chat.asks
+    assert text.startswith("Tidying what I remember about you.") and "Forget this one?" in text and offer.startswith("t")
+    assert len(memory.profile()) == 3
+    again = make_offers_again(x)
+    assert again[offer][0] in (a.id, b.id), "the question survives a restart"
+    assert await x.conv.handle_decision(999, offer, True) == "" and len(memory.profile()) == 3
+    assert await x.conv.handle_decision(OWNER, offer, True) == "Forgotten." and len(memory.profile()) == 2
+    assert await x.conv.handle_decision(OWNER, offer, True) == "This request is no longer waiting."
+    x.clock.t += timedelta(hours=3)
+    await say(x, "And again.")
+    assert len(x.chat.asks) == 1, "once a week, not at every conversation"
+
+
+def make_offers_again(x):
+    from odysseus.offers import Offers
+    return Offers(x.conv._offers._path) if getattr(x.conv._offers, "_path", None) else x.conv._offers
+
+
+async def test_when_a_long_conversation_is_condensed_what_the_owner_said_is_offered_for_saving(tmp_path):
+    x = closing_rig(tmp_path)
+    for text in ("Who is Tara Menon?", "When is our call?", "I prefer calls after 2pm."):
+        await say(x, text)
+    assert x.seen == [] and x.chat.asks == []
+    x.runner.compacted = True           # what the agent library's hook sets when it condenses the conversation
+    await say(x, "Draft a reply asking for the data room.")
+    assert len(x.seen) == 1 and x.runner.compacted is False
+    assert [t for t, _ in x.chat.asks] == ['This conversation has grown long and was condensed. Save this to memory?\n\n"Prefers calls after 2pm."']
+    assert [r["proposed"] for r in x.journal.read() if r["kind"] == "condensed"] == [1]
+    assert len(x.clients) == 1, "the conversation itself goes on; nothing was begun again"
+    x.clock.t += timedelta(hours=3)
+    await say(x, "Where were we?")
+    assert len(x.chat.asks) == 1, "the same fact is not put to the owner a second time when the conversation closes"

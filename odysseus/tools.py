@@ -237,6 +237,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     # The assistant's own inbox (mailbox.py): reading only. What is read is recorded as other people's words.
     for n in ("inbox_list", "inbox_read", "inbox_attachment"):
         gate.rule(_name(n), ALLOW)
+    # Sending from that address is always put to the owner, with the whole message in the question. No setting widens it.
+    from .mailbox import INBOX_SEND, describe_own_send
+    gate.rule(INBOX_SEND, ASK, describe_own_send)
     # Code run on a throwaway machine with no internet (sandbox.py): it can reach nothing of the owner's but the kept
     # files it is handed, and can send them nowhere. What it makes goes to the owner's own chat. So it runs unasked.
     gate.rule(_name("run_code"), ALLOW)
@@ -252,6 +255,10 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
                 + f"\n\n{q}\n\nThey will see it exactly as shown.")
     gate.rule(_name("colleague_ask"), lambda a: ASK if taint.leaked(str(a.get("question", ""))) or taint.spill(str(a.get("question", ""))) else ALLOW,
               ask_question)
+    # A file to a colleague's assistant (peers.py) leaves the owner's side for good: asked every time, by the file's name.
+    # The assistant's start-up gives this rule the kept files, so the question can name the file (__main__.py).
+    from .peers import COLLEAGUE_FILE, describe_file
+    gate.rule(COLLEAGUE_FILE, ASK, describe_file)
     gate.rule(_name("files_send"), ALLOW)
     gate.rule(_name("checkin_remove"), ALLOW)
     if with_watches:
@@ -561,13 +568,17 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         ]
     if inbox:
         from . import mailbox as mailbox_mod
+        if gate is not None:
+            inbox = {**inbox, "inbox_send": gate.guarded(mailbox_mod.INBOX_SEND, inbox["inbox_send"])}      # lock 2: only the message that was approved
         tools += [tool(n, mailbox_mod.SCHEMAS[n][0], mailbox_mod.SCHEMAS[n][1])(inbox[n]) for n in mailbox_mod.SCHEMAS]
     if code:
         from . import sandbox as sandbox_mod
         tools += [tool(n, sandbox_mod.SCHEMAS[n][0], sandbox_mod.SCHEMAS[n][1])(code[n]) for n in sandbox_mod.SCHEMAS]
     if peers:
         from . import peers as peers_mod
-        tools += [tool(n, peers_mod.SCHEMAS[n][0], peers_mod.SCHEMAS[n][1])(peers[n]) for n in peers_mod.SCHEMAS]
+        if gate is not None and "colleague_file" in peers:
+            peers = {**peers, "colleague_file": gate.guarded(peers_mod.COLLEAGUE_FILE, peers["colleague_file"])}     # lock 2: only the file that was approved
+        tools += [tool(n, peers_mod.SCHEMAS[n][0], peers_mod.SCHEMAS[n][1])(peers[n]) for n in peers_mod.SCHEMAS if n in peers]
     if leads is not None:
         from . import leads as leads_mod
 
