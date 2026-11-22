@@ -75,6 +75,29 @@ except Exception as e:
 '''
 
 
+PRINTED = f'''
+import subprocess
+from pypdf import PdfReader
+html = """<!doctype html><html><head><meta charset="utf-8"><style>
+@page {{ size: A4; margin: 22mm 20mm; @bottom-right {{ content: counter(page); font: 9pt Inter; color: #777 }} }}
+body {{ font: 11pt/1.5 'Source Serif 4', serif; color: #111 }}
+h1 {{ font: 600 28pt Inter; margin: 0 0 4mm }}
+.cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; margin: 8mm 0 }}
+.card {{ background: #f4f3ef; border-radius: 3mm; padding: 5mm; break-inside: avoid }}
+.card b {{ display: block; font: 600 22pt Inter }}
+h2 {{ break-before: page; font: 600 16pt Inter }}
+</style></head><body><h1>A made-up memo</h1><p>""" + "A sentence of a made-up memo, for a test. " * 30 + """</p>
+<div class="cards"><div class="card"><b>7</b>fleets</div><div class="card"><b>12</b>months</div><div class="card"><b>3x</b>growth</div></div>
+<h2>Second page</h2><p>More of it.</p></body></html>"""
+open("/home/user/page.html", "w").write(html)
+done = subprocess.run(["chromium", "--headless", "--no-sandbox", "--disable-gpu", "--no-pdf-header-footer",
+                       "--print-to-pdf={OUT_DIR}/memo.pdf", "file:///home/user/page.html"], capture_output=True, text=True, timeout=90)
+pdf = PdfReader("{OUT_DIR}/memo.pdf")
+fonts = subprocess.run(["pdffonts", "{OUT_DIR}/memo.pdf"], capture_output=True, text=True).stdout
+print("PRINTED pages=%d width=%d inter=%s serif=%s" % (len(pdf.pages), round(float(pdf.pages[0].mediabox.width)), "Inter" in fonts, "SourceSerif4" in fonts))
+'''
+
+
 async def main() -> int:
     settings = config.load()
     if not settings.e2b_api_key or not settings.sandbox_template:
@@ -114,6 +137,16 @@ async def main() -> int:
         if keep:
             for e in sent:
                 (keep / e["name"]).write_bytes(shelf.data(e) or b"")
+
+        out = await run({"code": PRINTED, "look": True})
+        text = out["content"][0]["text"]
+        row = journal.read()[-1]
+        check("a web page is printed to a PDF by the browser on the machine: two A4 pages in the typefaces it names",
+              "PRINTED pages=2 width=595 inter=True serif=True" in text and len([c for c in out["content"] if c["type"] == "image"]) == 1,
+              f"{row['seconds']} s, ${row['cost_usd']}")
+        if keep:
+            for i, p in enumerate(c for c in out["content"] if c["type"] == "image"):
+                (keep / f"printed-{i}.jpg").write_bytes(base64.b64decode(p["data"]))
 
         out = await run({"code": OUTSIDE})
         check("the machine with our image still has no way out", "NO WAY OUT" in out["content"][0]["text"] and "REACHED" not in out["content"][0]["text"])

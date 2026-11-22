@@ -337,6 +337,20 @@ return file_block(name, result, sights)</code></pre>
 </table></div>
 <p><span class="g u">Not tested</span>: a deck from the owner's own material (a memo from a company's file, an update from a table of figures); whether the model corrects a fault it is shown, since in the one real run the first trial was already clean; a long document; charts inside a deck. The pictures are small, so a wrong figure or a misspelt name will not be caught by looking.</p>
 
+<h3 id="printed">A PDF that is a printed web page</h3>
+<p>A PDF library places text at coordinates. It has no notion of a column that wraps, a card that grows with its text, or a heading that must not be left alone at the foot of a page, so what a model draws with one is plain at best. A web page has all of that, and models write HTML and CSS better than they write anything else that has a layout. So a PDF whose look matters is written as one HTML file and printed by a browser on the machine. Nothing is bought for this: the browser is one more package in the image, it runs on the same rented machine with no internet, and no new company sees the file.</p>
+<div class="tbl"><table>
+<thead><tr><th>What the model is told</th><th>Why</th></tr></thead>
+<tbody>
+<tr><th>One file, with its CSS inside</th><td>The machine has no internet: a font, script or picture fetched from elsewhere would not arrive. A chart is drawn inline or embedded</td></tr>
+<tr><th>Paper, margins and page numbers in the CSS</th><td>The page rules of CSS set the size and put a number in the margin of every page</td></tr>
+<tr><th>What must stay together</th><td>A heading with its text, a table row, a card: marked so that a page does not break inside them</td></tr>
+<tr><th>A short rule of design</th><td>One typeface for text and at most one more, body size and line length in a stated range, one accent colour, figures in tables or cards</td></tr>
+<tr><th>A trial first</th><td>As for a deck: pictures of the pages come back before anything is sent</td></tr>
+</tbody>
+</table></div>
+<p>Run once in the real chat, on an invented company: a two-page investment memo with five figures in cards across the top, a revenue chart, a table of growth by month, a table of the round, risks, a list of what was not given, a boxed section left open for the owner's recommendation, and a numbered footer on each page. One trial, then the sending run. It took 293 seconds and 33 cents; the first attempt to start the machine failed on a dropped connection, and the time includes it. <span class="g u">Not tested</span>: a document of ten pages or more, where page breaks go wrong most often; the owner's own look applied to a printed PDF, since the template mechanism below is for PowerPoint and Word files only.</p>
+
 <h2 id="templates">Starting from the owner's own template</h2>
 <p>A deck made from a blank file is correct and looks like nobody's. A firm has its own: a slide master with its colours, typefaces and logo, a memo with its header and its named styles. A model asked to imitate these from a description gets them nearly right, which is worse than plain. So the look is not described to the model at all. The owner sends the file once and says it is the template, and after that the look comes out of the file.</p>
 <div class="tbl"><table>

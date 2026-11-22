@@ -114,7 +114,8 @@ reminders fire in UTC.
 - With `E2B_API_KEY` set, the assistant can run Python on a rented machine that has no internet access and is destroyed
   after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.
   Run `python scripts/build_sandbox.py` once and set `ODYSSEUS_SANDBOX_TEMPLATE=odysseus-documents`, and it can also
-  make slide decks, Word files and PDFs, and looks at pictures of the pages before it sends them. Send it your own
+  make slide decks, Word files and PDFs (a designed PDF is a web page printed by a browser on that machine), and looks
+  at pictures of the pages before it sends them. Send it your own
   deck or Word file and say it is your template, and later ones start from it. If your deck exists only as a PDF, it
   measures the PDF and builds a template from that, which is an imitation and says so.
 - With `AGENTMAIL_API_KEY` set, `/address` gives the assistant an email address of its own. Mail from you is dealt

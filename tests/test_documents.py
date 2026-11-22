@@ -63,6 +63,7 @@ def deck(**more):
 def test_the_tool_speaks_of_documents_only_when_the_machine_can_make_them():
     plain, full = schemas(False)["run_code"], schemas(True)["run_code"]
     assert plain == SCHEMAS["run_code"] and "look" not in plain[1]["properties"] and "python-pptx" not in plain[0]
+    assert "printed by the browser on the machine" in full[0] and "--print-to-pdf=/home/user/out/name.pdf" in full[0] and "@page { size: A4" in full[0]
     assert "python-pptx" in full[0] and "soffice" in full[0] and "look=true" in full[0] and full[1]["properties"]["look"]["type"] == "boolean"
     assert full[1]["required"] == ["code"], "a trial is offered, never demanded"
     assert "look" not in SCHEMAS["run_code"][1]["properties"], "describing it for documents does not change the plain description"

@@ -5,7 +5,8 @@
 
 The company's standard image can write a spreadsheet and a Word file and nothing else, and a machine with no internet
 cannot download what is missing. So the missing parts are put into an image once, here: the libraries for slide decks
-and PDFs, LibreOffice to turn a deck or a document into a PDF and into pictures of its pages, and fonts that are
+and PDFs, LibreOffice to turn a deck or a document into a PDF and into pictures of its pages, a browser to print a web
+page to a PDF, and fonts that are
 metric-compatible with the ones Office files usually ask for. The build runs on the company's machines; nothing is
 built on this one. Afterwards, set ODYSSEUS_SANDBOX_TEMPLATE to the name printed.
 """
@@ -18,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 NAME = "odysseus-documents"
 BASE = "code-interpreter-v1"            # the image sandbox.py used before; everything it had is still there
-APT = ["libreoffice-impress", "libreoffice-writer", "libreoffice-calc", "poppler-utils", "git", "fontconfig",
+APT = ["libreoffice-impress", "libreoffice-writer", "libreoffice-calc", "poppler-utils", "git", "fontconfig", "chromium",
        "fonts-liberation2", "fonts-crosextra-carlito", "fonts-crosextra-caladea", "fonts-inter", "fonts-noto-core"]
 PIP = ["python-pptx", "reportlab", "pypdf", "XlsxWriter", "markdown"]
 # Open-licensed typefaces that firms' decks and memos are often set in, from Google's public collection. A template that
