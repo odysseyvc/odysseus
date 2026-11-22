@@ -113,6 +113,8 @@ reminders fire in UTC.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With `E2B_API_KEY` set, the assistant can run Python on a rented machine that has no internet access and is destroyed
   after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.
+  Run `python scripts/build_sandbox.py` once and set `ODYSSEUS_SANDBOX_TEMPLATE=odysseus-documents`, and it can also
+  make slide decks, Word files and PDFs, and looks at pictures of the pages before it sends them.
 - With `AGENTMAIL_API_KEY` set, `/address` gives the assistant an email address of its own. Mail from you is dealt
   with at once; mail from anyone else is put to you with one tap before any model reads it. It can send from it
   with a key that has the send permission, and asks you before every message.

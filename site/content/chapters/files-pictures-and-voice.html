@@ -311,6 +311,32 @@ return file_block(name, result, sights)</code></pre>
 </table></div>
 <p><span class="g u">Not tested</span>: the model choosing to use the tool in a real conversation, and whether its code is right; a real cap table; code written under the influence of a hostile file. That nothing leaves the machine one way, without a reply, rests on the company's word: proving it needs a listening server of one's own. The cost is from the list price and has not been checked against an invoice.</p>
 
+<h2 id="documents">Making a document, and looking at it first</h2>
+<p>Reading files is half of the work. The other half is handing one back: a five-slide deck, a memo as a Word file, a PDF to forward. The machine that runs code can write these if the libraries are on it, and here the rule of no internet bites: the sandbox company's standard image can write a spreadsheet and a Word file and nothing else, and a machine with no way out cannot download what is missing. So the missing parts are put into an image once (<code>scripts/build_sandbox.py</code>): the libraries for slide decks and PDFs, LibreOffice to turn a deck or a document into a PDF, and typefaces with the same letter widths as the ones Office files ask for. The image is built on the company's machines from a recipe of a dozen lines and named in one setting. Without the setting the tool is described as before and offers none of this.</p>
+<p>A model that writes a deck in code writes it blind. It sets a title at a position and a size and never sees that the title wrapped onto three lines and ran into the text below. The fault is common and no reading of the code finds it. So a run can be a <strong>trial</strong>:</p>
+<div class="tbl"><table>
+<thead><tr><th>Step</th><th>Done by</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><th>1. Write the file</th><td>The model's code</td><td>Run with <code>look</code> set. The file is written on the machine</td></tr>
+<tr><th>2. Make pictures</th><td>Fixed code, after the model's</td><td>Each file is turned into a PDF if it is not one, the pages are counted, and the first twelve are laid out, numbered, as one small picture</td></tr>
+<tr><th>3. Look</th><td>The model</td><td>It is shown the pictures and told what to look for: text cut off, text over text, an empty page, the wrong order. Nothing is sent to the owner or kept</td></tr>
+<tr><th>4. Send</th><td>The model's code, corrected</td><td>Run again without <code>look</code>. This run sends the files to the owner's chat and keeps them</td></tr>
+</tbody>
+</table></div>
+<p>The trial is offered, not forced: a spreadsheet of sums does not need looking at, and a second run costs time. Two things about it are held by code. The pictures are made by code the model did not write and cannot change, so a file cannot be made to look right by the same mistake that made it wrong. And a trial sends nothing, whatever the model's code says, because sending happens outside the machine.</p>
+<p>The description of the tool carries a few rules for a deck, since the model will otherwise produce the average deck: sixteen by nine, a title that states the slide's point, little text and large, figures in a chart or a table, one plain typeface, and only what the owner gave or the model read, with gaps marked as gaps.</p>
+<p>Run against the real service (<code>scripts/live_documents.py</code>, 9 of 9 checks, no model called): a deck, a Word file and the deck's PDF were made; each came back as a picture; a slide written with far too much text showed, in the picture, its title running into its body; the trial sent nothing and the run after it sent three files; and the machine with the new image still had no way out. Then once in the real chat, with the request "a 5-slide deck that explains what a SAFE note is to a first-time founder, as PowerPoint and as a PDF":</p>
+<div class="tbl"><table>
+<thead><tr><th>Measured, one run</th><th>Result</th></tr></thead>
+<tbody>
+<tr><th>What the model did</th><td>One web search, one trial, one run that sent</td></tr>
+<tr><th>What arrived</th><td>A deck of five slides and its PDF, nothing off a page, a source line on each slide</td></tr>
+<tr><th>From request to files</th><td>83 seconds</td></tr>
+<tr><th>Cost</th><td>14 cents, of which the two runs of the machine were under a fifth of a cent</td></tr>
+</tbody>
+</table></div>
+<p><span class="g u">Not tested</span>: a deck from the owner's own material (a memo from a company's file, an update from a table of figures); whether the model corrects a fault it is shown, since in the one real run the first trial was already clean; a long document; charts inside a deck; a file in the firm's own template, which is not built: the model starts from a blank file every time. The pictures are small, so a wrong figure or a misspelt name will not be caught by looking.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A confident misreading.</strong> If the service turns 1,842 into 1,342, the wrong figure arrives as clean text and the model reports it with confidence. Nothing in the design catches this. Numbered pages help the owner check; the model is told to say when something is unclear, which helps only when the text looks unclear. The reader's notes are labelled "by eye" for the same reason.</p>
 <p><strong>A picture with nothing to read.</strong> Sending every picture to text recognition made a photograph of a room or a parcel a blank. Pictures in the common formats sent in the chat are therefore shown to the model. A picture made in code, red above and blue below with no writing, was sent with "Which two colours are in this picture, and which one is on top?" to a copy with no text-recognition key. The reply: "The picture has red on top and blue on the bottom." <span class="g v">Verified</span>. A picture in another format, or one attached to an email, still goes to text recognition and comes back blank if it has no writing.</p>
@@ -334,6 +360,7 @@ return file_block(name, result, sights)</code></pre>
 <li>The page reader has no tools, by two locks (an empty list and an empty server), so a hostile page can at most make it describe the page wrongly.</li>
 <li>A file is the owner's request but someone else's writing: nothing is removed, and nothing in it is an instruction.</li>
 <li>Code runs on a rented machine with no way out, destroyed after each run; its output is treated as derived from the file it was given.</li>
+<li>The same machine, from an image with the libraries already on it, writes decks, Word files and PDFs. A trial run shows the model pictures of the pages before anything is sent.</li>
 <li>A voice note is shown back as "Heard:" before it is acted on; names are what speech recognition gets wrong.</li>
 <li>Reading a file lives in one place, the reader, for a file sent in the chat, fetched from a link or attached to an email. Only a link in the owner's own message is fetched, and only by code. The log keeps sizes, never contents.</li>
 </ul></div>

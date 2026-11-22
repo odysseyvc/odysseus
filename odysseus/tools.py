@@ -574,7 +574,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         tools += [tool(n, mailbox_mod.SCHEMAS[n][0], mailbox_mod.SCHEMAS[n][1])(inbox[n]) for n in mailbox_mod.SCHEMAS]
     if code:
         from . import sandbox as sandbox_mod
-        tools += [tool(n, sandbox_mod.SCHEMAS[n][0], sandbox_mod.SCHEMAS[n][1])(code[n]) for n in sandbox_mod.SCHEMAS]
+        described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)))
+        tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described]
     if peers:
         from . import peers as peers_mod
         if gate is not None and "colleague_file" in peers:

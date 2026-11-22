@@ -37,6 +37,7 @@ class Settings:
     mistral_api_key: str = ""    # optional: without it, files the owner sends cannot be read
     agentmail_api_key: str = ""  # optional: with it, each person can give the assistant an email address of its own (mailbox.py)
     e2b_api_key: str = ""        # optional: with it, the assistant can run code on a throwaway machine (sandbox.py)
+    sandbox_template: str = ""   # optional: the name of an image of our own for that machine, which can make decks and PDFs (scripts/build_sandbox.py)
     owner_emails: tuple = ()     # the host's other addresses, besides the connected mailbox's: mail from these to the assistant is the host's own
     # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
     whatsapp_token: str = ""          # a permanent access token for the Meta app
@@ -124,6 +125,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         mistral_api_key=merged.get("MISTRAL_API_KEY", ""),
         agentmail_api_key=merged.get("AGENTMAIL_API_KEY", "").strip(),
         e2b_api_key=merged.get("E2B_API_KEY", "").strip(),
+        sandbox_template=merged.get("ODYSSEUS_SANDBOX_TEMPLATE", "").strip(),
         owner_emails=tuple(a.strip().lower() for a in merged.get("ODYSSEUS_OWNER_EMAILS", "").split(",") if "@" in a),
         whatsapp_token=merged.get("WHATSAPP_TOKEN", ""),
         whatsapp_phone_id=merged.get("WHATSAPP_PHONE_ID", ""),

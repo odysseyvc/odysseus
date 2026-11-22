@@ -277,7 +277,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     code_tools = None
     if settings.e2b_api_key:
         from .sandbox import E2B, CodeRunner
-        code_tools = CodeRunner(E2B(settings.e2b_api_key), journal, ledger, settings.daily_usd, gate.taint).handlers(
+        code_tools = CodeRunner(E2B(settings.e2b_api_key, settings.sandbox_template), journal, ledger, settings.daily_usd, gate.taint).handlers(
             shelf, lambda entry: deliver(shelf, entry, own_chat))
 
     # Asking a colleague's assistant (peers.py): this person's desk at the switchboard, and the tool that uses it.
