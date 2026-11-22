@@ -335,7 +335,22 @@ return file_block(name, result, sights)</code></pre>
 <tr><th>Cost</th><td>14 cents, of which the two runs of the machine were under a fifth of a cent</td></tr>
 </tbody>
 </table></div>
-<p><span class="g u">Not tested</span>: a deck from the owner's own material (a memo from a company's file, an update from a table of figures); whether the model corrects a fault it is shown, since in the one real run the first trial was already clean; a long document; charts inside a deck; a file in the firm's own template, which is not built: the model starts from a blank file every time. The pictures are small, so a wrong figure or a misspelt name will not be caught by looking.</p>
+<p><span class="g u">Not tested</span>: a deck from the owner's own material (a memo from a company's file, an update from a table of figures); whether the model corrects a fault it is shown, since in the one real run the first trial was already clean; a long document; charts inside a deck. The pictures are small, so a wrong figure or a misspelt name will not be caught by looking.</p>
+
+<h2 id="templates">Starting from the owner's own template</h2>
+<p>A deck made from a blank file is correct and looks like nobody's. A firm has its own: a slide master with its colours, typefaces and logo, a memo with its header and its named styles. A model asked to imitate these from a description gets them nearly right, which is worse than plain. So the look is not described to the model at all. The owner sends the file once and says it is the template, and after that the look comes out of the file.</p>
+<div class="tbl"><table>
+<thead><tr><th>Step</th><th>Done by</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><th>1. Keep</th><td>The model, on the owner's word</td><td>It names a kept PowerPoint or Word file as the template. One for decks, one for documents; a new one replaces the old, and the old stays a kept file</td></tr>
+<tr><th>2. Read</th><td>Fixed code, on the rented machine</td><td>The file is opened. For a deck: slide size, the number of example slides, each layout and the placeholders it has. For a document: page size, the styles, whether there is a header or footer. A file that does not open changes nothing</td></tr>
+<tr><th>3. Ask</th><td>The model, before any deck or Word file</td><td>One call with no arguments returns what is kept, that list, and a few lines on how to start from it. It runs nothing</td></tr>
+<tr><th>4. Use</th><td>The model's code</td><td>It opens the template by a fixed name, takes out the example content, and fills the layouts' placeholders or writes in the named styles. It is told to set no typeface, colour or size</td></tr>
+</tbody>
+</table></div>
+<p>Three details are held by code. The template goes onto the machine only in a run whose code names it, so a run that adds up a column does not carry the firm's deck to the sandbox company. The list of layouts is made by code the model did not write, with every name cut short, because a layout's name was typed by whoever made the file and is shown to the model as a label and not as an instruction. And a PDF or a picture of a deck is refused: a look cannot be recovered from pages, only from the file that holds the master.</p>
+<p>Run against the real service (<code>scripts/live_templates.py</code>, 8 of 8 checks, no model called), with a made-up house deck and memo standing in for an owner's: the layouts and styles were read in 7 seconds for a thirtieth of a cent; a deck started from the template kept the house background and had none of the three example slides; a memo kept the house header and style and none of the example text; a run that did not name a template found nothing of it on the machine. The stand-in deck had dark text on its dark background, a fault in the stand-in, and the page picture showed it. Then once in the real chat: asked to treat an earlier deck as the template and make three slides from it, the model found the file, kept it as the template, ran one trial and one sending run, in 65 seconds for 9 cents.</p>
+<p><span class="g u">Not tested</span>: a real firm's template, which will have more layouts, pictures in the master and placeholders of odd kinds; a Word template in the real chat; an Office template file (.potx, .dotx), which is turned into an ordinary file first and has only been tried with a stand-in for the machine. In the one real run the model also passed the template in as an ordinary file, so it was uploaded twice; harmless, and not yet prevented.</p>
 
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A confident misreading.</strong> If the service turns 1,842 into 1,342, the wrong figure arrives as clean text and the model reports it with confidence. Nothing in the design catches this. Numbered pages help the owner check; the model is told to say when something is unclear, which helps only when the text looks unclear. The reader's notes are labelled "by eye" for the same reason.</p>
@@ -361,6 +376,7 @@ return file_block(name, result, sights)</code></pre>
 <li>A file is the owner's request but someone else's writing: nothing is removed, and nothing in it is an instruction.</li>
 <li>Code runs on a rented machine with no way out, destroyed after each run; its output is treated as derived from the file it was given.</li>
 <li>The same machine, from an image with the libraries already on it, writes decks, Word files and PDFs. A trial run shows the model pictures of the pages before anything is sent.</li>
+<li>The owner's own deck or Word file can be kept as a template. Fixed code lists its layouts and styles, and the look comes from the file, not from the model.</li>
 <li>A voice note is shown back as "Heard:" before it is acted on; names are what speech recognition gets wrong.</li>
 <li>Reading a file lives in one place, the reader, for a file sent in the chat, fetched from a link or attached to an email. Only a link in the owner's own message is fetched, and only by code. The log keeps sizes, never contents.</li>
 </ul></div>

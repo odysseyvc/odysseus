@@ -137,6 +137,33 @@ class Shelf:
         self._write([e for e in self._read() if e["id"] != entry["id"]])
         return entry
 
+    # --- templates -------------------------------------------------------------------------------------------------
+    def templates(self) -> dict[str, dict[str, Any]]:
+        """The kept files the owner's documents start from: at most one per kind ("deck", "document")."""
+        return {str(e["template"]): e for e in self._read() if e.get("template") and e.get("kept")}
+
+    def set_template(self, file_id: str, kind: str, outline: str = "") -> dict[str, Any] | None:
+        """Make this kept file the template for its kind. The one it replaces stays a kept file and is no longer a template."""
+        entries = self._read()
+        wanted = str(file_id or "").strip().lower().lstrip("#")
+        entry = next((e for e in entries if e["id"] == wanted and e.get("kept")), None)
+        if entry is None:
+            return None
+        for e in entries:
+            if e.get("template") == kind:
+                e.pop("template", None), e.pop("outline", None)
+        entry["template"], entry["outline"] = kind, outline[:TEXT_KEPT]
+        self._write(entries)
+        return entry
+
+    def clear_template(self, kind: str) -> dict[str, Any] | None:
+        entries = self._read()
+        entry = next((e for e in entries if e.get("template") == kind), None)
+        if entry is not None:
+            entry.pop("template", None), entry.pop("outline", None)
+            self._write(entries)
+        return entry
+
     # --- finding ---------------------------------------------------------------------------------------------------
     def find(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """The files that fit these words best, newest first among equals. No words: the newest files.
@@ -160,6 +187,8 @@ class Shelf:
         size = int(e.get("size") or 0)
         human = f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{max(1, size // 1024)} KB"
         out = f"[{e['id']}] {e.get('name', 'file')}, {human}, sent {str(e.get('at', ''))[:16].replace('T', ' ')}"
+        if e.get("template"):
+            out += f", the template for {'decks' if e['template'] == 'deck' else 'documents'}"
         if e.get("said"):
             out += f'\n    the owner wrote: "{e["said"][:200]}"'
         if e.get("origin"):

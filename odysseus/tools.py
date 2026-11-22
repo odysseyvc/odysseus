@@ -243,6 +243,9 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     # Code run on a throwaway machine with no internet (sandbox.py): it can reach nothing of the owner's but the kept
     # files it is handed, and can send them nowhere. What it makes goes to the owner's own chat. So it runs unasked.
     gate.rule(_name("run_code"), ALLOW)
+    # Marking one of the owner's kept files as the template their documents start from. Nothing leaves, the owner is told,
+    # and it is undone in a word.
+    gate.rule(_name("template"), ALLOW)
     # Common free times with colleagues (peers.py): code on both sides, busy blocks only, and only the intersection comes back.
     gate.rule(_name("times_find"), ALLOW)
     # A question to a colleague's assistant (peers.py) leaves the owner's side. Like a search, it goes unasked unless it
@@ -575,7 +578,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     if code:
         from . import sandbox as sandbox_mod
         described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)))
-        tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described]
+        tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described if n in code]
     if peers:
         from . import peers as peers_mod
         if gate is not None and "colleague_file" in peers:
