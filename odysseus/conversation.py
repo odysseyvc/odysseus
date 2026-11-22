@@ -74,7 +74,7 @@ class Conversation:
                  schedule: ScheduleStore | None = None, gate: Gate | None = None, apps: Apps | None = None, browser: Browser | None = None,
                  ocr: OcrBackend | None = None, anyapp: AnyApp | None = None, tracing: Any = None, voice: VoiceBackend | None = None, watches: Any = None, attio: Any = None,
                  services: Any = (), pages: Any = None, links: Any = None, deckview: Any = None, history: Any = None, closer: Any = None,
-                 decisions: Any = None, worker: Any = None, checkins: Any = None, files: Any = None):
+                 decisions: Any = None, worker: Any = None, checkins: Any = None, files: Any = None, skills: Any = None):
         self._s = settings
         # More agents, each for one job at a time in the background (see _run): a deck sent with no message, a document read
         # from a link, a filing the owner approved from a question. The owner's conversation stays free meanwhile. How
@@ -117,6 +117,8 @@ class Conversation:
         self.alone = None            # set at start-up: whether this person is the only one on this copy (peers.py)
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
+        self._skills = skills              # ways of doing a task that the owner taught: skills.py
+        self._shown_skills = -1            # the version of the list of skills the model last saw
         self._files = files                # what the owner sent, kept to be handed back: files.py
         # What the program has put to the owner, by the id on its buttons: a fact to save, or work to run. Kept in a file,
         # so that a question still waiting when the program restarts can still be answered (offers.py).
@@ -284,7 +286,7 @@ class Conversation:
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/checkins shows the people I remind you to keep in touch with. "
-                            "/files shows the files you sent that I am keeping. /address shows my own email address. "
+                            "/files shows the files you sent that I am keeping. /skills shows what you have taught me to do your way. /address shows my own email address. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
                             "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague.")
             return
@@ -339,6 +341,26 @@ class Conversation:
                     await chat.send(f"Deleted {entry['name']} from my files. The copy in this chat is yours to delete.")
             else:
                 await chat.send("Send /files to list them, /files send and an id to get one back, or /files remove and an id to delete one.")
+            return
+        # Skills the owner taught, listed, read or deleted by the owner directly. No model is involved.
+        if command.split()[0] == "/skills":
+            words = command.split()
+            self._journal.write("command", name="/skills", action=words[1] if len(words) > 1 else "list")
+            if self._skills is None:
+                await chat.send("Skills are not kept here.")
+            elif len(words) == 1:
+                await chat.send(self._skills.listing())
+            elif len(words) == 3 and words[1] in ("show", "remove", "delete"):
+                skill = self._skills.get(words[2])
+                if skill is None:
+                    await chat.send("I have no skill of that name. /skills lists them.")
+                elif words[1] == "show":
+                    await chat.send(f"{skill['name']}\nWhen: {skill['description']}\n\n{skill['body']}")
+                else:
+                    self._skills.remove(words[2], by="owner")
+                    await chat.send(f"Deleted the skill \"{skill['name']}\". I will no longer follow it.")
+            else:
+                await chat.send("Send /skills to list them, /skills show and a name to read one, or /skills remove and a name to delete one.")
             return
         if command == "/checkins":
             await chat.send(("People to keep in touch with:\n" + self._checkins.listing()) if self._checkins is not None else "No list is kept here.")
@@ -809,6 +831,11 @@ class Conversation:
         if blank or self._memory.version != self._shown_version:
             self._shown_version = self._memory.version
             out += f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        if self._skills is not None and (blank or self._skills.version != self._shown_skills):
+            # Only names and when to use each: a skill's body is read by the model when a task fits (skills.py).
+            from .skills import SKILLS_NOTE
+            self._shown_skills = self._skills.version
+            out += f"SKILLS\n{SKILLS_NOTE}\n{self._skills.listing_for_model()}\nEND OF SKILLS\n\n"
         if blank and self.alone is not None and self.alone():
             out += ("Nobody else uses this assistant yet. times_find, colleague_ask and colleague_file reach only colleagues who do, so "
                     "do not offer them: for anyone else, the owner's own calendar and an email are the way.\n\n")
@@ -919,7 +946,11 @@ class Conversation:
         """What a job in the background is shown first: what is remembered about the owner, and nothing of the conversation."""
         if self._memory is None:
             return ""
-        return f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        out = f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        if self._skills is not None and self._skills.all():       # a job in the background does the owner's work too, their way
+            from .skills import SKILLS_NOTE
+            out += f"SKILLS\n{SKILLS_NOTE}\n{self._skills.listing_for_model()}\nEND OF SKILLS\n\n"
+        return out
 
     async def _run(self, prompt: str, chat: Chat, images: list[tuple[str, bytes]] | None = None, material: str | None = None, bg: bool = False,
                    slot: int = 0) -> None:
@@ -981,6 +1012,8 @@ class Conversation:
         if alone:       # with another task running, what is waiting to be reported is that task's, and must not be thrown away
             if self._memory is not None:
                 self._memory.pop_changes()   # anything pending is not from this task
+            if self._skills is not None:
+                self._skills.pop_changes()
             if self._schedule is not None:
                 self._schedule.pop_changes()
             if self._watches is not None:
@@ -1077,6 +1110,9 @@ class Conversation:
         changes = self._memory.pop_changes() if self._memory is not None else []
         if changes:
             body += "\n\nMemory: " + "; ".join(changes) + "."
+        # So is every skill it saved, changed or removed: a standing instruction never appears without the owner being told.
+        for line in (self._skills.pop_changes() if self._skills is not None else []):
+            body += "\n\n" + line
         acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else []) \
             + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()] \
             + (self._inbox.pop_changes() if self._inbox is not None and hasattr(self._inbox, "pop_changes") else [])

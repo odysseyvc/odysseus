@@ -122,6 +122,9 @@ reminders fire in UTC.
 - Files you send in the chat, attachments it reads in your mail and the text of DocSend documents it reads are kept in
   the data folder so that you can ask for them back. `/files` lists them and
   `/files remove` with an id deletes one.
+- Tell it how you want a kind of task done ("learn how we write a memo: ...") and it keeps that as a skill, a
+  `SKILL.md` file in the data folder, and follows it from then on. `/skills` lists them, `/skills show` with a name
+  prints one and `/skills remove` with a name deletes it.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
 

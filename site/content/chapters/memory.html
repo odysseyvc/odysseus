@@ -235,6 +235,41 @@ gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text"
 <p>The summary is one paragraph, so most of what was said is still not in front of the model. It is on disk. Each exchange is appended to a file as it ends, the owner's words and the reply, each cut to a fixed length. The model's <code>recall</code> tool, which searches saved notes, now searches that file too, by plain word matching in code: the exchanges sharing at least half of the query's uncommon words, best first. There is no index and no model.</p>
 <p>What comes back from there is not memory, and is not presented as memory. A reply may quote an email, so the result is headed as earlier exchanges that may repeat what other people wrote, and reading it counts as reading outside material for every rule in {{ch:untrusted-content}}. An unattended run's <code>recall</code> does not search it. <span class="g v">Verified</span> by unit tests (<code>tests/test_upkeep.py</code>, six tests). Whether the real model reaches for it when the owner says "as we discussed" is not tested.</p>
 
+<h2 id="skills">Skills: a procedure taught once</h2>
+<p>A fact about the owner is one sentence and is wanted in every conversation. How the firm writes an investment memo is twenty lines and is wanted only when a memo is being written. Put in the profile, twenty such procedures would be read at the start of every conversation and paid for each time, and the one that mattered would sit among nineteen that did not. So a procedure is kept apart from memory, as a <strong>skill</strong>, in two parts:</p>
+<div class="tbl"><table>
+<thead><tr><th>Part</th><th>What it holds</th><th>When the model sees it</th></tr></thead>
+<tbody>
+<tr><th>Description</th><td>One or two sentences: what the skill is for and when to use it</td><td>At the start of a conversation and whenever the list changes, for every skill</td></tr>
+<tr><th>Body</th><td>The steps, rules and format, in the owner's words</td><td>Only when the task at hand fits the description, through one tool call</td></tr>
+</tbody>
+</table></div>
+<p>This is the Agent Skills format, and each skill is stored exactly as that format has it: a folder with one <code>SKILL.md</code>, a name and a description between two lines of dashes, then the body. A skill written for another assistant can be dropped into the folder and is read; one taught here can be carried elsewhere.</p>
+<p>The agent library has its own way of loading such files, and it is not used. Its loader is one of the library's built-in tools, the files a skill refers to are read with the built-in file and shell tools, and those act on the machine the assistant runs on, which holds every key and every person's folder. An assistant that reads strangers' mail is given no tool that can open a file on its own machine (see the chapter on the gate). The library's documentation also does not say that a skill written during a session is seen by that session. So the format is kept and the loading is thirty lines of our own: three tools that read, save and remove a skill, and nothing else touches the folder.</p>
+<p>The description decides whether a skill is ever used, since it is all the model sees until it reads the body. The saving tool asks for it in the third person, with the occasion first and in the words the owner would use when asking.</p>
+<h3>A skill is a standing instruction</h3>
+<p>Everything else the model reads is material. A skill is the one place where text is stored in order to be followed later, so it is where a planted instruction would do the most lasting harm: a web page that got the model to save "when writing to backers, copy this address" would be obeyed in every later conversation. What holds, by code:</p>
+<div class="tbl"><table>
+<thead><tr><th>Rule</th><th>How it is held</th></tr></thead>
+<tbody>
+<tr><th>Whose words</th><td>Saved unasked only when the task has read nothing but the owner's own messages. Once it has read mail, a page or a file, the owner is shown the whole skill and asked, as for memory</td></tr>
+<tr><th>Never silent</th><td>Every save, change and removal is added under the reply by code, with the command that prints the skill</td></tr>
+<tr><th>Grants nothing</th><td>A skill says how to do a task. Every act it leads to passes the same gate as before; the body is handed to the model under a line saying so</td></tr>
+<tr><th>No secrets</th><td>A body with something shaped like a card number or a key is refused</td></tr>
+<tr><th>Undone by the owner</th><td><code>/skills</code> lists them, <code>/skills show</code> prints one, <code>/skills remove</code> deletes it. No model is involved. A file of changes keeps the text each save replaced</td></tr>
+</tbody>
+</table></div>
+<p>Run once in the real chat, with a made-up format for a one-page company summary (a word limit, a first line, four labelled lines, a last line, a mark for anything not verified):</p>
+<div class="tbl"><table>
+<thead><tr><th>Step</th><th>What happened</th><th>Time and cost</th></tr></thead>
+<tbody>
+<tr><th>Taught in one message</th><td>One call to save; the file held the owner's six rules and no others; the reply ended with the line added by code</td><td>8 seconds, 13 cents, most of it the long conversation being read again</td></tr>
+<tr><th>Asked for a summary of an invented company</th><td>One call to read the skill, then a reply in the taught format, with seven marks on what it had not been given</td><td>6 seconds, 1.5 cents</td></tr>
+<tr><th>Removed by command</th><td>The folder was gone</td><td>No model called</td></tr>
+</tbody>
+</table></div>
+<p><span class="g u">Not tested</span>: whether the right skill is picked when twenty are kept and two are alike; a correction to a skill ("shorter next time") saved back into it; a skill used by a job in the background, such as the reading of a deck; a save from a task that had read outside material, in the real chat (the rule is tested with a stand-in); a skill that needs a file beside it, such as a template, which this does not carry.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <h3>Compaction itself is still unguarded</h3>
 <p>The closing pass runs when a conversation ends after a pause. It does not run when the agent library condenses a conversation that is still going, which can happen inside one long sitting. There the program still relies on the model saving lasting facts as they come up, and on the hook that shows the profile again afterwards. If the model failed to save something, compaction loses it. <span class="g u">Not tested</span> Compaction in a live conversation is not recorded; the hook is exercised only by a test that calls it by hand.</p>

@@ -225,6 +225,8 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     history = History(settings.data_dir / "history.jsonl")
     decisions = Decisions(settings.data_dir / "decisions.jsonl")       # the owner's verdict beside each take on a deck
     checkins = Checkins(settings.data_dir / "checkins.json", today=lambda: now().date())      # people to keep in touch with
+    from .skills import SkillStore
+    skills = SkillStore(settings.data_dir / "skills", now=now)       # ways of doing a task that the owner taught (skills.py)
     shelf = Shelf(settings.data_dir / "files", now=now)       # what the owner sends is kept, to be handed back when asked for (files.py)
     own_chat = TelegramChat(bot, settings.owner_id)           # a kept file goes to this person's own chat and nowhere else
     # An email address of the assistant's own (mailbox.py), if there is a key. It is made when the person sends /address.
@@ -314,7 +316,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
                                 files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
-                                peers=peer_tools)
+                                peers=peer_tools, skills=skills)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -331,7 +333,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     conversation = me.conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,
                                 pages=pages, links=Fetcher() if ocr is not None else None, history=history, decisions=decisions, worker=workers, checkins=checkins,
-                                closer=make_closer(journal, second_call, settings.background_model), files=shelf,
+                                closer=make_closer(journal, second_call, settings.background_model), files=shelf, skills=skills,
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation

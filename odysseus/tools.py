@@ -194,6 +194,17 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
               lambda a: describe_memory(a, taint))
     gate.rule(_name("note"), lambda a: ASK if _after_reading(taint, str(a.get("text", ""))) else ALLOW,
               lambda a: describe_memory(a, taint, "Write this in my dated notes?"))
+    # A skill (skills.py) is a standing instruction: text that the model follows in later conversations. From the owner's
+    # own words it is saved unasked and reported by code. Once the task has read what other people wrote, the words may
+    # be theirs, and the owner is shown the whole skill and asked. Reading and removing one change nothing outside.
+    from . import skills as skills_mod
+
+    def skill_text(a: dict[str, Any]) -> str:
+        return f"{a.get('name', '')} {a.get('description', '')} {a.get('body', '')}"
+    gate.rule(skills_mod.SKILL_SAVE, lambda a: ASK if _after_reading(taint, skill_text(a)) else ALLOW,
+              lambda a: skills_mod.describe_save(a, _after_reading(taint, skill_text(a))))
+    gate.rule(_name("skill_read"), ALLOW)
+    gate.rule(_name("skill_remove"), ALLOW)
     # A search is allowed unless it carries details recognised from the owner's accounts, or more that is not the owner's
     # own words than may leave unasked (taint.py); then the owner is asked.
     gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(_sent(a)) or taint.spill(_sent(a)) else ALLOW,
@@ -348,7 +359,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      read_only: bool = False, gate: Gate | None = None, apps: Apps | None = None,
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
-                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None, peers: Any = None):
+                     checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None, peers: Any = None,
+                     skills: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -579,6 +591,12 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         from . import sandbox as sandbox_mod
         described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)))
         tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described if n in code]
+    if skills is not None:
+        from . import skills as skills_mod
+        sk = skills.handlers(journal, getattr(gate, "taint", None))
+        if gate is not None:
+            sk["skill_save"] = gate.guarded(skills_mod.SKILL_SAVE, sk["skill_save"])      # lock 2: only the skill that was approved
+        tools += [tool(n, skills_mod.SCHEMAS[n][0], skills_mod.SCHEMAS[n][1])(sk[n]) for n in skills_mod.SCHEMAS]
     if peers:
         from . import peers as peers_mod
         if gate is not None and "colleague_file" in peers:
