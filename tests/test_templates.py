@@ -54,6 +54,7 @@ def test_the_tool_is_offered_only_where_documents_can_be_made(tmp_path):
     assert "template" in schemas(True) and "template" not in schemas(False)
     assert schemas(True)["template"][1].get("required") is None, "called with nothing, it shows what is kept"
     assert "call `template`" in schemas(True)["run_code"][0]
+    assert "only as a PDF" in schemas(True)["template"][0] and "it is an imitation" in schemas(True)["template"][0]
 
     class Plain:
         async def run(self, code, files, seconds):

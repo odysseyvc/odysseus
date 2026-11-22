@@ -500,7 +500,13 @@ TEMPLATE = ("The owner's own templates for slide decks and for Word documents: t
             "whether a template is kept for each, where it is on the code machine, what layouts or styles it has and how to start from it: do "
             "that before you make a deck or a Word file. When the owner sends a .pptx or .docx (or .potx, .dotx) and says it is their template, "
             "or that their decks or memos should look like it, call it with that file's `id` to keep it as the template: one for decks, one "
-            "for documents, a new one replacing the old. `clear` stops using one; the file itself stays kept.",
+            "for documents, a new one replacing the old. `clear` stops using one; the file itself stays kept. If the owner has their deck only "
+            "as a PDF, a PDF cannot be the template, but you can build one from it with run_code: put the PDF in with `files`; read its page "
+            "size and font names (pypdf) and its colours (pixels of a page picture from pdftoppm); cut the logo out of a page picture as a PNG "
+            "and place it on the master where the PDF has it; set the look on the slide master and its layouts, not on slides; give it the "
+            "layouts the PDF uses most (title, text, two columns, big figures, closing); name the PDF's own typefaces even if they are not "
+            "installed here; look at your pages beside the PDF's; send the .pptx and keep it with `id`. Tell the owner it is an imitation "
+            "and say what differs from the original.",
             {"type": "object",
              "properties": {"id": {"type": "string", "description": "The id of a kept .pptx or .docx to make the template, from files_find."},
                             "clear": {"type": "string", "enum": ["deck", "document"], "description": "Stop using the template of this kind."}}})
