@@ -91,6 +91,28 @@ print("MEMO paragraphs=%d header=%s style=%s example=%s" % (len(again.paragraphs
       again.paragraphs[1].style.name, any("Example" in p.text for p in again.paragraphs)))
 '''
 
+PDF_DECK = f'''
+from reportlab.pdfgen import canvas
+W, H = 13.333 * 72, 7.5 * 72
+c = canvas.Canvas("{OUT_DIR}/House deck.pdf", pagesize=(W, H))
+c.setFillColorRGB(0.04, 0.14, 0.26); c.rect(0, 0, W, H, fill=1, stroke=0)
+c.setFillColorRGB(0.96, 0.95, 0.93); c.setFont("Times-Italic", 54); c.drawString(72, H / 2, "A made-up house deck")
+c.showPage()
+TITLES = ["Revenue tripled", "Why now is the moment", "Two risks we watch closely", "The team", "How the money is used", "Customers stay"]
+WORDS = "harbour quartz meadow lantern orbit velvet thistle copper glacier saffron ember willow".split()
+for n in range(6):
+    c.setFillColorRGB(0.96, 0.95, 0.93); c.rect(0, 0, W, H, fill=1, stroke=0)
+    c.setFillColorRGB(0.78, 0.27, 0.17); c.circle(0.6 * 72, H - 0.55 * 72, 0.2 * 72, fill=1, stroke=0)      # the mark: 0.4 to 0.8 across, 0.35 to 0.75 down
+    c.setFillColorRGB(0.04, 0.14, 0.26); c.rect(0.4 * 72, 0.5 * 72, W - 0.8 * 72, 1.5, fill=1, stroke=0)     # a rule 7 inches down
+    c.setFont("Helvetica-Bold", 30); c.drawString((1 + 0.4 * (n % 3)) * 72, H - (1.5 + 0.1 * n) * 72, TITLES[n])
+    c.setFont("Helvetica", 18)
+    for i in range(n + 2):
+        c.drawString((1 + 0.3 * ((n + i) % 4)) * 72, H - (2.5 + 0.1 * n + 0.5 * i) * 72, " ".join(WORDS[(n * 5 + i * 3 + k) % 12] for k in range(3 + (n + i) % 5)))
+    c.showPage()
+c.save()
+print("made")
+'''
+
 LISTING = f'''
 import os
 print("IN", sorted(os.listdir("{IN_DIR}")))
@@ -144,6 +166,28 @@ async def main() -> int:
             keep.mkdir(parents=True, exist_ok=True)
             for i, p in enumerate(pictures):
                 (keep / f"template-look-{i}.jpg").write_bytes(base64.b64decode(p["data"]))
+
+        sent.clear()
+        await run({"code": PDF_DECK})
+        pdf = next((e for e in sent if e["name"].endswith(".pdf")), None)
+        out = await template({"study": pdf["id"]}) if pdf else {"content": [{"type": "text", "text": "no PDF was made"}], "is_error": True}
+        text = out["content"][0]["text"]
+        row = journal.read()[-1]
+        check("fixed code measures a PDF-only deck: pages, size, two kinds of page", not out.get("is_error") and "7 pages of 13.33 by 7.5" in text
+              and "2 kind(s)" in text, f"{row.get('seconds')} s, ${row.get('cost_usd')}")
+        marks = [ln.split() for ln in text.splitlines() if ln.strip().startswith(("mark", "line", "block"))]
+        near = lambda ln, x, y: abs(float(ln[2].rstrip(",")) - x) < 0.08 and abs(float(ln[4].rstrip(",")) - y) < 0.08
+        check("it finds the mark and the rule that repeat, where they are, and nothing else",
+              len(marks) == 2 and any(m[0] == "mark" and near(m, 0.4, 0.35) for m in marks) and any(m[0] == "line" and near(m, 0.4, 6.98) for m in marks),
+              " / ".join(" ".join(m) for m in marks)[:200])
+        check("the cover, a kind with one page, is said to be unmeasured", "Fewer than three such pages" in text)
+        check("it shows the pages", len(out["content"]) == 2 and out["content"][1]["type"] == "image")
+        if keep and len(out["content"]) == 2:
+            keep.mkdir(parents=True, exist_ok=True)
+            (keep / "study.jpg").write_bytes(base64.b64decode(out["content"][1]["data"]))
+            (keep / "study.txt").write_text(text, encoding="utf-8")
+        out = await run({"code": "import subprocess\nprint(subprocess.run(['fc-list', ':', 'family'], capture_output=True, text=True).stdout.count('Serif'))"})
+        check("open typefaces are on the machine", int(out["content"][0]["text"].split("Printed:")[-1].split()[0]) > 20, out["content"][0]["text"].split("Printed:")[-1].strip()[:40])
 
         await template({"clear": "deck"})
         out = await run({"code": LISTING + f"# {TEMPLATE_FILE['deck']}\n"})

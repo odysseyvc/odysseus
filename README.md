@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 514 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 625 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -115,7 +115,8 @@ reminders fire in UTC.
   after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.
   Run `python scripts/build_sandbox.py` once and set `ODYSSEUS_SANDBOX_TEMPLATE=odysseus-documents`, and it can also
   make slide decks, Word files and PDFs, and looks at pictures of the pages before it sends them. Send it your own
-  deck or Word file and say it is your template, and later ones start from it.
+  deck or Word file and say it is your template, and later ones start from it. If your deck exists only as a PDF, it
+  measures the PDF and builds a template from that, which is an imitation and says so.
 - With `AGENTMAIL_API_KEY` set, `/address` gives the assistant an email address of its own. Mail from you is dealt
   with at once; mail from anyone else is put to you with one tap before any model reads it. It can send from it
   with a key that has the send permission, and asks you before every message.

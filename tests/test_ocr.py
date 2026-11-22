@@ -246,3 +246,10 @@ async def test_the_page_reader_is_shown_the_file_has_no_tools_and_its_cost_is_co
 async def test_pages_that_show_nothing_beyond_their_text_give_no_notes(tmp_path):
     read, journal, _ = reader_rig(tmp_path, "NOTHING.")
     assert await read(b"%PDF", "words") == ("", 0.05)
+
+
+def test_the_owners_own_firms_deck_is_not_a_pitch():
+    from odysseus.agent import DECK_PROMPT
+    from odysseus.ocr import NO_MESSAGE
+    assert "The owner's own firm's deck or report" in NO_MESSAGE and "search for nothing and file nothing" in NO_MESSAGE
+    assert "First be sure it is one." in DECK_PROMPT and "search for nothing and file nothing" in DECK_PROMPT

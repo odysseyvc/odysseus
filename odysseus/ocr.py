@@ -35,8 +35,9 @@ NO_MESSAGE = ("(The owner sent this file with no message. If it is a pitch deck 
               "and ask what to do. Deal with it now, as your instructions for a pitch deck say, and do every step: 1. search the web for the "
               "company and its founders by name; 2. file it, which includes a deal at the earliest stage of the pipeline with the owner as its "
               "owner (do not ask which stage; if the company is already in the database and has no deal, add the deal); 3. reply with your "
-              "take in the order given there, ending with the line on a first call. For any other file, say briefly what it is and ask what "
-              "they would like done.)")
+              "take in the order given there, ending with the line on a first call. A pitch is a company asking investors for money for itself. The owner's own "
+              "firm's deck or report, or any investment firm's presentation of itself (its strategy, its portfolio, its record), is not one: "
+              "search for nothing and file nothing. For that and any other file, say briefly what it is and ask what they would like done.)")
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/bmp", "image/tiff"}
 DOCUMENT_TYPES = {

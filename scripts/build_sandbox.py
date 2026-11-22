@@ -18,9 +18,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 NAME = "odysseus-documents"
 BASE = "code-interpreter-v1"            # the image sandbox.py used before; everything it had is still there
-APT = ["libreoffice-impress", "libreoffice-writer", "libreoffice-calc", "poppler-utils",
+APT = ["libreoffice-impress", "libreoffice-writer", "libreoffice-calc", "poppler-utils", "git", "fontconfig",
        "fonts-liberation2", "fonts-crosextra-carlito", "fonts-crosextra-caladea", "fonts-inter", "fonts-noto-core"]
 PIP = ["python-pptx", "reportlab", "pypdf", "XlsxWriter", "markdown"]
+# Open-licensed typefaces that firms' decks and memos are often set in, from Google's public collection. A template that
+# names one of these is then drawn in it when the pages are looked at, and not in a stand-in. A list, to be added to.
+FONTS = ["archivo", "bebasneue", "bitter", "bricolagegrotesque", "cormorantgaramond", "crimsonpro", "dmsans", "dmserifdisplay", "dmseriftext",
+         "ebgaramond", "figtree", "fraunces", "geist", "geistmono", "ibmplexmono", "ibmplexsans", "ibmplexserif", "instrumentsans",
+         "instrumentserif", "jetbrainsmono", "karla", "lato", "lexend", "librebaskerville", "librefranklin", "lora", "manrope", "merriweather",
+         "montserrat", "newsreader", "nunito", "nunitosans", "opensans", "oswald", "outfit", "playfairdisplay", "plusjakartasans", "poppins",
+         "ptsans", "ptserif", "publicsans", "raleway", "roboto", "robotomono", "robotoslab", "rubik", "sora", "sourcesans3", "sourceserif4",
+         "spacegrotesk", "spectral", "urbanist", "worksans"]
+FONT_CMD = ("git clone --quiet --depth 1 --filter=blob:none --sparse https://github.com/google/fonts /tmp/gf && cd /tmp/gf && "
+            "git sparse-checkout set " + " ".join(f"ofl/{f}" for f in FONTS) + " && mkdir -p /usr/share/fonts/truetype/open && "
+            "find ofl -name '*.ttf' -exec cp {} /usr/share/fonts/truetype/open/ ';' && cd / && rm -rf /tmp/gf && fc-cache -f && "
+            "fc-list : family | sort -u | wc -l")
 
 
 def recipe():
@@ -29,6 +41,7 @@ def recipe():
             .set_user("root")
             .apt_install(APT, no_install_recommends=True)
             .pip_install(PIP)
+            .run_cmd(FONT_CMD)
             # LibreOffice writes a profile the first time it starts, which takes several seconds. Done once here.
             .run_cmd("soffice --headless --convert-to pdf --outdir /tmp /dev/null || true", user="user")
             .set_user("user"))

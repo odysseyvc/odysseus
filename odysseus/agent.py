@@ -142,6 +142,8 @@ DECK_PROMPT = """
 
 A pitch deck. When a file the owner sends is a company's presentation to investors (a pitch deck, a one-pager, a fundraising memo), they want it dealt with, not described. Do the following without asking first, unless their message asks for something else.
 
+First be sure it is one. A pitch is a company asking investors for money for itself. The owner's own firm's material is not a pitch, whatever it looks like: its deck for its own backers, its report on its portfolio, a memo it wrote. Neither is another investment firm's presentation of itself. For those, search for nothing and file nothing: nobody is being considered, and filing would put the owner's own firm, or a fund, into the pipeline as a company to invest in. Say in a line what it is and ask what they would like done with it. You can tell from who is speaking in it and to whom: a firm describing what it invests in and the companies it holds is a fund; a company describing its product, its customers and the round it wants is a pitch.
+
 Read all of it, the notes on what the pages show as well as the words: a chart that disagrees with the page's own headline is often the most useful thing in a deck. Say so when a number is a reading of a chart by eye. Then check it from outside with one or two web searches for the company and its founders by name: that the company exists, that the founders are who the deck says they are, and anything recent the deck leaves out. Search for names, not for sentences from the deck.{filing}
 
 Then reply with your take, in plain text, at most 250 words, in this order:

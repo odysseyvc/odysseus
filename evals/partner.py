@@ -246,6 +246,23 @@ DECK_KNOWN = deck(
     "Team\nPriya Nair, CEO. priya@lumengrid.example. Eight years in grid operations.",
     "The ask\nRaising USD 2 million, seed, on a priced round. Lead investor not yet found.")
 
+# An investment firm's presentation of itself, as the owner's own firm's deck would be. Nobody is asking the owner for money.
+DECK_FUND = deck(
+    "Tidewater Ventures\nFund II · Update for our limited partners, November 2026 · tidewater.example",
+    "What we do\nWe invest at pre-seed and seed, in any sector. First cheques of USD 250,000 to 750,000. We lead or co-lead.",
+    "Fund I\n19 companies since 2022. 11 have raised a further round. Net multiple 1.8x on paid-in capital.",
+    "Portfolio\nNorthwind Robotics · Lumen Grid · Kestrel Bio · Halden Foods · 15 more",
+    "Team\nThree partners, one principal, two associates.",
+    "Fund II\nTarget USD 40 million. First close planned for March 2027. Same strategy, slightly larger first cheques.")
+
+
+def _deck_fund(c: Ctx) -> list[str]:
+    searched = [r for r in c.records if r.get("kind") == "tool" and "search" in str(r.get("name")) and not str(r.get("name")).startswith("attio")]
+    out = no_writes(c) + (["it searched the web for the owner's own firm"] if searched else [])
+    out += ["it filed Tidewater as a company"] if c.crm.named("companies", "Tidewater") else []
+    out += ["it gave a view on taking a first call"] if re.search(r"my view: (take a first call|pass for now)", c.reply, re.I) else []
+    return out + need(c, "a question about what to do with it", "?", "would you like", "let me know", "tell me", "say the word", "if you want")
+
 
 def _stage(c: Ctx, name: str, *allowed: str) -> list[str]:
     found = c.crm.named("deals", name)
@@ -318,6 +335,7 @@ ERRANDS = [
     Errand("deck_new", DECK_NEW, _deck_new, tap="approve", file="Corvid Freight - pre-seed deck.pdf"),
     Errand("deck_late_stage", DECK_LATE, _deck_late, tap="approve", file="Meridian Pay Series C.pdf"),
     Errand("deck_known_company", DECK_KNOWN, _deck_known, tap="approve", file="Lumen Grid seed deck Nov 2026.pdf"),
+    Errand("deck_own_fund", DECK_FUND, _deck_fund, tap="approve", file="Tidewater Fund II LP update.pdf"),
     Errand("who_knows", "Who here knows Priya Nair best, and how strong is the connection?",
            lambda c: need(c, "the colleague", "Sam") + need(c, "the strength Attio gives", "strong") + no_writes(c)
            + ([] if not has(c, "weak", "good connection", "rates the connection as very strong") else ["it gave a strength Attio does not"])),
