@@ -57,6 +57,14 @@ class Settings:
     linq_secret: str = ""             # the signing secret of the webhook subscription, which signs every delivery
     owner_imessage: str = ""          # your own number as iMessage knows it; only this number is listened to
     imessage: bool = True             # ODYSSEUS_IMESSAGE=off switches the channel off and leaves its settings in place
+    # Optional: WhatsApp by a second route, through Vobiz and a number rented from it (vobiz.py). All five are needed,
+    # with owner_whatsapp above, and `vobiz` must not be off. The direct route above is separate and may be on as well.
+    vobiz_auth_id: str = ""           # the Vobiz account's id
+    vobiz_auth_token: str = ""        # and its token
+    vobiz_channel_id: str = ""        # the WhatsApp channel made in Vobiz for the number
+    vobiz_number: str = ""            # the WhatsApp number rented from Vobiz, with country code
+    vobiz_secret: str = ""            # a secret of your own choosing, given to Vobiz when the address is registered; it signs every delivery
+    vobiz: bool = True                # ODYSSEUS_VOBIZ=off switches this route off and leaves its settings in place
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
     langfuse_base_url: str = ""     # the Langfuse region or your own server; empty means Langfuse's default
@@ -82,6 +90,12 @@ class Settings:
 def imessage_on(s: Settings) -> bool:
     """Whether the iMessage channel is switched on: every one of its settings is present and it has not been turned off."""
     return bool(s.imessage and s.linq_token and s.linq_number and s.linq_secret and s.owner_imessage)
+
+
+def vobiz_on(s: Settings) -> bool:
+    """Whether WhatsApp through Vobiz is switched on: every one of its settings is present and it has not been turned off."""
+    return bool(s.vobiz and s.vobiz_auth_id and s.vobiz_auth_token and s.vobiz_channel_id and s.vobiz_number and s.vobiz_secret
+                and s.owner_whatsapp)
 
 
 def make_clock(tz: str = ""):
@@ -154,6 +168,12 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         linq_secret=merged.get("LINQ_WEBHOOK_SECRET", "").strip(),
         owner_imessage=merged.get("OWNER_IMESSAGE", "").strip(),
         imessage=merged.get("ODYSSEUS_IMESSAGE", "").strip().lower() not in ("0", "false", "no", "off"),
+        vobiz_auth_id=merged.get("VOBIZ_AUTH_ID", "").strip(),
+        vobiz_auth_token=merged.get("VOBIZ_AUTH_TOKEN", "").strip(),
+        vobiz_channel_id=merged.get("VOBIZ_CHANNEL_ID", "").strip(),
+        vobiz_number=merged.get("VOBIZ_NUMBER", "").strip(),
+        vobiz_secret=merged.get("VOBIZ_WEBHOOK_SECRET", "").strip(),
+        vobiz=merged.get("ODYSSEUS_VOBIZ", "").strip().lower() not in ("0", "false", "no", "off"),
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),

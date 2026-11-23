@@ -135,7 +135,16 @@ The same address with GET lists the apps the account is subscribed to; yours sho
 <li>Run <code>python scripts/connect_linq.py</code>. It registers <code>https://your-app-name.fly.dev/linq</code> with Linq and writes the signing secret, which Linq shows once, into <code>.env</code> as <code>LINQ_WEBHOOK_SECRET</code>.</li>
 <li>Send those four lines to the server as secrets, and deploy.</li>
 </ol>
-<p>To switch the channel off and keep its settings, set <code>ODYSSEUS_IMESSAGE=off</code>; remove that line, or set it to <code>on</code>, to switch it back. The channel only answers: reminders and routines stay on Telegram. A question that needs your approval arrives as a poll with Approve and Decline; if the poll cannot be made, the question is put to you on Telegram.</p>
+<p>To switch the channel off and keep its settings, set <code>ODYSSEUS_IMESSAGE=off</code>; remove that line, or set it to <code>on</code>, to switch it back. The channel only answers: reminders and routines stay on Telegram. A question that needs your approval arrives as a poll with Approve and Decline; if the poll cannot be made, you are asked to reply YES or NO.</p>
+<h3>Optional: WhatsApp on a number rented from Vobiz</h3>
+<p>In place of, or beside, the direct route above: Vobiz (vobiz.ai) rents the number and passes messages between Meta and this program. Your WhatsApp account at Meta is still your own. Vobiz keeps a copy of every message on this route. These steps are written from Vobiz's documentation and have not been run.</p>
+<ol>
+<li>Create a Vobiz account, complete its identity check, and add money. In its console, rent a WhatsApp-capable number and make a WhatsApp channel for it on your own WhatsApp account (it asks for the account's id and a token, or signs you in to Meta). Meta's code for the number comes by a phone call, which Vobiz's console lets you hear.</li>
+<li>Put <code>VOBIZ_AUTH_ID</code>, <code>VOBIZ_AUTH_TOKEN</code>, <code>VOBIZ_CHANNEL_ID</code>, <code>VOBIZ_NUMBER</code> and <code>OWNER_WHATSAPP</code> in <code>.env</code>.</li>
+<li>Run <code>python scripts/connect_vobiz.py</code>. It registers <code>https://your-app-name.fly.dev/vobiz</code> with Vobiz under a secret it makes, and writes that secret into <code>.env</code> as <code>VOBIZ_WEBHOOK_SECRET</code>.</li>
+<li>Send those lines to the server as secrets, and deploy. Then message the number from your own WhatsApp.</li>
+</ol>
+<p><code>ODYSSEUS_VOBIZ=off</code> switches the route off and keeps its settings. Vobiz cannot send Approve and Decline buttons, so a question that needs your approval ends with "Reply YES to approve or NO to decline", and only that exact one-word reply, within ten minutes, answers it.</p>
 <h3>Updating later</h3>
 <p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update. The bot is away for under a minute; a task it was in the middle of is announced when it returns, not carried on.</p>
 <h3>Going back</h3>
@@ -172,6 +181,7 @@ fly deploy --ha=false --image registry.fly.io/your-app-name:deployment-XXXX</cod
 <tr><th>The browser vendor (optional)</th><td>The tasks you browse, and the sign-ins you save there</td></tr>
 <tr><th>The text-recognition service (optional)</th><td>Every file you send the bot, in full</td></tr>
 <tr><th>The iMessage vendor (optional)</th><td>Every message on that channel, both ways</td></tr>
+<tr><th>The WhatsApp reseller (optional)</th><td>Every message on its number, both ways, kept in readable form, and a token for your WhatsApp account</td></tr>
 <tr><th>Your host</th><td>The disk holding your memory, schedule and log</td></tr>
 </tbody>
 </table></div>

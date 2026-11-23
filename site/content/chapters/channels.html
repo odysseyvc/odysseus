@@ -236,7 +236,7 @@
 <tbody>
 <tr><th>The sender's identity</th><td>A phone number in a delivery signed in the Standard Webhooks way: an HMAC-SHA256 over the delivery's id, its time and its exact bytes, keyed with a secret shown once when the address is registered</td><td>Refuses a bad signature, and one more than five minutes old; listens only to the owner's number, in a chat of two, on this line</td></tr>
 <tr><th>A way to speak first</th><td>Allowed, but the vendor asks that a line converse and not broadcast, and a free line may write only to people who wrote first</td><td>Only answers. Reminders and routines stay on Telegram, and there is no setting to move them here</td></tr>
-<tr><th>A way to approve</th><td>No buttons. Polls, and a vote arrives as a signed event naming the poll and the option</td><td>Sends the question whole, then a poll with Approve and Decline. Only a vote in that poll answers it</td></tr>
+<tr><th>A way to approve</th><td>No buttons. Polls, and a vote arrives as a signed event naming the poll and the option</td><td>Sends the question whole, then a poll with Approve and Decline. A vote in that poll answers it</td></tr>
 <tr><th>Drafts</th><td>None; a "typing" bubble</td><td>Asks for the bubble at most once a minute while a reply is written</td></tr>
 <tr><th>Files and voice</th><td>An address at the vendor's file service, with a type and a size</td><td>Fetches it without the account's token, over https, reading no more than the size limit</td></tr>
 <tr><th>Limits</th><td>10,000 characters a message; 30 messages a minute to one person; at least one delivery, sometimes more</td><td>Splits at 4,000; remembers both the event's id and the message's id, because a replay carries a new event id</td></tr>
@@ -248,13 +248,39 @@ answer = answers.get(str(d.get("option_id")), "")
 if not answer:
     return          # a vote in a poll this program is not waiting on
 self._polls.pop(str(d.get("message_id")), None)</code></pre>
-<p>Polls exist only on iMessage itself, not on the SMS a message falls back to. Where the poll cannot be made, the question is put on Telegram, where there are buttons, and a line on iMessage says so. A second channel that cannot carry an approval borrows the first one's; it does not invent a weaker approval of its own.</p>
+<p>Polls exist only on iMessage itself, not on the SMS a message falls back to. The first version put the question on Telegram when no poll could be made, on the principle that a channel which cannot carry an approval borrows another's. The owner overruled it: being sent to a second app to tap a button "will be taking away from the experience". What replaced it is the next section.</p>
+<h3 id="typed">The owner's exception: an answer in words</h3>
+<p>The rule in {{ch:the-gate}} is that only a tap approves and a typed "yes" is an ordinary message. It exists for two reasons. Words reach the model, and a model can be talked into reading consent where there was none; and a word is not tied to any one question. The owner asked for an exception on channels with no buttons, and it is the owner's rule to change. The rule stands wherever buttons exist. The exception is built so that the first reason does not apply at all and the second is narrowed (<code>odysseus/typed.py</code>, which states it at its head).</p>
+<ul>
+<li>Code reads the reply, never a model. A message is an answer only if, trimmed and in any letter case, it is exactly one of a few words: yes or approve, no or decline, and "thread" where that was offered. "yes please", "ok" and "sure, send it" are ordinary messages.</li>
+<li>Only while a question is waiting: one this program put on this same channel less than ten minutes ago, which is as long as the gate waits. With nothing waiting, "yes" is a message like any other.</li>
+<li>A reply answers the latest waiting question, once, and the line sent back names it by its first words: <em>Approved. ("Send this email to Priya? I'll be ten minutes late.")</em></li>
+<li>The reply came through the channel's own door: a signed delivery, from the owner's number, handled once and not late.</li>
+</ul>
+<pre><code>word = (text or "").strip().rstrip(".!").strip().lower()
+if not self._waiting or word not in YES | NO | THREAD:
+    return None
+approval_id, thread, first, _ = self._waiting[-1]</code></pre>
+<p>What is given up is real and should be said. A button is tied to its question by the platform; a word is tied only by being the next thing said. A one-word reply sent by habit, meant for something else, can approve the question that happens to be waiting. The line naming what was answered is how that is noticed, and for a sent email noticing is too late. The exception is used where the only alternatives were no approval on the channel or an approval somewhere else.</p>
+<p><span class="g v">Verified</span> by unit tests: loose wording, a stranger's "yes", a second delivery of the same answer and a "yes" with nothing waiting all approve nothing; the exact word approves once and never reaches the conversation. <span class="g u">Not tested</span>: any of it with a person.</p>
 <h3>A choice</h3>
 <p>The channel is on when its four settings are present, and one more setting switches it off and leaves them in place. That is one function, read in the two places that care: whether to open the door, and whether to build the adapter.</p>
 <pre><code>def imessage_on(s: Settings) -> bool:
     return bool(s.imessage and s.linq_token and s.linq_number and s.linq_secret and s.owner_imessage)</code></pre>
-<p>What buying costs is the row the WhatsApp table already gave for a reseller: one more company holds every message that passes, and the free line is a sandbox with a ceiling of twenty contacts. The vendor also sells WhatsApp, as an addition to its paid plan. WhatsApp here stays on Meta's own interface, which works and has nobody in between.</p>
-<p><span class="g v">Verified</span> by twelve unit tests with hand-built deliveries (<code>tests/test_linq.py</code>, and one in <code>tests/test_startup.py</code> that starts the program with the channel on and then off). <span class="g u">Not tested</span>: anything against the vendor. No account exists yet, so every shape in the adapter, the signature included, is written from the documentation, as WhatsApp's were; and the first real WhatsApp message went nowhere for a reason no document mentioned.</p>
+<p>What buying costs is the row the WhatsApp table already gave for a reseller: one more company holds every message that passes, and the free line is a sandbox with a ceiling of twenty contacts.</p>
+<p><span class="g v">Verified</span> by unit tests with hand-built deliveries (<code>tests/test_linq.py</code>, and one in <code>tests/test_startup.py</code> that starts the program with the channel on and then off). <span class="g u">Not tested</span>: anything against the vendor. No account exists yet, so every shape in the adapter, the signature included, is written from the documentation, as WhatsApp's were; and the first real WhatsApp message went nowhere for a reason no document mentioned.</p>
+
+<h2 id="reseller">WhatsApp by the second route after all</h2>
+<p>The table of three routes to WhatsApp chose Meta's own interface and set the reseller aside: one more company holding every message, and a fee. That choice was made and it worked. Then the assistant needed a number of its own in place of Meta's test number, and getting one in the owner's country turned out to be the hard part: an ordinary SIM kept alive in a drawer, or a virtual number that cannot receive the SMS Meta sends and needs company papers to rent. A telephony company that rents such numbers also sells an interface to WhatsApp on them, and the owner chose that: its product, with its number, and no number of the firm's own to keep.</p>
+<p>The decision turns the earlier one over for a reason the first table did not weigh, which is the cost of the number, not of the interface. The WhatsApp account at Meta is still the owner's; the reseller holds a token for it, receives Meta's deliveries and passes them on. What changes is what the table said would change: the reseller stores every message in readable form, and bills by the conversation at a price its site does not publish.</p>
+<p>For the code it was the cheapest channel yet, because the reseller passes Meta's delivery on unchanged inside an envelope of its own. The adapter (<code>odysseus/vobiz.py</code>) is a subclass of the direct one: a different signature at the door, a different shape for sending, a different address for fetching a file, and everything in between inherited. Three things in it are worth a line each.</p>
+<ul>
+<li><strong>The signature has no time in it.</strong> It is an HMAC-SHA256 of the exact bytes under a secret the program chose when it registered its address. A recorded delivery could be posted again. It would carry the same message id, which is handled once, and after ten minutes it is a late message, which is not acted on; a restart inside those ten minutes forgets the ids, and that gap is real.</li>
+<li><strong>No buttons can be sent.</strong> The reseller's documentation offers text, media and pre-approved templates. So this is the route on which approval is the owner's answer in words, described above.</li>
+<li><strong>One account, two numbers, two routes.</strong> Both the firm's own app and the reseller's are subscribed to the same WhatsApp account, so a message to either number is delivered to both doors. The direct route now reads only deliveries for its own number, and the reseller's route only those for its; without that, one message would have been answered twice.</li>
+</ul>
+<p>Like iMessage, it is a choice: on when its settings are present, off by one word with them in place, and the direct route is untouched beside it.</p>
+<p><span class="g v">Verified</span> by unit tests with hand-built deliveries (<code>tests/test_vobiz.py</code>). <span class="g u">Not tested</span>: anything against the reseller. No account exists, so the envelope, the signature and the refusal outside the 24 hours are written from its documentation, and that documentation contradicts itself in two places (the shape of an incoming message, and whether a failed delivery is retried).</p>
 
 <h2 id="people">Telling several people apart</h2>
 <p>Each assistant serves exactly one person. Identity is therefore a comparison with one value: on Telegram, the sender's user id against the owner's id in the settings; on WhatsApp, the sender's number against the owner's number, after the signature has made that number believable. Everyone else is met with silence and a line in the log. A stranger's file or recording is never even downloaded: the Telegram adapter fetches a file only if <code>conversation.is_owner(user_id)</code>, and <code>handle_file</code> and <code>handle_voice</code> check again.</p>
@@ -422,7 +448,7 @@ self._polls.pop(str(d.get("message_id")), None)</code></pre>
 <li>Treat platform rules as constraints with planned answers: the 24-hour window (default to Telegram, fall back, retry), link previews (off), late deliveries (report, do not act).</li>
 <li>Split long approval questions and put the buttons last; a button carries only an id.</li>
 <li>One program serves one owner; several people get several copies.</li>
-<li>On a channel with no buttons, an approval can still be a tap if the platform reports some structured choice, such as a vote in a poll. Where it reports none, put the question on a channel that does.</li>
+<li>On a channel with no buttons, an approval can still be a tap if the platform reports some structured choice, such as a vote in a poll. Where it reports none, the choices are another channel's buttons or an answer in words; if words, let code read one exact word for one waiting question, and never a model.</li>
 <li>Between two people's assistants, decide in code what may leave before any model converses. For meeting times that is busy blocks in and common free time out, with no conversation at all.</li>
 </ul></div>
 

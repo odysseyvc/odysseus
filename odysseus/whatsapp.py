@@ -165,7 +165,11 @@ class WhatsApp:
             return 200
         for entry in payload.get("entry") or []:
             for change in entry.get("changes") or []:
-                for message in (change.get("value") or {}).get("messages") or []:
+                value = change.get("value") or {}
+                line = str((value.get("metadata") or {}).get("phone_number_id") or "")
+                if line and self._phone_id and line != self._phone_id:
+                    continue        # for another number of the same account, which another route may be serving (vobiz.py)
+                for message in value.get("messages") or []:
                     task = asyncio.get_running_loop().create_task(self._handle(message))
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)

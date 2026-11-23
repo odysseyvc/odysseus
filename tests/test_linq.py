@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 from odysseus.config import imessage_on, load
 from odysseus.journal import Journal
-from odysseus.linq import API, ON_THE_OTHER_CHANNEL, Linq, signature_ok
+from odysseus.linq import API, Linq, signature_ok
 
 KEY = b"a-signing-key-for-tests-only-32b"
 SECRET = "whsec_" + base64.b64encode(KEY).decode()
@@ -40,17 +40,8 @@ class FakeConversation:
         self.voices.append((name, size, data))
 
 
-class Buttons:
-    """The other channel, which has buttons."""
-    def __init__(self):
-        self.asked = []
-
-    async def ask(self, text, approval_id, thread=False):
-        self.asked.append((text, approval_id, thread))
-
-
 def rig(tmp_path, polls=True, state=True):
-    sent, conv, journal, buttons = [], FakeConversation(), Journal(tmp_path / "journal.jsonl"), Buttons()
+    sent, conv, journal = [], FakeConversation(), Journal(tmp_path / "journal.jsonl")
 
     async def http(method, url, body):
         sent.append((method, url.removeprefix(API), body))
@@ -66,8 +57,8 @@ def rig(tmp_path, polls=True, state=True):
     async def fetch(url, most):
         return b"%PDF-1.4 test" if url.startswith("https://cdn.") else None
     linq = Linq(conv, journal, http, number=LINE, owner_number="+91 98200 12345", secret=SECRET, owner_id=7,
-                state_file=(tmp_path / "linq.json") if state else None, elsewhere=buttons, fetch=fetch, clock=lambda: NOW)
-    return SimpleNamespace(linq=linq, conv=conv, sent=sent, journal=journal, buttons=buttons)
+                state_file=(tmp_path / "linq.json") if state else None, fetch=fetch, clock=lambda: NOW)
+    return SimpleNamespace(linq=linq, conv=conv, sent=sent, journal=journal)
 
 
 def delivery(data, kind="message.received", event_id="evt-1", at=NOW, key=KEY):
@@ -207,13 +198,20 @@ async def test_an_approval_is_a_vote_in_a_poll_and_a_typed_yes_is_only_a_message
     assert y.conv.decisions == [(7, "ef56", True, True)]
 
 
-async def test_where_a_poll_cannot_be_made_the_question_goes_to_the_channel_with_buttons(tmp_path):
+async def test_where_a_poll_cannot_be_made_the_question_is_answered_by_one_exact_word_in_the_same_chat(tmp_path):
     x = rig(tmp_path, polls=False)
     x.linq.receive(*delivery(text("hello")))
     await x.linq.wait()
     await x.linq.chat().ask("Send this email to Priya?", "ab12cd34")
-    assert x.buttons.asked == [("Send this email to Priya?", "ab12cd34", False)]
-    assert x.sent[-1][2]["message"]["parts"][0]["value"] == ON_THE_OTHER_CHANNEL
+    said = [b["message"]["parts"][0]["value"] for _, u, b in x.sent if u.endswith("/messages")]
+    assert said[-2:] == ["Send this email to Priya?", "Reply YES to approve or NO to decline. Any other reply is an ordinary message and approves nothing."]
+    x.linq.receive(*delivery(text("yes please", mid="loose"), event_id="e2"))
+    await x.linq.wait()
+    assert x.conv.decisions == [] and x.conv.texts[-1] == (7, "yes please")
+    x.linq.receive(*delivery(text("No", mid="answer"), event_id="e3"))
+    await x.linq.wait()
+    assert x.conv.decisions == [(7, "ab12cd34", False, False)] and x.conv.texts[-1] == (7, "yes please")
+    assert x.sent[-1][2]["message"]["parts"][0]["value"] == 'Declined. ("Send this email to Priya?")'
 
 
 # --- the choice -----------------------------------------------------------------------------------------

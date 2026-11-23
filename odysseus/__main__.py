@@ -64,7 +64,7 @@ from .linq import make_fetch
 from dataclasses import replace
 from types import SimpleNamespace
 
-from .config import ConfigError, Settings, imessage_on, load, make_clock
+from .config import ConfigError, Settings, imessage_on, load, make_clock, vobiz_on
 from .conversation import Conversation
 from .history import History
 from .journal import Journal, Ledger
@@ -391,17 +391,30 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                             ids_file=settings.data_dir / "whatsapp.json")
     # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
     telegram = TelegramChat(bot, settings.owner_id)
-    on_whatsapp = whatsapp is not None and settings.notify_on == "whatsapp"
-    notify = me.notify = whatsapp.chat() if on_whatsapp else telegram
+    # Optional: WhatsApp by a second route, through Vobiz and a number rented from it (vobiz.py). It cannot send
+    # buttons, so its approval questions are asked and answered in words (typed.py).
+    vobiz = None
+    if host and vobiz_on(settings):
+        from .vobiz import Vobiz
+        from .vobiz import attach as attach_vobiz
+        from .vobiz import make_http as vobiz_http
+        via, close_via = vobiz_http(settings.vobiz_auth_id, settings.vobiz_auth_token)
+        vobiz = Vobiz(conversation, journal, via, auth_id=settings.vobiz_auth_id, channel_id=settings.vobiz_channel_id,
+                      number=settings.vobiz_number, owner_number=settings.owner_whatsapp, secret=settings.vobiz_secret,
+                      owner_id=settings.owner_id, ids_file=settings.data_dir / "whatsapp.json")
+        me.closers += [attach_vobiz(vobiz, shared.door), close_via]
+    by_whatsapp = whatsapp or vobiz         # the direct route if it is set up, else the one through Vobiz
+    on_whatsapp = by_whatsapp is not None and settings.notify_on == "whatsapp"
+    notify = me.notify = by_whatsapp.chat() if on_whatsapp else telegram
     # Optional: iMessage as a third channel, through Linq (linq.py). It only answers: reminders stay where they are.
-    # A question it cannot put as a poll is put on Telegram, where there are buttons.
+    # A question it cannot put as a poll is asked and answered in words (typed.py).
     imessage = None
     if host and imessage_on(settings):
         linq_http, close_linq = make_http(settings.linq_token)
         linq_fetch, close_fetch = make_fetch()
         imessage = Linq(conversation, journal, linq_http, number=settings.linq_number, owner_number=settings.owner_imessage,
                         secret=settings.linq_secret, owner_id=settings.owner_id, state_file=settings.data_dir / "linq.json",
-                        elsewhere=telegram, fetch=linq_fetch)
+                        fetch=linq_fetch)
         me.closers += [attach_linq(imessage, shared.door), close_linq, close_fetch]
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
@@ -459,7 +472,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         except Exception as e:
             journal.write("error", where="restart.notice", error=type(e).__name__)
     journal.write("start", model=settings.model, background_model=settings.background_model, apps=apps is not None, browser=browser is not None,
-                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, imessage=imessage is not None, host=host, boot=marks or {})
+                  files=ocr is not None, voice=voice is not None, watches=watches is not None, briefs=briefer is not None, tracing=tracing.on, whatsapp=whatsapp is not None, vobiz=vobiz is not None, imessage=imessage is not None, host=host, boot=marks or {})
     if whatsapp is not None:
         me.closers += [attach(whatsapp, shared.door), close_http]
     me.tasks.append(asyncio.create_task(scheduler.run_forever()))
@@ -545,7 +558,8 @@ def member_settings(settings: Settings, user_id: int) -> Settings:
     return replace(settings, owner_id=user_id, data_dir=settings.data_dir / "people" / str(user_id),
                    daily_usd=settings.member_daily_usd or settings.daily_usd, notify_on="telegram",
                    whatsapp_token="", whatsapp_phone_id="", whatsapp_app_secret="", owner_whatsapp="",
-                   linq_token="", linq_number="", linq_secret="", owner_imessage="")
+                   linq_token="", linq_number="", linq_secret="", owner_imessage="",
+                   vobiz_auth_id="", vobiz_auth_token="", vobiz_channel_id="", vobiz_number="", vobiz_secret="")
 
 
 def firm_settings(settings: Settings, chat_id: int, attio: bool) -> Settings:
@@ -569,7 +583,7 @@ async def main() -> int:
               "conversation are being copied to that service. Set ODYSSEUS_DATA_DIR to a folder that is not synced.", file=sys.stderr)
     # The one port, opened only if something needs it: a public address for sign-ins, or WhatsApp (door.py).
     door = Door()
-    if settings.public_url or imessage_on(settings) or (settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp):
+    if settings.public_url or imessage_on(settings) or vobiz_on(settings) or (settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp):
         await door.open(settings.whatsapp_port)
     # What there is one of, however many people are served: the bot, the search client, one plain call to the small model
     # (the second reader, and closing a conversation), and the optional record of every task in Langfuse, from which
@@ -578,7 +592,7 @@ async def main() -> int:
     tracing = Tracing(settings.langfuse_public_key, settings.langfuse_secret_key, settings.langfuse_base_url,
                       secrets=(settings.telegram_token, settings.anthropic_api_key, settings.exa_api_key, settings.composio_api_key,
                                settings.browser_use_api_key, settings.mistral_api_key, settings.agentmail_api_key, settings.whatsapp_token,
-                               settings.whatsapp_app_secret, settings.linq_token, settings.linq_secret), full_content=settings.langfuse_full_content)
+                               settings.whatsapp_app_secret, settings.linq_token, settings.linq_secret, settings.vobiz_auth_token, settings.vobiz_secret), full_content=settings.langfuse_full_content)
     marks["tracing"] = round(time.monotonic() - _BEGAN, 1)
     second_call = anthropic_call(settings.anthropic_api_key)
     # The people the host has invited, each with an assistant of their own (people.py), and the one way between two

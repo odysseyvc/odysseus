@@ -18,9 +18,9 @@ Rules of this channel that shape what is possible:
 
   no buttons        iMessage has none. It has polls, and a vote in a poll arrives as a signed event naming the poll and
                     the option. So an approval question is sent as text, followed by a poll with Approve and Decline;
-                    a vote is the tap. A typed "yes" approves nothing, here as everywhere. If the poll cannot be made
-                    (polls exist only on iMessage itself, not on its SMS fallback), the question is put on the other
-                    channel, where there are buttons, and a line here says so.
+                    a vote is the tap, and while a poll stands a typed "yes" approves nothing. If the poll cannot be
+                    made (polls exist only on iMessage itself, not on its SMS fallback), the owner is asked to answer
+                    with one exact word, read by code and never by a model (typed.py states that exception).
   speaking first    Linq asks that a line converse and not broadcast, and a free line may write only to people who
                     wrote first. Reminders and routines therefore stay on Telegram; this channel only answers.
   the first message of a new chat may not contain a link (Linq refuses it), so the chat the owner opened is remembered
@@ -45,6 +45,7 @@ from typing import Any, Awaitable, Callable
 from .conversation import Conversation, split_message
 from .journal import Journal
 from .ocr import MAX_BYTES
+from .typed import TypedAnswers, how
 from .whatsapp import digits
 
 API = "https://api.linqapp.com/api/partner/v3"
@@ -53,7 +54,6 @@ EVENTS = ("message.received", "poll.vote.added")
 TEXT_LIMIT = 4000                   # Linq allows 10,000 characters; a message that long is unreadable on a phone
 STALE_AFTER_S = 600
 SIGNATURE_TOLERANCE_S = 300
-ON_THE_OTHER_CHANNEL = "This needs your approval. I have put the question to you on Telegram, where there are buttons."
 
 # (method, url, json body or None) -> (status, parsed json or raw bytes)
 Http = Callable[[str, str, Any], Awaitable[tuple[int, Any]]]
@@ -99,28 +99,24 @@ class LinqChat:
 
     async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The question is sent whole, then a poll whose options are the buttons. Only a vote in that poll answers it.
+        await self.send(text)
         try:
-            await self.send(text)
             await self._linq.post_poll(approval_id, thread)
         except Exception:
-            if self._linq.elsewhere is None:
-                raise
-            await self._linq.elsewhere.ask(text, approval_id, thread)
-            try:
-                await self._linq.post_text(ON_THE_OTHER_CHANNEL)
-            except Exception:
-                pass
+            # No poll could be made. The question has been shown; say how to answer it in words (typed.py).
+            await self.send(how(thread))
+            self._linq.typed.asked(approval_id, thread, text)
 
 
 class Linq:
     """Receives what Linq delivers, checks it, and hands the owner's messages to the conversation."""
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, number: str, owner_number: str, secret: str,
-                 owner_id: int, state_file: Path | None = None, elsewhere: Any = None, fetch: Fetch | None = None,
+                 owner_id: int, state_file: Path | None = None, fetch: Fetch | None = None,
                  clock: Callable[[], float] = time.time):
         self._conv, self._journal, self.http, self.clock = conversation, journal, http, clock
         self._number, self._owner, self._secret, self._owner_id = digits(number), digits(owner_number), secret, owner_id
-        self.elsewhere, self._fetch = elsewhere, fetch       # a chat with buttons, for a question a poll cannot carry
+        self._fetch, self.typed = fetch, TypedAnswers(clock)      # answers in words, for a question a poll could not carry
         self._unsigned, self._unsigned_logged, self._late_told = 0, 0.0, 0.0
         self._seen: deque[str] = deque(maxlen=1000)
         self._polls: dict[str, tuple[str, dict[str, str]]] = {}      # a poll's message id -> (approval id, option id -> y, n or t)
@@ -258,7 +254,13 @@ class Linq:
             text = "\n".join(str(p.get("value") or "") for p in parts if p.get("type") == "text").strip()
             media = [p for p in parts if p.get("type") == "media"]
             if not media:
-                if text:
+                found = self.typed.answer(text) if text else None
+                if found is not None:
+                    approval_id, answer, first = found
+                    line = (await self._conv.handle_decision(self._owner_id, approval_id, True, thread=True) if answer == "t"
+                            else await self._conv.handle_decision(self._owner_id, approval_id, answer == "y"))
+                    await chat.send(f'{line or "Noted."} ("{first}")')
+                elif text:
                     await self._conv.handle(self._owner_id, text, chat)
                 return
             item = media[0]         # one file to a message, as on the other channels; the words with it are its caption

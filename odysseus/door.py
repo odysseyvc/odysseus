@@ -7,6 +7,7 @@ Telegram needs no door: the program fetches its messages. Two things do need one
                 copies its address into the chat; with one, they see "Connected" and nothing more is asked of them.
   /whatsapp     Meta's deliveries, if WhatsApp is switched on (whatsapp.py).
   /linq         Linq's deliveries, if iMessage is switched on (linq.py).
+  /vobiz        Vobiz's deliveries, if WhatsApp through Vobiz is switched on (vobiz.py).
   /health       answers "ok" and nothing else, for the host's own check that the process is running and its loop is
                 turning. It says nothing about who runs this or what is connected, and reads nothing that was sent.
 
