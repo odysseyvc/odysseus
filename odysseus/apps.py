@@ -764,3 +764,37 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
     "mail_archive": ("Archive one message, by the id mail_search returned: it leaves the inbox and is kept. Only when the owner asks.",
                      {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}),
 }
+
+
+def compact_inputs(schema: Any) -> str:
+    """A tool's inputs on one line: each name, a star if it is required, its type, its choices, and the start of what the
+    service says about it. Enough to call a tool that only reads without first asking for its full description, which is
+    what used to cost a call to the model before any work began. The full description is still there for the asking."""
+    props = (schema or {}).get("properties") if isinstance(schema, dict) else None
+    if not isinstance(props, dict) or not props:
+        return "(no inputs)"
+    required = set((schema or {}).get("required") or [])
+
+    def kind(v: dict[str, Any]) -> str:
+        t = v.get("type") or "|".join(sorted({str(x.get("type")) for x in v.get("anyOf") or [] if isinstance(x, dict) and x.get("type")})) or "any"
+        return "|".join(map(str, t)) if isinstance(t, list) else str(t)
+    parts = []
+    for name, v in props.items():
+        if not isinstance(v, dict):
+            continue
+        bit = f"{name}{'*' if name in required else ''}: {kind(v)}"
+        if v.get("enum"):
+            bit += " one of " + "/".join(map(str, v["enum"][:14]))
+        if isinstance(v.get("items"), dict):
+            bit += f" of {kind(v['items'])}"
+        inner = v.get("properties")
+        if isinstance(inner, dict) and inner:
+            bit += " {" + ", ".join(f"{k}" + (" one of " + "/".join(map(str, x["enum"][:12])) if isinstance(x, dict) and x.get("enum") else "")
+                                    for k, x in list(inner.items())[:8]) + "}"
+        if "maximum" in v:
+            bit += f", at most {v['maximum']}"
+        said = " ".join(str(v.get("description") or "").split())
+        if said:
+            bit += f" ({said[:110]})"
+        parts.append(bit)
+    return "; ".join(parts)

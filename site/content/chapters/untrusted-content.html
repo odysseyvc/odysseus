@@ -311,6 +311,19 @@ pages = make_page_reader(settings, journal, empty_server(),
 <p><span class="g v">Verified</span> live, in small numbers: no planted instruction has been acted on in any run listed above. None of them tested the code against a real model that was actually misled, because in the runs that matter the model was not misled.</p>
 <p><span class="g u">Not tested</span>: an adaptive attacker; the leak check on reads sent to another company's server, against a real service; a file attached to mail read end to end by the model; a brief whose invitation carries a planted instruction, against the real model; a server that mislabels its tools; how often taint questions interrupt ordinary use. The taint check compares characters and does not understand meaning: a paraphrase passes it, so does a detail split across three searches, and so does a short fact such as a name or a date. The count of new words limits the volume of all three in a web search and stops none of them; it has been measured against past searches and never against an attack. A browser task and a read sent to another company's service have the text match alone.</p></div>
 
+<h2 id="per-conversation">A record that outlives the task that made it</h2>
+<p>The record of what kinds of outside material have been read exists to answer one question at the moment the model wants to save something or set something up: could these words be somebody else's? It was cleared at the start of every message. That is the wrong lifetime. The model's own context is not cleared at every message: a file read three messages ago is still in front of it. So text planted in that file could wait. Read in one message, acted on in a later one ("remember what it said about how I like things done"), it would be saved to memory or made a standing instruction with nothing on the record, and so without the question that is the whole protection. An outside review of the program found this by reading the code; no test had, because every test of a planted instruction put the instruction and the act in the same message.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>Before</th><th>Now</th></tr></thead>
+<tbody>
+<tr><th>The record is cleared</th><td>At each message, if no other task was running</td><td>When the model's context is: at the start of a new conversation, after a long pause or on the owner's command</td></tr>
+<tr><th>After a restart</th><td>Empty, though the conversation was picked up again with everything it had read</td><td>Kept in a small file beside the conversation, and picked up with it</td></tr>
+<tr><th>A job in the background</th><td>Could clear the record the conversation depended on</td><td>Never clears it</td></tr>
+</tbody>
+</table></div>
+<p>The price is more questions. Late in a long conversation that has read a file or mail, a save to memory is put to the owner where before it went through unasked. The rule that begins a new conversation after two idle hours bounds how long that lasts. The rule to take from it is general: a record that guards a context must live exactly as long as that context, and any shorter lifetime is a hole whose size is the difference.</p>
+<p><span class="g u">Not tested</span> with the real model: an evaluation case in which the planted text arrives in one message and the save is attempted in the next. The unit test reproduces the old behaviour and proves the new one with a stand-in for the model.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>Prompt injection is text written to be read as instructions. A model cannot reliably tell it from its owner's words, so a prompt telling it to be careful changes odds, not outcomes.</li>

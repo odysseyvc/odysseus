@@ -167,3 +167,37 @@ async def test_a_task_records_how_long_the_first_word_took_and_what_was_sent(tmp
     out = await runner.run("hi", noop)
     assert out.first_word_s is not None and out.first_word_s >= 0
     assert out.tokens == {"tokens_in": 4, "tokens_cache_read": 9000, "tokens_cache_write": 300, "tokens_out": 7}
+
+
+async def test_what_was_read_stays_on_the_record_for_as_long_as_the_conversation_does(tmp_path):
+    """Text planted in a file read in one message must still make the program ask in the next: the model still has it."""
+    from odysseus.conversation import Conversation
+    from odysseus.journal import Ledger
+    from odysseus.memory import MemoryStore
+    from odysseus.tools import make_gate
+    from tests.test_slice import FakeChat
+    s = settings(tmp_path)
+    journal = Journal(tmp_path / "j.jsonl")
+    gate = make_gate(journal)
+    runner = AgentRunner(s, journal, object(), client_factory=lambda options=None: FakeClient([[result(text="Read.")]], options=options), gate=gate)
+    conv = Conversation(s, journal, Ledger(journal), runner, MemoryStore(tmp_path / "memory"), gate=gate)
+    chat = FakeChat()
+    await conv.handle(OWNER, "FILE: deck.pdf ... END OF FILE", chat, material="a file you sent")
+    await conv.wait()
+    assert gate.taint.sources == {"a file you sent"}
+    await conv.handle(OWNER, "Remember what it said about me.", chat)
+    await conv.wait()
+    assert gate.taint.sources == {"a file you sent"}, "a new message is not a new conversation: the file is still in front of the model"
+    assert json.loads((tmp_path / "read.json").read_text(encoding="utf-8")) == ["a file you sent"]
+    # A restart that picks the conversation up again picks the record up too.
+    gate2 = make_gate(Journal(tmp_path / "j2.jsonl"))
+    runner2 = AgentRunner(s, journal, object(), client_factory=lambda options=None: FakeClient([[result(text="Read.")]], options=options), gate=gate2, persist=True)
+    runner2.session_id = "sess-1"
+    Conversation(s, journal, Ledger(journal), runner2, MemoryStore(tmp_path / "memory"), gate=gate2)
+    assert gate2.taint.sources == {"a file you sent"}
+    # A new conversation clears it: nothing other people wrote is in front of the model any more.
+    await conv.handle(OWNER, "/new", chat)
+    await conv.wait()
+    await conv.handle(OWNER, "Hello again.", chat)
+    await conv.wait()
+    assert gate.taint.sources == set()

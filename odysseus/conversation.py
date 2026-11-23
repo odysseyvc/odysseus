@@ -6,6 +6,7 @@ what the person is told when one ends. None of those decisions is the model's.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import secrets
 import time
@@ -111,6 +112,12 @@ class Conversation:
         # After each exchange, a line of labels and measurements in this person's journal: what was asked for, how it went
         # (insight.py). Written after the reply has gone, so it delays nothing.
         self.labeller: Any = None           # set by whoever assembles the assistant; without it no signal is written
+        # A conversation picked up after a restart still holds what it read before. So does the record of it.
+        if gate is not None and getattr(gate, "taint", None) is not None and getattr(runner, "session_id", None):
+            try:
+                gate.taint.sources |= {str(x) for x in json.loads((self._s.data_dir / "read.json").read_text(encoding="utf-8"))}
+            except (OSError, ValueError, TypeError):
+                pass
         # Who this is in the traces: a short mark worked out from their id, so that one person's tasks can be told from
         # another's there without a name or a number that means anything outside this program.
         self._who = "person-" + __import__("hashlib").sha256(str(self._s.owner_id).encode()).hexdigest()[:8]
@@ -810,6 +817,18 @@ class Conversation:
         finally:
             self._stopping = False
 
+    def _keep_read(self) -> None:
+        """Write down which kinds of outside material this conversation has read, beside the conversation itself, so that a
+        restart which picks the conversation up again picks this up too."""
+        taint = getattr(self._gate, "taint", None) if self._gate is not None else None
+        sources = getattr(taint, "sources", None)
+        if sources is None:
+            return
+        try:
+            (self._s.data_dir / "read.json").write_text(json.dumps(sorted(sources)), encoding="utf-8")
+        except (OSError, TypeError):
+            pass
+
     def _signal(self, exchange: tuple[str, str], before: tuple[str, str] | None) -> None:
         """Label this exchange in the background (insight.py). A failure here is never the owner's problem."""
         if self.labeller is None:
@@ -888,6 +907,12 @@ class Conversation:
         if blank or self._memory.version != self._shown_version:
             self._shown_version = self._memory.version
             out += f"MEMORY\n{MEMORY_NOTE}\n{self._memory.profile_text()}\nEND OF MEMORY\n\n"
+        if blank and self._attio is not None and hasattr(self._attio, "brief"):
+            # What the program already read from the firm's database: its reading tools with their inputs, and its layout.
+            # Shown once as a conversation begins, so the first question about the firm costs no calls spent finding out.
+            brief = self._attio.brief()
+            if brief:
+                out += f"ATTIO\n{brief}\nEND OF ATTIO\n\n"
         if self._skills is not None and (blank or self._skills.version != self._shown_skills):
             # Only names and when to use each: a skill's body is read by the model when a task fits (skills.py).
             from .skills import SKILLS_NOTE
@@ -1060,8 +1085,13 @@ class Conversation:
 
         stamp = f"\n\n[{self._now().strftime('%A %d %B %Y, %H:%M')}]"
         if self._gate is not None and getattr(self._gate, "taint", None) is not None:
-            if alone:                                # with another task running, what it has read stays on the record
-                self._gate.taint.start_task()        # nothing other people wrote has been read in this task yet...
+            # The record of what other people wrote is cleared when the model's own context is: at the start of a new
+            # conversation, and not at each message. It used to be cleared with every message, while the model still had the
+            # earlier messages in front of it: text planted in something read in one message could then be acted on in the
+            # next, saved to memory or made a standing instruction, with nothing on the record to make the program ask.
+            if alone and not bg and (self._runner.session_id is None or self._fresh_reason()):
+                self._gate.taint.start_task()        # a new conversation: nothing other people wrote is in front of the model
+                self._keep_read()
             if material:
                 self._gate.taint.saw(material)       # ...unless the message itself carries a file or a picture
             else:
@@ -1159,6 +1189,7 @@ class Conversation:
         if self._history is not None:
             self._history.add(*exchange)
         self._signal(exchange, None if bg or not self._recent else self._recent[-1])
+        self._keep_read()
         if bg:
             # Not part of the conversation, which went on meanwhile. The conversation's model is told of it with its next
             # message, as it is told of what a routine sent, so that "tell me more about that deck" makes sense.

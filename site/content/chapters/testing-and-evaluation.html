@@ -361,6 +361,22 @@ class Errand:
 </table></div>
 <p>Three rounds in a row were not kept, which is the stopping rule, and the instructions were left as they began. The whole exercise cost twelve dollars in the assistant's runs. The result is a finding all the same. Telling the assistant in words to take fewer steps does make it take fewer, and it then skips the lookups that keep it right: the one change that cut calls measurably also produced the only unsafe runs in the whole exercise. Without the held-out half and the safety count, round 1 would have looked like a win. The calls that can be removed safely are the ones that carry no judgement, such as asking a service what tools it has and then asking again for their inputs, and removing those is a change to code, which this loop is not allowed to make.</p>
 <p><span class="g u">Not tested</span>: the loop with quality as its goal, for want of room to improve; more than three rounds; any flow but fund work; a judge checked against a person's marks.</p>
+<h3>The same saving, made in code</h3>
+<p>The calls that carry no judgement were then removed by a change to the program. Every question about the firm's database used to begin with the assistant asking what tools exist, and then asking again for the inputs of the ones it meant to use: two calls to the model before any work. The program had read all of that already when it started. So a conversation now begins with a block holding the database's reading tools, each with its inputs on one line, and the layout of the workspace; and the first answer to "what tools exist" from any connected service carries the inputs of the tools that only read. A tool that changes something still has its full description fetched before it is first run.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>Before</th><th>After</th><th>Change, case by case</th></tr></thead>
+<tbody>
+<tr><th>Calls to the model per run</th><td>3.51</td><td>2.93</td><td>0.58 fewer (interval 0.34 to 0.86)</td></tr>
+<tr><th>Reading the database</th><td>4.33</td><td>2.67</td><td></td></tr>
+<tr><th>The kept procedures (memos, notes, packs)</th><td>4.71</td><td>3.46</td><td></td></tr>
+<tr><th>Filing</th><td>5.54</td><td>4.67</td><td></td></tr>
+<tr><th>Score</th><td>97.1%</td><td>95.9%</td><td>1.2 points lower (interval 3.2 lower to 0.4 higher): inside the noise</td></tr>
+<tr><th>Unsafe runs</th><td>0</td><td>0</td><td></td></tr>
+<tr><th>Cost of a run, median</th><td>1.7 cents</td><td>1.6 cents</td><td></td></tr>
+</tbody>
+</table></div>
+<p>The first version of the change scored 1.9 points lower, at the edge of the noise, and nearly all of it was one case. Asked which founders the firm had not been in touch with, the assistant, now able to go straight to the records, did so, and skipped the review that works that question out by code. One sentence in the opening block, saying that such questions belong to the review, brought the case back; the figures above are from the run after it.</p>
+<p>The comparison itself had a fault that was caught only because two ways of counting disagreed. Thirty rows of the baseline had their calls recorded as nought: the column was added after those runs, filled in from their logs, and their logs were not where the script looked. A run's average over all rows came out lower before the change than after, while the same figures compared case by case showed a clear saving. A finished run makes at least one call, so nought is now read as "not recorded" and left out, and the comparison above is over the 43 cases with a count on both sides. The three rounds of the loop were counted again the same way and their verdicts stand.</p>
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>

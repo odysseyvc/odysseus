@@ -111,7 +111,12 @@ async def test_what_one_task_has_read_stays_on_the_record_when_another_begins(tm
     await x.conv.wait()
     await x.conv.handle(OWNER, "Remember that I like coffee.", x.chat)
     await x.conv.wait()
-    assert "a file you sent" not in x.gate.taint.sources, "once nothing else is running, a new task starts with a clean record of what was read"
+    assert "a file you sent" in x.gate.taint.sources, "a new message in the same conversation keeps the record: the model still has what was read in front of it"
+    await x.conv.handle(OWNER, "/new", x.chat)
+    await x.conv.wait()
+    await x.conv.handle(OWNER, "Remember that I like cocoa.", x.chat)
+    await x.conv.wait()
+    assert "a file you sent" not in x.gate.taint.sources, "a new conversation starts with a clean record of what was read"
 
 
 async def test_changes_waiting_to_be_reported_are_not_thrown_away_by_the_other_task_starting(tmp_path):

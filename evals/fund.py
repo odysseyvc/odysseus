@@ -658,6 +658,8 @@ def per_case(rows: list[dict[str, Any]], key: str = "score") -> dict[str, float]
         if key in r["grade"]:
             by.setdefault(r["prompt_id"], []).append(float(r["grade"][key]))
         elif key in r and key not in ("grade",):
+            if key == "turns" and not r[key]:
+                continue            # a finished run made at least one call: nought means the count was not recorded, not that it was free
             by.setdefault(r["prompt_id"], []).append(float(r[key] or 0))
     return {k: sum(v) / len(v) for k, v in by.items()}
 
@@ -688,7 +690,7 @@ def summary(rows: list[dict[str, Any]], ids: set[str] | None = None) -> dict[str
         groups.setdefault(r["tags"][0], []).append(r["grade"]["score"])
     quality = [r["grade"]["quality"] for r in rows if "quality" in r["grade"]]
     costs, times = sorted(r["cost_usd"] for r in rows), sorted(r["latency_s"] for r in rows)
-    turns = sorted(r.get("turns") or 0 for r in rows)
+    turns = sorted(r["turns"] for r in rows if r.get("turns"))      # nought is "not recorded"
     return {"cases": len(scores), "runs": len(rows), "score": round(mean, 4), "low": round(low, 4), "high": round(high, 4),
             "correct": round(sum(r["grade"]["correct"] for r in rows) / max(1, len(rows)), 4),
             "quality": round(sum(quality) / len(quality), 4) if quality else None,
