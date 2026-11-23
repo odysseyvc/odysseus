@@ -59,6 +59,9 @@ PROBLEM_STATUSES = ("open", "exploring", "building", "solved", "parked")
 PROBLEM_KINDS = ("idea", "question", "progress", "resource", "connection")
 LINK_TYPES = ("writing", "notes", "reading", "problems", "projects", "zines")     # `links: ["type/slug"]`
 QUOTE_MAX = 600                                       # the site caps a quote at this many characters
+# The order the site's Studio writes a file's fields in (PersonalSite/worker/notes.ts, META_ORDER).
+FIELD_ORDER = ("title", "author", "kind", "url", "status", "added", "started", "finished", "public", "recommended", "pitch",
+               "why", "takeaway", "topics", "links")
 IST = timezone(timedelta(hours=5, minutes=30))        # the contract: `at` carries the +05:30 offset
 PRIVATE_FOR = timedelta(minutes=30)                   # how long after a note "keep that private" still means that note
 
@@ -414,8 +417,14 @@ def set_fields(raw: str, values: dict[str, Any]) -> str:
         new = _scalar(key, value)
         at = next((i for i, l in enumerate(lines) if re.match(rf"^{re.escape(key)}\s*:", l)), None)
         if at is None:
+            # A new field goes before the first field that comes after it in the site's own order (as its Studio
+            # writes files), and in any case before `notes`.
             block = notes_block("".join(lines))
-            lines.insert(block.key_line if block else len(lines), new)
+            stop = block.key_line if block else len(lines)
+            rank = FIELD_ORDER.index(key) if key in FIELD_ORDER else len(FIELD_ORDER)
+            later = [i for i in range(stop) if (m := re.match(r"^([a-z_]+)\s*:", lines[i])) and m.group(1) in FIELD_ORDER
+                     and FIELD_ORDER.index(m.group(1)) > rank]
+            lines.insert(later[0] if later else stop, new)
             continue
         end = at + 1
         while end < len(lines) and not _is_top(lines[end]) and (lines[end].startswith((" ", "\t")) or not lines[end].strip()) \

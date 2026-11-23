@@ -149,6 +149,8 @@ async def test_first_note_on_a_queued_book_starts_it(tmp_path):
     book = yaml.safe_load(repo.files[f"{bn.FOLDER}/the-power-law.yaml"])
     assert (book["status"], str(book["started"]), str(book["added"])) == ("reading", "2026-11-26", "2026-11-24")
     assert len(book["notes"]) == 1 and "from To read to Reading" in reply
+    # The new field sits where the site's Studio would put it: after `added`, before `public`.
+    assert "added: 2026-11-24\nstarted: 2026-11-26\npublic: false\n" in repo.files[f"{bn.FOLDER}/the-power-law.yaml"]
     await s.add_note(bn.parse("reading power law p.9: second", NOW + timedelta(days=2)))
     assert "To read" not in (await s.add_note(bn.parse("reading power law p.10: third", NOW + timedelta(days=2))))
 
