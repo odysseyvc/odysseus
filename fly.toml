@@ -20,7 +20,7 @@ primary_region = "sin"
 kill_timeout = 30
 # Measured on this machine: the program holds about 390 MB and each connected agent about 130 MB. The host alone
 # (three agents) leaves under 100 MB of 1 GB free, and another person's first message would run it out. Swap on the
-# machine's own disk costs nothing and turns running out into running slowly; more memory is the real answer (below).
+# machine's own disk costs nothing and turns running out into running slowly. It is kept as a margin under the 2 GB below.
 swap_size_mb = 1024
 
 [env]
@@ -40,11 +40,11 @@ swap_size_mb = 1024
 # Memory, measured on this machine: about 770 MB with the host's agents
 # connected and nobody else talking, and about 130 MB more for each agent of
 # another person while they talk (nothing fifteen minutes after they stop).
-# 1 GB holds the host alone and only with the swap above; use 2gb as soon as
-# a second person is invited.
+# 1 GB holds the host alone and only with the swap above. This copy serves
+# more than one person, so it has 2 GB; "1gb" is enough for one.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "1gb"
+  memory = "2gb"
 
 [[restart]]
   policy = "always"
