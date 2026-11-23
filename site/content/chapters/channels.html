@@ -227,6 +227,35 @@
 </tbody></table></div>
 <p>Users of one commercial assistant have reported WhatsApp bans <span class="g s">Secondary</span>. The first route was chosen; the set-up and the window come with it.</p>
 
+<h2 id="third">A third channel, bought: iMessage</h2>
+<p>The owner asked for iMessage as well, through a company that sells it, and asked that it be something that can be switched on or off. Nobody but Apple can speak iMessage from a server, so there is no first route to compare with the other two: this channel is bought or it does not exist. The vendor, Linq, runs the lines and offers one interface for iMessage with RCS and SMS behind it. The adapter is <code>odysseus/linq.py</code>.</p>
+<p>It is a second test of the claim made above, that a channel is a thin adapter. Nothing below the interface changed. What the adapter had to settle is the list of needs from the start of this chapter, checked against the vendor's documentation before any code.</p>
+<div class="tablewrap"><table>
+<caption>The six needs, for iMessage through Linq.</caption>
+<thead><tr><th>Need</th><th>What the platform gives</th><th>What the adapter does</th></tr></thead>
+<tbody>
+<tr><th>The sender's identity</th><td>A phone number in a delivery signed in the Standard Webhooks way: an HMAC-SHA256 over the delivery's id, its time and its exact bytes, keyed with a secret shown once when the address is registered</td><td>Refuses a bad signature, and one more than five minutes old; listens only to the owner's number, in a chat of two, on this line</td></tr>
+<tr><th>A way to speak first</th><td>Allowed, but the vendor asks that a line converse and not broadcast, and a free line may write only to people who wrote first</td><td>Only answers. Reminders and routines stay on Telegram, and there is no setting to move them here</td></tr>
+<tr><th>A way to approve</th><td>No buttons. Polls, and a vote arrives as a signed event naming the poll and the option</td><td>Sends the question whole, then a poll with Approve and Decline. Only a vote in that poll answers it</td></tr>
+<tr><th>Drafts</th><td>None; a "typing" bubble</td><td>Asks for the bubble at most once a minute while a reply is written</td></tr>
+<tr><th>Files and voice</th><td>An address at the vendor's file service, with a type and a size</td><td>Fetches it without the account's token, over https, reading no more than the size limit</td></tr>
+<tr><th>Limits</th><td>10,000 characters a message; 30 messages a minute to one person; at least one delivery, sometimes more</td><td>Splits at 4,000; remembers both the event's id and the message's id, because a replay carries a new event id</td></tr>
+</tbody></table></div>
+<h3>An approval with no buttons</h3>
+<p>Exercise 4 of this chapter asks how an owner approves on a channel with no buttons without letting a typed "yes" count. iMessage is that channel. The rule that matters is the gate's: approval is a deliberate act on one particular question, carried by the platform as structure and not as words a model could be talked into reading as consent. A poll meets it. The program makes the poll, the platform returns an id for it and one for each option, and the vote comes back as a signed event with both ids. The adapter keeps, in the running program only, which poll stands for which approval; a vote in any other poll, or from any other number, does nothing, and a poll answers once. Like a button, the poll dies with the process.</p>
+<pre><code>approval_id, answers = self._polls.get(str(d.get("message_id")), ("", {}))
+answer = answers.get(str(d.get("option_id")), "")
+if not answer:
+    return          # a vote in a poll this program is not waiting on
+self._polls.pop(str(d.get("message_id")), None)</code></pre>
+<p>Polls exist only on iMessage itself, not on the SMS a message falls back to. Where the poll cannot be made, the question is put on Telegram, where there are buttons, and a line on iMessage says so. A second channel that cannot carry an approval borrows the first one's; it does not invent a weaker approval of its own.</p>
+<h3>A choice</h3>
+<p>The channel is on when its four settings are present, and one more setting switches it off and leaves them in place. That is one function, read in the two places that care: whether to open the door, and whether to build the adapter.</p>
+<pre><code>def imessage_on(s: Settings) -> bool:
+    return bool(s.imessage and s.linq_token and s.linq_number and s.linq_secret and s.owner_imessage)</code></pre>
+<p>What buying costs is the row the WhatsApp table already gave for a reseller: one more company holds every message that passes, and the free line is a sandbox with a ceiling of twenty contacts. The vendor also sells WhatsApp, as an addition to its paid plan. WhatsApp here stays on Meta's own interface, which works and has nobody in between.</p>
+<p><span class="g v">Verified</span> by twelve unit tests with hand-built deliveries (<code>tests/test_linq.py</code>, and one in <code>tests/test_startup.py</code> that starts the program with the channel on and then off). <span class="g u">Not tested</span>: anything against the vendor. No account exists yet, so every shape in the adapter, the signature included, is written from the documentation, as WhatsApp's were; and the first real WhatsApp message went nowhere for a reason no document mentioned.</p>
+
 <h2 id="people">Telling several people apart</h2>
 <p>Each assistant serves exactly one person. Identity is therefore a comparison with one value: on Telegram, the sender's user id against the owner's id in the settings; on WhatsApp, the sender's number against the owner's number, after the signature has made that number believable. Everyone else is met with silence and a line in the log. A stranger's file or recording is never even downloaded: the Telegram adapter fetches a file only if <code>conversation.is_owner(user_id)</code>, and <code>handle_file</code> and <code>handle_voice</code> check again.</p>
 <p>Two further rules follow from serving one person. The Telegram handlers listen only in private chats (<code>F.chat.type == "private"</code>), because a bot added to a group would otherwise hear other people. And both channels lead into one conversation: the owner can start on Telegram and continue on WhatsApp, and the reply goes back on the channel the message came from, because each incoming message brings its own <code>Chat</code> object.</p>
@@ -393,6 +422,7 @@
 <li>Treat platform rules as constraints with planned answers: the 24-hour window (default to Telegram, fall back, retry), link previews (off), late deliveries (report, do not act).</li>
 <li>Split long approval questions and put the buttons last; a button carries only an id.</li>
 <li>One program serves one owner; several people get several copies.</li>
+<li>On a channel with no buttons, an approval can still be a tap if the platform reports some structured choice, such as a vote in a poll. Where it reports none, put the question on a channel that does.</li>
 <li>Between two people's assistants, decide in code what may leave before any model converses. For meeting times that is busy blocks in and common free time out, with no conversation at all.</li>
 </ul></div>
 

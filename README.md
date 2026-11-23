@@ -25,6 +25,7 @@ and answered one real message. The book's closing chapter
 | `MISTRAL_API_KEY` | Mistral (reading documents, listening to voice notes) | optional |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Langfuse (a readable record of every task) | optional |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `OWNER_WHATSAPP` | Meta's WhatsApp Cloud API (a second channel; needs a public HTTPS address) | optional |
+| `LINQ_API_TOKEN`, `LINQ_NUMBER`, `LINQ_WEBHOOK_SECRET`, `OWNER_IMESSAGE` | Linq (iMessage as a third channel; needs the same public HTTPS address). `ODYSSEUS_IMESSAGE=off` switches it off | optional |
 | `ODYSSEUS_DATA_DIR` | where the journal, memory and conversation are kept (default `var`). They hold mail text in the clear: do not put this inside a folder that syncs to a cloud drive | optional |
 
 Python 3.13.
@@ -126,6 +127,9 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
   website (its server is looked up in the public registry, and accepted only if published under the company's own
   domain), or by the server's address. You approve on the service's own page, in a browser on the machine the program runs on. Tools the server
   labels read-only run unasked; everything else asks. Only you can do this; the assistant cannot connect anything.
+- iMessage, if you switch it on, is bought from Linq, which then carries every message on that channel. It only
+  answers; reminders stay on Telegram. An approval there is a vote in a poll, and falls back to Telegram's buttons.
+  It is built from Linq's documentation and has not yet run against Linq.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With `E2B_API_KEY` set, the assistant can run Python on a rented machine that has no internet access and is destroyed
   after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.

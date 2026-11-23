@@ -51,6 +51,12 @@ class Settings:
     whatsapp_port: int = 8080         # the port the program listens on, for Meta's deliveries and for sign-ins coming back
     public_url: str = ""              # https address at which that port is reachable from the internet, if any (door.py)
     notify_on: str = "telegram"       # where reminders and routines are sent: telegram or whatsapp
+    # Optional: iMessage as a third channel, bought from Linq (linq.py). All four are needed, and `imessage` must not be off.
+    linq_token: str = ""              # the Linq account's API token
+    linq_number: str = ""             # the Linq line the assistant writes from, with country code
+    linq_secret: str = ""             # the signing secret of the webhook subscription, which signs every delivery
+    owner_imessage: str = ""          # your own number as iMessage knows it; only this number is listened to
+    imessage: bool = True             # ODYSSEUS_IMESSAGE=off switches the channel off and leaves its settings in place
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
     langfuse_base_url: str = ""     # the Langfuse region or your own server; empty means Langfuse's default
@@ -71,6 +77,11 @@ class Settings:
     park_after_min: int = 15     # an invited person silent this long has their agents' processes let go until they speak. 0: never
     member_daily_usd: float = 0.0   # the daily spending limit of each invited person. 0: the same as daily_usd
     attio_file: Path | None = None  # set by the program for the group's assistant when the host shares the firm's database with it
+
+
+def imessage_on(s: Settings) -> bool:
+    """Whether the iMessage channel is switched on: every one of its settings is present and it has not been turned off."""
+    return bool(s.imessage and s.linq_token and s.linq_number and s.linq_secret and s.owner_imessage)
 
 
 def make_clock(tz: str = ""):
@@ -138,6 +149,11 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         whatsapp_port=int(merged.get("ODYSSEUS_PORT", "") or merged.get("WHATSAPP_PORT", 8080)),
         public_url=(lambda u: u if u.startswith("https://") else "")(merged.get("ODYSSEUS_PUBLIC_URL", "").strip().rstrip("/")),
         notify_on=merged.get("ODYSSEUS_NOTIFY_ON", "telegram").strip().lower(),
+        linq_token=merged.get("LINQ_API_TOKEN", "").strip(),
+        linq_number=merged.get("LINQ_NUMBER", "").strip(),
+        linq_secret=merged.get("LINQ_WEBHOOK_SECRET", "").strip(),
+        owner_imessage=merged.get("OWNER_IMESSAGE", "").strip(),
+        imessage=merged.get("ODYSSEUS_IMESSAGE", "").strip().lower() not in ("0", "false", "no", "off"),
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),

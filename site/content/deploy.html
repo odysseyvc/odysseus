@@ -127,6 +127,15 @@ The same address with GET lists the apps the account is subscribed to; yours sho
 <li>Send the test number a message from your own WhatsApp. If nothing answers, read the journal: a delivery that arrived and was refused leaves a line, and one that never arrived leaves none.</li>
 </ol>
 <div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>
+<h3>Optional: iMessage as a third channel</h3>
+<p>iMessage is bought from Linq (linqapp.com), which runs the lines. It uses the same door, at <code>/linq</code>. These steps are written from Linq's documentation and have not been run.</p>
+<ol>
+<li>Create a Linq account. It gives you an API token and a Linq number. On the free line you can write only to a number that has written to yours first, so send your Linq number a message from your own phone.</li>
+<li>Put <code>LINQ_API_TOKEN</code>, <code>LINQ_NUMBER</code> and <code>OWNER_IMESSAGE</code> (your own number with country code) in <code>.env</code>.</li>
+<li>Run <code>python scripts/connect_linq.py</code>. It registers <code>https://your-app-name.fly.dev/linq</code> with Linq and writes the signing secret, which Linq shows once, into <code>.env</code> as <code>LINQ_WEBHOOK_SECRET</code>.</li>
+<li>Send those four lines to the server as secrets, and deploy.</li>
+</ol>
+<p>To switch the channel off and keep its settings, set <code>ODYSSEUS_IMESSAGE=off</code>; remove that line, or set it to <code>on</code>, to switch it back. The channel only answers: reminders and routines stay on Telegram. A question that needs your approval arrives as a poll with Approve and Decline; if the poll cannot be made, the question is put to you on Telegram.</p>
 <h3>Updating later</h3>
 <p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update. The bot is away for under a minute; a task it was in the middle of is announced when it returns, not carried on.</p>
 <h3>Going back</h3>
@@ -162,6 +171,7 @@ fly deploy --ha=false --image registry.fly.io/your-app-name:deployment-XXXX</cod
 <tr><th>The connector (optional)</th><td>It holds the access to your mail, calendar and connected apps, and your mail passes through it</td></tr>
 <tr><th>The browser vendor (optional)</th><td>The tasks you browse, and the sign-ins you save there</td></tr>
 <tr><th>The text-recognition service (optional)</th><td>Every file you send the bot, in full</td></tr>
+<tr><th>The iMessage vendor (optional)</th><td>Every message on that channel, both ways</td></tr>
 <tr><th>Your host</th><td>The disk holding your memory, schedule and log</td></tr>
 </tbody>
 </table></div>

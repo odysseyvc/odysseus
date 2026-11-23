@@ -113,3 +113,28 @@ def test_the_vendor_comparison_picks_a_lookup_and_judges_an_answer_by_what_the_f
     other = bake.judge('{"name": "Corvid Systems", "website": "corvid.example", "raised": "$40M"}', known)
     assert other == {"found": False, "people": False, "funding": False, "chars": 0}, "a different company of a similar name is not a find"
     assert bake.judge("Corvid Freight", {"name": "Corvid Freight", "domain": "", "people": ""})["people"] == ""
+
+
+async def test_imessage_is_a_choice_on_with_its_settings_and_off_by_one_word(tmp_path, monkeypatch):
+    import json
+    from odysseus.connect import free_port
+    for key, value in {"TELEGRAM_BOT_TOKEN": "t", "OWNER_TELEGRAM_ID": "1", "ANTHROPIC_API_KEY": "k", "EXA_API_KEY": "e",
+                       "COMPOSIO_API_KEY": "", "BROWSER_USE_API_KEY": "", "WHATSAPP_TOKEN": "", "ODYSSEUS_PUBLIC_URL": "",
+                       "LINQ_API_TOKEN": "tok", "LINQ_NUMBER": "+12025550100", "LINQ_WEBHOOK_SECRET": "whsec_c2VjcmV0", "OWNER_IMESSAGE": "+919820012345",
+                       "ODYSSEUS_PORT": str(free_port())}.items():
+        monkeypatch.setenv(key, value)
+
+    async def fake_start(self):
+        pass
+
+    monkeypatch.setattr(entry, "Bot", FakeBot)
+    monkeypatch.setattr(entry, "build_dispatcher", lambda bot, conversation: FakeDispatcher())
+    monkeypatch.setattr(entry.AgentRunner, "start", fake_start)
+    seen = []
+    for folder, switch in (("on", ""), ("off", "off")):
+        monkeypatch.setenv("ODYSSEUS_DATA_DIR", str(tmp_path / folder))
+        monkeypatch.setenv("ODYSSEUS_IMESSAGE", switch)
+        assert await entry.main() == 0
+        lines = [json.loads(line) for line in (tmp_path / folder / "journal.jsonl").read_text(encoding="utf-8").splitlines()]
+        seen.append([r["imessage"] for r in lines if r["kind"] == "start"])
+    assert seen == [[True], [False]]
