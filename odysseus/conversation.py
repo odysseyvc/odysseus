@@ -181,6 +181,7 @@ class Conversation:
         self._draft_seq = 0
         self._tracing = tracing
         self._conversation_id = f"conversation-{int(time.time())}"     # groups this run's tasks together in the trace viewer
+        self.reading: Any = None        # reading notes for the owner's website (booknotes.py); set by the program when configured
 
     def is_owner(self, user_id: int) -> bool:
         return user_id == self._s.owner_id
@@ -207,6 +208,12 @@ class Conversation:
             self._journal.write("command", name="sign-in address")
             await chat.send(await self._connector.pasted(text) if self._connector is not None
                             else "No sign-in is waiting for that address.")
+            return
+
+        # A reading note ("reading <book> p.120: ...") and its few companions are filed by code, with no model: booknotes.py.
+        # A message that only looks like one (no such book, nothing filed lately) comes back and goes on as usual.
+        if self.reading is not None and material is None and not images and not background and not command.startswith("/")                 and await self.reading.take(text, chat, getattr(chat, "sent", None)):
+            self._journal.write("command", name="reading")
             return
 
         # The owner tapped Done on a check-in a moment ago and was asked what came of it. Whether this message is the
@@ -327,7 +334,9 @@ class Conversation:
                             "/checkins shows the people I remind you to keep in touch with. "
                             "/files shows the files you sent that I am keeping. /skills shows what you have taught me to do your way and the ways that came with me. /portfolio shows the figures recorded from your companies' updates. /address shows my own email address. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
-                            "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague.")
+                            "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague."
+                            + (" For reading notes on your website: \"reading <book> p.120: <thought>\", \"keep that private\", "
+                               "\"why <book>: <reason>\", \"finished <book>: <takeaway>\" and \"publish <book>\"." if self.reading is not None else ""))
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
         if self._memory is not None and command == "/memory":

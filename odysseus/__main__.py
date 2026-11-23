@@ -364,6 +364,12 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation
+    # Reading notes, filed by code into the owner's website repository (booknotes.py). The host's alone.
+    if host and settings.reading_repo and settings.reading_token:
+        from . import booknotes
+        conversation.reading = booknotes.Desk(booknotes.Shelf(booknotes.GitHubFiles(settings.reading_repo, settings.reading_token, settings.reading_branch),
+                                                              journal, state=settings.data_dir / "reading.json"), gate, journal)
+        mark("reading")
     # After every exchange, a line of labels and measurements in this person's own journal (insight.py): what was asked for
     # and how it went, never the words. It is what the host's /insights counts.
     from .insight import make_labeller
@@ -559,7 +565,8 @@ def member_settings(settings: Settings, user_id: int) -> Settings:
                    daily_usd=settings.member_daily_usd or settings.daily_usd, notify_on="telegram",
                    whatsapp_token="", whatsapp_phone_id="", whatsapp_app_secret="", owner_whatsapp="",
                    linq_token="", linq_number="", linq_secret="", owner_imessage="",
-                   vobiz_auth_id="", vobiz_auth_token="", vobiz_channel_id="", vobiz_number="", vobiz_secret="")
+                   vobiz_auth_id="", vobiz_auth_token="", vobiz_channel_id="", vobiz_number="", vobiz_secret="",
+                   reading_repo="", reading_token="")       # the reading notes go to the host's own website, and only the host's
 
 
 def firm_settings(settings: Settings, chat_id: int, attio: bool) -> Settings:

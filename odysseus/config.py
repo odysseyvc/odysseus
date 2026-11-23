@@ -83,6 +83,10 @@ class Settings:
     cache_1h: bool = False       # keep the conversation's cache for an hour, not five minutes: a dearer write, fewer of them (agent.py)
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
+    # Optional: reading notes filed into the owner's own website (booknotes.py). Both are needed.
+    reading_repo: str = ""            # the site's GitHub repository, as owner/name
+    reading_token: str = ""           # a fine-grained GitHub token with Contents read and write on that repository only
+    reading_branch: str = "main"      # the branch whose pushes deploy the site
     people_max: int = 10         # how many people this copy serves at most, the host included (people.py)
     park_after_min: int = 15     # an invited person silent this long has their agents' processes let go until they speak. 0: never
     member_daily_usd: float = 0.0   # the daily spending limit of each invited person. 0: the same as daily_usd
@@ -206,6 +210,9 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),
+        reading_repo=merged.get("ODYSSEUS_READING_REPO", "").strip(),
+        reading_token=merged.get("ODYSSEUS_READING_TOKEN", "").strip(),
+        reading_branch=merged.get("ODYSSEUS_READING_BRANCH", "").strip() or "main",
         people_max=max(1, min(50, int(merged.get("ODYSSEUS_PEOPLE_MAX", "") or 10))),
         park_after_min=max(0, int(merged.get("ODYSSEUS_PARK_AFTER_MIN", "") or 15)),
         member_daily_usd=float(merged.get("ODYSSEUS_MEMBER_DAILY_USD", "") or 0.0),

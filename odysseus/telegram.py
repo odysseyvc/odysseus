@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timezone
+from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramRetryAfter
@@ -23,8 +24,9 @@ NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 class TelegramChat:
-    def __init__(self, bot: Bot, chat_id: int, who: str = "", message_id: int | None = None):
+    def __init__(self, bot: Bot, chat_id: int, who: str = "", message_id: int | None = None, sent: Any = None):
         self._bot = bot
+        self.sent = sent        # when the owner sent the message (Telegram's time), for anything dated by it: booknotes.py
         self._chat_id = chat_id
         self.who = who          # the sender's name as Telegram gives it; used only when someone joins (people.py)
         # The message this chat object was made for. When that message had to wait behind another task, its answer is
@@ -144,7 +146,8 @@ def build_dispatcher(bot: Bot, conversation: Conversation) -> Dispatcher:
             if await late(message):
                 return
             await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, who=message.from_user.full_name if message.from_user else "",
-                                                                                message_id=message.message_id))
+                                                                                message_id=message.message_id,
+                                                                                sent=message.date if message.date.tzinfo else message.date.replace(tzinfo=timezone.utc)))
 
     # One group, if the host switched the firm's assistant on in it (people.House.handle_group). Text only. Whether a
     # message is addressed to the assistant is decided here, from what Telegram says: a mention of its name, or a reply
