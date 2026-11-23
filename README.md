@@ -8,8 +8,8 @@ person or cannot be undone is shown to you first and needs a button press.
 **Status: in development, used by one person.** It has 679 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It runs on a small server, moved there from
-a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has sent and
-has never received. The book's closing chapter
+a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has received
+and answered one real message. The book's closing chapter
 (`site/content/chapters/what-is-built.html`) says for each part what was and was not tested.
 
 ## What you need

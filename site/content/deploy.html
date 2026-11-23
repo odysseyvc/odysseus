@@ -114,13 +114,17 @@ chown -R app:app /data</code></pre></div></li>
 </ol>
 <div class="callout bad"><p><b>Do not start the old copy again.</b> Its folder still holds the sign-in renewals as they were when you moved. Each is good for one use; the old copy would spend them, and the server's sign-ins would stop at their next renewal. Keep the folder as a backup and leave it alone.</p></div>
 <h3>Optional: WhatsApp as a second channel</h3>
-<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. Sending has run for real; receiving has not yet, so treat steps 4 and 5 as untried.</p>
+<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. These steps have been run: a message from the owner's phone was received on the server and answered. A button tap, a file and a voice note have not been tried.</p>
 <ol>
-<li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions. The token the set-up page shows lasts a couple of hours: a bot left with that one sends nothing by the next day and does not say so.</li>
+<li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, a messaging account id, and under the app's basic settings an app secret. In the business settings, add a system user, assign it the app and the WhatsApp account, and generate a token for it with the two WhatsApp permissions (<code>whatsapp_business_messaging</code> and <code>whatsapp_business_management</code>). Meta may ask you to accept a policy and to confirm your account by an emailed code on the way. The token the set-up page shows lasts a couple of hours: a bot left with that one sends nothing by the next day and does not say so.</li>
 <li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
 <li>Set <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_APP_SECRET</code>, <code>OWNER_WHATSAPP</code> (your number with country code) and <code>WHATSAPP_VERIFY_TOKEN</code> (any phrase you choose) as secrets.</li>
 <li>The <code>[http_service]</code> section at the end of <code>fly.toml</code> opens the port; it is already on if you kept it for sign-ins. Deploy.</li>
-<li>In the Meta app, register the webhook address <code>https://your-app-name.fly.dev/whatsapp</code> with the same phrase, and subscribe to <code>messages</code>.</li>
+<li>In the Meta app, register the webhook address <code>https://your-app-name.fly.dev/whatsapp</code> with the same phrase, and subscribe to <code>messages</code>. Meta calls the address at once and accepts it only if the phrase comes back.</li>
+<li>Subscribe the WhatsApp account to your app. Without this the address shows as active and no message is ever forwarded. Use the messaging account id from the app's own WhatsApp page, not the number the business settings show for the account:
+<div class="cmd"><pre><code>curl -X POST -H "Authorization: Bearer $WHATSAPP_TOKEN" https://graph.facebook.com/v27.0/YOUR_MESSAGING_ACCOUNT_ID/subscribed_apps</code></pre></div>
+The same address with GET lists the apps the account is subscribed to; yours should be among them.</li>
+<li>Send the test number a message from your own WhatsApp. If nothing answers, read the journal: a delivery that arrived and was refused leaves a line, and one that never arrived leaves none.</li>
 </ol>
 <div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>
 <h3>Updating later</h3>
