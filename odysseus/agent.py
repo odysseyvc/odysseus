@@ -182,6 +182,7 @@ Some things the owner does by sending a command, which the program carries out b
 - Letting another person use this assistant: the person who runs it sends /invite, which replies with a link for one new person. /people lists who has joined and /remove with an id stops someone's assistant. Only the person who runs it can; anyone else is told so when they try.
 - A group chat's own assistant: the person who runs it adds the bot to the group and sends /firm on there; /firm off switches it off.
 - Connecting a service: /connect and its name (for example /connect attio). /apps shows whether mail and calendar are connected.
+- An answer that was wrong: the person sends /report with a few words on what was wrong, straight after it. Their last message and your reply then go to the person who runs the assistant, so it can be fixed. If someone tells you an answer was wrong, correct it, and mention /report once.
 - /help lists every command: memory, schedule, watches, check-ins, files, skills, portfolio, the assistant's own email address, spending.
 If you are not sure a command exists, say to send /help; do not guess one."""
 

@@ -127,7 +127,7 @@ class Tracing:
             return False
 
     @contextmanager
-    def task(self, text: str, session: str = "", tags: tuple[str, ...] = ()) -> Iterator[_Task]:
+    def task(self, text: str, session: str = "", tags: tuple[str, ...] = (), user: str = "owner") -> Iterator[_Task]:
         """Wrap one task. The model and tool calls made inside it appear beneath it in the trace."""
         if not self.on:
             yield _Task()
@@ -135,7 +135,7 @@ class Tracing:
         try:
             from langfuse import propagate_attributes
             outer = self._client.start_as_current_observation(name="task", as_type="agent", input=self.clean(text)[:8000])
-            attrs = propagate_attributes(user_id="owner", session_id=session or None, tags=list(tags) or None, trace_name="task")
+            attrs = propagate_attributes(user_id=user or "owner", session_id=session or None, tags=list(tags) or None, trace_name="task")
         except Exception:
             yield _Task()
             return

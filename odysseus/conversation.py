@@ -108,6 +108,13 @@ class Conversation:
         # A conversation left alone long enough is closed (summarised) before the next message comes, not when it comes:
         # the owner used to wait four or five seconds for that summary at the start of the first message after a pause.
         self._closing: asyncio.Task | None = None
+        # After each exchange, a line of labels and measurements in this person's journal: what was asked for, how it went
+        # (insight.py). Written after the reply has gone, so it delays nothing.
+        self.labeller: Any = None           # set by whoever assembles the assistant; without it no signal is written
+        # Who this is in the traces: a short mark worked out from their id, so that one person's tasks can be told from
+        # another's there without a name or a number that means anything outside this program.
+        self._who = "person-" + __import__("hashlib").sha256(str(self._s.owner_id).encode()).hexdigest()[:8]
+        self._labelling: set = set()
         self._closed_early: tuple[Any, tuple[str, list[str]]] | None = None      # (the end it was made after, (summary, facts))
         # After a restart the saved conversation is picked up again, so the pause must be measured from before the
         # restart too: the time of the last task the journal holds. Without this the rule never fires after a restart.
@@ -803,6 +810,20 @@ class Conversation:
         finally:
             self._stopping = False
 
+    def _signal(self, exchange: tuple[str, str], before: tuple[str, str] | None) -> None:
+        """Label this exchange in the background (insight.py). A failure here is never the owner's problem."""
+        if self.labeller is None:
+            return
+        try:
+            task = asyncio.get_running_loop().create_task(self.labeller(exchange[0], exchange[1], before))
+            self._labelling.add(task)
+            task.add_done_callback(self._labelling.discard)
+        except Exception:
+            pass
+
+    def last_exchange(self) -> tuple[str, str] | None:
+        return self._recent[-1] if self._recent else None
+
     def _close_when_cold(self) -> None:
         """Once this conversation has been left long enough that the next message will begin a new one, write its summary
         then, in the background. If a message comes first, nothing was done and nothing is lost."""
@@ -1070,7 +1091,7 @@ class Conversation:
                 self._attio.pop_changes()
             for service in self._services:
                 service.pop_changes()
-        trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",)) if self._tracing is not None else None
+        trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",), user=self._who) if self._tracing is not None else None
         traced = trace.__enter__() if trace is not None else None
         why = "" if bg else self._fresh_reason()     # a job in the background has no conversation to begin again
         if why:
@@ -1137,6 +1158,7 @@ class Conversation:
         exchange = (self._words(prompt), " ".join(body.split())[:RECAP_REPLY] or f"(no reply: {outcome.status})")
         if self._history is not None:
             self._history.add(*exchange)
+        self._signal(exchange, None if bg or not self._recent else self._recent[-1])
         if bg:
             # Not part of the conversation, which went on meanwhile. The conversation's model is told of it with its next
             # message, as it is told of what a routine sent, so that "tell me more about that deck" makes sense.

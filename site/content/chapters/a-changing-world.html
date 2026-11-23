@@ -285,6 +285,26 @@ for attempt in range(3 if reading else 1):
 <p><span class="g u">Not tested</span>: whether the fault plan resembles real services (one in seven is a choice); whether the second rewording check catches every bad one; and the loop of reading real traces, since the program has had almost no real use.</p>
 <p>Not built: situations not written by the builders; simulated people less polite than scripts (published work found scripted people flatter agents, <span class="g s">Secondary</span>); anything longer than two simulated days; an adaptive attacker; the real mail service, browser and files.</p></div>
 
+<h2 id="insight">Knowing how it is used, without reading anyone's conversation</h2>
+<p>Once more than one person uses the assistant, whoever runs it needs to know two things to keep improving it: what people ask it for, and where it lets them down. The traces answer that for a builder reading their own use. They do not fit a firm: each person's conversation is theirs, and the person running the program has no business reading a colleague's mail. The first version of the traces did not respect that. Every person's tasks were sent to the trace store under one fixed name, so the host could read all of them and could not even tell whose they were.</p>
+<p>The design that replaced it lets labels and numbers cross from a person's folder to the host, and never words (<code>insight.py</code>).</p>
+<div class="tbl"><table>
+<thead><tr><th>Piece</th><th>What it is</th><th>What crosses to the host</th></tr></thead>
+<tbody>
+<tr><th>A signal</th><td>After every exchange, one line in that person's own journal. A small model chooses three labels from fixed lists (the kind of request, how the reply ended, how the person's message took the previous reply) and answers in code words; anything else it writes is dropped. Code adds what it measures itself: how the task ended, seconds to the first word, calls to the model, tools that failed, proposals the person declined</td><td>Nothing yet: the line stays in the person's journal</td></tr>
+<tr><th>A fault</th><td>Worked out by code from a signal: not finished, a tool failed, a proposal declined, the previous reply corrected, the request repeated, "I cannot do that", slow, many calls</td><td>Nothing yet</td></tr>
+<tr><th>The host's view</th><td>A command that reads each person's signals and replies with counts: exchanges by kind of request, faults by kind, which kinds of request fall short most, median seconds, spend</td><td>Counts and labels</td></tr>
+<tr><th>A report</th><td>A command anyone can send straight after an answer that was wrong, with a few words on why</td><td>That one exchange, with its words, because the person chose to send it. This is the only way content crosses</td></tr>
+<tr><th>A mark in the traces</th><td>Each person's tasks carry a short mark derived from their id, so one person's can be told from another's without a name</td><td>The traces still hold each person's messages and replies; see below</td></tr>
+</tbody>
+</table></div>
+<p>The label "corrected" is the most useful one, and the reason a model is used at all. An error is easy for code to see. A reply that was confidently wrong produces no error: the only sign is the person's next message, and telling "no, I meant the other one" from "and what about the other one" takes reading.</p>
+<div class="box warn"><div class="label">What this does not fix</div>
+<p>With the trace store switched on, every person's messages and the assistant's replies are still sent to it, and whoever holds its keys can read them. The signals make it unnecessary to read them in order to know how the assistant is doing; they do not make it impossible. A firm that wants colleagues' words to stay unread has to switch content off in the traces for everyone but the host, which this program does not yet do.</p></div>
+<h3>From a fault to a case</h3>
+<p>The loop that improves the instructions ({{ch:testing-and-evaluation}}) climbs only on the cases it has, and the cases that matter come from real use, which is private. So nothing real goes into the suite. A second program (<code>evals/harvest.py</code>) reads the exchanges people reported and the host's own exchanges that carry a fault, and has a model rewrite each as a case with every name, company, address and figure replaced by an invented one, keeping the shape of the request, since the shape is usually why the assistant went wrong. Code then compares the candidate with the original and throws it away if an email address, a web address, a number of four digits or more, or one of the original's proper names is still in it. What survives is written to a folder that is not committed, for a person to read. A candidate becomes a case when somebody writes its check.</p>
+<p><span class="g u">Not tested</span>: any of this on real use. The labels have been checked only against invented exchanges in unit tests, so how often the small model mislabels a correction is not known. No report has been sent and no candidate case has been harvested. The view has never been read with more than one person's signals in it.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A suite of hand-written tasks in a still world reflects only what its author thought of; published audits show the effect is large and common.</li>

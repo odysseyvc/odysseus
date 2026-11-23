@@ -51,6 +51,7 @@ WELCOME = ("You're in. I'm an assistant, and this chat is yours alone: nobody el
 CONNECT = "To let me read your mail and calendar, sign in to each. Then just send me a message."
 NO_ACCOUNTS = "Mail and calendar are not set up on this copy, so there is nothing to sign in to yet."
 HOST_HELP = ("Hosting: /invite makes a link for one new person (add a note to remember who it was for). /people lists who is here. "
+             "/insights shows how everyone used their assistant and where it fell short, in counts only. "
              "/remove and an id stops that person's assistant. To give a group chat an assistant of its own, add me to the group and send "
              "/firm on there; /firm off switches it off.")
 
@@ -223,6 +224,17 @@ class House:
             waiting = len(self._people.invites)
             await chat.send("Here now:\n" + "\n".join(lines) + (f"\n\n{waiting} invitation{'s' if waiting != 1 else ''} not yet used." if waiting else "")
                             + "\n\nTo invite someone, send /invite. To stop someone's assistant, send /remove and their id.")
+            return True
+        if command == "/insights":
+            # How everyone used their assistant and where it fell short: labels and numbers from each journal, no words.
+            from . import insight
+            days = int(words[1]) if len(words) > 1 and words[1].isdigit() and 1 <= int(words[1]) <= 90 else 7
+            since, rows = insight.since_days(days), []
+            for uid, a in self._at.items():
+                who = "You" if uid == self._host else (self._people.members.get(str(uid), {}).get("name") or f"id {uid}")
+                rows.append((who, insight.usage(a.journal.read(), since)))
+            self._journal.write("command", name="/insights", days=days, people=len(rows))
+            await chat.send(insight.digest(rows, days))
             return True
         if command == "/remove":
             uid = int(words[1]) if len(words) > 1 and words[1].isdigit() else 0
@@ -430,6 +442,23 @@ class House:
         if stripped.lower().split()[:1] == ["/firm"]:
             # A command for a group chat. Here it reaches no model, which would only guess at what it means.
             await chat.send(FIRM_HERE if user_id == self._host else "That is a command for the person who runs this assistant.")
+            return
+        if stripped.lower().split()[:1] == ["/report"]:
+            # "That last answer was wrong." The person's last exchange goes to the host, with what they add. It is the one
+            # way anyone's words reach the host, and it happens only because the person sent this. No model is involved.
+            from . import insight
+            last = a.conversation.last_exchange() if hasattr(a.conversation, "last_exchange") else None
+            if last is None:
+                await chat.send("There is no exchange to report yet. Send /report right after an answer that was wrong, with a few words on what was wrong.")
+                return
+            who = "the host" if user_id == self._host else (self._people.members.get(str(user_id), {}).get("name") or f"id {user_id}")
+            signal = next((r for r in reversed(a.journal.read()[-200:]) if r.get("kind") == "signal"), None)
+            insight.file_report(Path(self._journal.path).parent, who, last[0], last[1], stripped[len("/report"):], signal)
+            self._journal.write("report", by_host=user_id == self._host)
+            await chat.send("Reported. Your last message and my reply to it" + ("" if user_id == self._host else " have gone to the person who runs this assistant")
+                            + ", with what you wrote, so that it can be fixed. Nothing else of yours was sent.")
+            if user_id != self._host:
+                await self._tell_host(f"{who} reported an answer as wrong. It is in reports.jsonl in the data folder; /insights shows the counts.")
             return
         if user_id == self._host and stripped.startswith("/") and await self._hosting(stripped, chat):
             return

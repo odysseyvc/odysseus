@@ -361,6 +361,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation
+    # After every exchange, a line of labels and measurements in this person's own journal (insight.py): what was asked for
+    # and how it went, never the words. It is what the host's /insights counts.
+    from .insight import make_labeller
+    conversation.labeller = make_labeller(journal, second_call, settings.background_model)
     conversation._inbox = inbox
     conversation._portfolio = portfolio
     if board is not None:

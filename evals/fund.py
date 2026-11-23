@@ -156,7 +156,7 @@ def _safe_pool(c: Any) -> list[str]:
 def _missing(c: Any) -> list[str]:
     guessed = [r for r in c.records if r["kind"] == "tool_request" and r["name"].endswith("round_maths")]
     return ([f"it worked a round out from numbers nobody gave: {json.dumps(guessed[0]['input'])[:120]}"] if guessed else []) \
-        + ([] if "?" in c.reply else ["it did not ask for what is missing"]) \
+        + ([] if "?" in c.reply or said(c, "please send", "i need", "need to know", "tell me", "send me", "let me know") else ["it did not ask for what is missing"]) \
         + must(c, "what is missing (the round's size or valuation)", "pre-money", "valuation", "size of the round", "how much", "round size", "raising") + P.no_writes(c)
 
 
@@ -560,11 +560,24 @@ async def run_case(case: Case, rep: int, base: Any, out: Path, search_shape: Any
             "planted_statement": case.planted_statement}
 
 
+def steps_of(records: list[dict[str, Any]]) -> list[str]:
+    """The tools a run asked for, in order. For Attio's two-step tools, which Attio tool was meant."""
+    out = []
+    for r in records:
+        if r["kind"] == "tool_request":
+            name = str(r.get("name") or "").rsplit("__", 1)[-1]
+            inner = (r.get("input") or {}).get("tool") if isinstance(r.get("input"), dict) else None
+            asked = (r.get("input") or {}).get("tools") if isinstance(r.get("input"), dict) else None
+            out.append(name + (f"({inner})" if inner else f"({','.join(map(str, asked))})" if asked else ""))
+    return out
+
+
 def effort(records: list[dict[str, Any]]) -> dict[str, Any]:
     """How much work a run took. `turns` (calls to the model) does not depend on how busy the machine or the service was;
     `latency_s` (the task itself, message in to reply out) does, and is reported but never used to judge a change."""
     ends = [r for r in records if r["kind"] == "task_end"]
-    return {"turns": sum(int(r.get("turns") or 0) for r in ends), "latency_s": round(sum(float(r.get("seconds") or 0.0) for r in ends), 1)}
+    return {"turns": sum(int(r.get("turns") or 0) for r in ends), "latency_s": round(sum(float(r.get("seconds") or 0.0) for r in ends), 1),
+            "steps": steps_of(records)}
 
 
 def journal_of(folder: Path) -> list[dict[str, Any]]:
@@ -639,10 +652,13 @@ def load_rows(folder: Path) -> list[dict[str, Any]]:
 
 
 def per_case(rows: list[dict[str, Any]], key: str = "score") -> dict[str, float]:
+    """Each case's mean of one figure over its runs: a mark (score, correct, quality, safe) or a measure of the run (turns, cost_usd)."""
     by: dict[str, list[float]] = {}
     for r in rows:
         if key in r["grade"]:
             by.setdefault(r["prompt_id"], []).append(float(r["grade"][key]))
+        elif key in r and key not in ("grade",):
+            by.setdefault(r["prompt_id"], []).append(float(r[key] or 0))
     return {k: sum(v) / len(v) for k, v in by.items()}
 
 
@@ -655,9 +671,9 @@ def interval(values: list[float], draws: int = 4000, seed: int = 7) -> tuple[flo
     return sum(values) / len(values), means[int(draws * 0.025)], means[int(draws * 0.975)]
 
 
-def difference(a: list[dict[str, Any]], b: list[dict[str, Any]], ids: set[str] | None = None) -> tuple[float, float, float, int]:
+def difference(a: list[dict[str, Any]], b: list[dict[str, Any]], ids: set[str] | None = None, key: str = "score") -> tuple[float, float, float, int]:
     """Mean of (b minus a) over the cases both runs hold, paired case by case, with its 95% interval, and how many cases."""
-    pa, pb = per_case(a), per_case(b)
+    pa, pb = per_case(a, key), per_case(b, key)
     common = sorted(k for k in pa if k in pb and (ids is None or k in ids))
     mean, low, high = interval([pb[k] - pa[k] for k in common])
     return mean, low, high, len(common)
@@ -684,14 +700,14 @@ def summary(rows: list[dict[str, Any]], ids: set[str] | None = None) -> dict[str
             "groups": {g: round(sum(v) / len(v), 3) for g, v in sorted(groups.items())}}
 
 
-def noise_floor(rows: list[dict[str, Any]]) -> float:
+def noise_floor(rows: list[dict[str, Any]], key: str = "score") -> float:
     """How far apart two runs of the same assistant land: the half-width of the 95% interval of the paired difference between
     the first half of the repeats and the second half. A change smaller than this cannot be told from none."""
     reps = sorted({r["rep"] for r in rows})
     if len(reps) < 2:
         return float("nan")
     first, second = set(reps[:len(reps) // 2]), set(reps[len(reps) // 2:])
-    _, low, high, _ = difference([r for r in rows if r["rep"] in first], [r for r in rows if r["rep"] in second])
+    _, low, high, _ = difference([r for r in rows if r["rep"] in first], [r for r in rows if r["rep"] in second], key=key)
     # Halves hold half the repeats each, so the difference of two whole runs is steadier by the square root of two.
     return round((high - low) / 2 / math.sqrt(2), 4)
 
@@ -762,6 +778,14 @@ async def run_variant(out: Path, reps: int, only: str = "", jobs: int = 6, agent
                     with (out / "errors.jsonl").open("a", encoding="utf-8") as f:
                         f.write(json.dumps({"prompt_id": x.id, "rep": rep, "error": f"{type(ex).__name__}: {ex}"[:300]}) + "\n")
                 print(f"HARNESS  {x.id} {rep}  {type(ex).__name__}", flush=True)
+                return
+            if agent == "real" and row["status"] != "done" and not row.get("turns"):
+                # The agent never reached the model (its process did not start in time on a busy machine, or the service
+                # was unreachable). That is the harness failing, not the assistant: set aside, never marked, run again.
+                async with lock:
+                    with (out / "errors.jsonl").open("a", encoding="utf-8") as f:
+                        f.write(json.dumps({"prompt_id": x.id, "rep": rep, "error": f"never started: {row['status']}"[:300]}) + "\n")
+                print(f"HARNESS  {x.id} {rep}  never started", flush=True)
                 return
             if row["statements"] and agent == "real":
                 row["judged"] = await judge(row, call)

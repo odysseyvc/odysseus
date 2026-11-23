@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 672 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 679 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It runs on a small server, moved there from
 a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has sent and
@@ -155,6 +155,10 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
   or paste one and it is recorded the same way. `/portfolio` shows what is kept.
 - Ask what a round does to ownership, what notes and SAFEs convert into, or what a pro rata costs, and the sums are
   done by code with the conventions stated, not by the model.
+- After every exchange a line of labels and measurements is kept in that person's own log: what kind of request it was,
+  how it ended, whether the next message corrected it, how long the first word took. `/insights` shows the person who
+  runs the assistant the counts for everyone, with nobody's words. Anyone can send `/report` after a wrong answer to
+  pass that one exchange on. `python -m evals.harvest` rewrites reported and faulty exchanges as made-up test cases.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
 
