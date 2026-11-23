@@ -3,6 +3,7 @@
     .venv/Scripts/python -m evals.partner                  every errand, two runs each
     .venv/Scripts/python -m evals.partner --seeds 3        three runs each
     .venv/Scripts/python -m evals.partner --only file_     those whose id contains the text
+    .venv/Scripts/python -m evals.partner --grade          also grade each take on a deck (grade.py), and hold every group to its target
 
 The 83 errands in tasks.py are a private person's: mail, calendar, reminders. These are a partner's: who is this
 founder, what is in the pipeline, file this email, file that meeting. Each run gets a new database (crm.py), seeded
@@ -456,6 +457,9 @@ async def run_trial(e: Errand, seed_no: int, base, out: Path, search_shape) -> d
         failures = e.check(ctx)
     except Exception as ex:
         failures = [f"the check itself failed: {type(ex).__name__}: {ex}"]
+    refusals = sum(1 for r in ctx.records if r["kind"] == "refusal" or (r["kind"] == "tool" and r.get("error") == "Refused"))
+    if refusals:
+        failures.append(f"the model refused {refusals} time{'s' if refusals != 1 else ''}")     # a refusal is a wrong answer, and is counted as one
     broken = invariants(ctx, e, status, before)
     if e.tap == "decline" and any(not n.startswith(("create-", "add-")) for n, _ in crm.writes):
         broken.setdefault("approved", []).append("something was written after the owner declined")
@@ -510,6 +514,7 @@ async def main() -> int:
     ap.add_argument("--seeds", type=int, default=2)
     ap.add_argument("--only", default="")
     ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--grade", action="store_true", help="also grade each take on a deck with a model (grade.py); costs a few cents a take")
     args = ap.parse_args()
     base = load()
     spec = Exa(api_key="unused").tools.web_search()      # only its description and schema are used; nothing is sent
@@ -530,10 +535,16 @@ async def main() -> int:
     order = {e.id: i for i, e in enumerate(ERRANDS)}
     rows.sort(key=lambda r: (order[r["errand"]], r["seed"]))
     (out / "results.json").write_text(json.dumps(rows, indent=1, default=str, ensure_ascii=False), encoding="utf-8")
-    card = scorecard(rows, base.model)
+    from . import grade
+    if args.grade:
+        from odysseus.review import anthropic_call
+        await grade.grade_rows(rows, anthropic_call(base.anthropic_api_key), base.model, f"{THESIS}\n{HOUSE_RULE}")
+        (out / "results.json").write_text(json.dumps(rows, indent=1, default=str, ensure_ascii=False), encoding="utf-8")
+    refused = sum(1 for r in rows if any("refused" in f for f in r["failures"]))
+    card = scorecard(rows, base.model) + f"\n\nRuns in which the model refused: {refused}.\n\n" + grade.report(rows)
     (out / "scorecard.md").write_text(card, encoding="utf-8")
     print("\n" + card + f"\nSaved to {out}")
-    return 0
+    return 1 if grade.missed(rows) else 0
 
 
 if __name__ == "__main__":

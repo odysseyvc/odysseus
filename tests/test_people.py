@@ -431,3 +431,10 @@ async def test_at_start_up_the_groups_assistant_is_built_apart_from_every_person
     assert host.apps is not None and house._board.desk(GROUP) is None and house._board.desk(1) is not None, "no way between it and a person's assistant"
     assert firm.conversation.is_owner(GROUP) and not firm.conversation.is_owner(1)
     assert [r["kind"] for r in Journal(tmp_path / "people" / "group" / "journal.jsonl").read()] == ["start"]
+
+
+def test_the_model_is_told_which_things_are_commands():
+    """Asked for an invite link, it said inviting people was not built. It cannot run a command; it can name one."""
+    from odysseus.agent import conversation_prompt
+    said = conversation_prompt(True)
+    assert "/invite" in said and "/people" in said and "/help" in said and "never say such a thing is not built" in said

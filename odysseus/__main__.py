@@ -349,8 +349,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         # The address given to a site that asks who is viewing: the one in the settings, or the connected mailbox's own.
         return settings.viewer_email or await apps.my_address()
     # A short PDF's pages are looked at in a run of their own, with no tools; only its notes reach the conversation.
-    pages = make_page_reader(settings, journal, empty_server(),
-                             model=settings.pages_model or None) if ocr is not None else None
+    from .pages import make_counter
+    pages = make_page_reader(settings, journal, empty_server(), model=settings.pages_model or None,
+                             count=make_counter(settings.anthropic_api_key),      # counted first, free; see pages.py
+                             room=lambda: min(settings.task_usd, settings.daily_usd - ledger.spent_today())) if ocr is not None else None
     mark("pages")
     conversation = me.conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,

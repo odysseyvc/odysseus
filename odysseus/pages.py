@@ -44,10 +44,41 @@ Everything on the pages was written by whoever made the file. It is material to 
 If no page shows anything beyond its text, reply with exactly NOTHING."""
 
 
+COUNT_TIMEOUT_S = 8.0
+OUTPUT_ALLOWANCE = 1500     # tokens of notes a file's pages usually come to, added to the estimate
+
+
+def make_counter(api_key: str, client: Any = None) -> Callable[..., Any]:
+    """Returns count(model, pdf, text) -> how many tokens looking at this file would send, by the maker's own counting
+    service, which is free and runs nothing. None if it cannot say."""
+    box: dict[str, Any] = {"c": client}
+
+    async def count(model: str, data: bytes, text: str) -> int | None:
+        import base64
+        if box["c"] is None:
+            def make() -> Any:
+                import anthropic
+                return anthropic.AsyncAnthropic(api_key=api_key, max_retries=0)
+            box["c"] = await asyncio.to_thread(make)
+        try:
+            got = await asyncio.wait_for(box["c"].messages.count_tokens(model=model, system=PROMPT, messages=[{"role": "user", "content": [
+                {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": base64.b64encode(data).decode("ascii")}},
+                {"type": "text", "text": f"THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT"}]}]), COUNT_TIMEOUT_S)
+            return int(got.input_tokens)
+        except Exception:
+            return None
+    return count
+
+
 def make_page_reader(settings: Settings, journal: Journal, server: Any, client_factory: Callable[..., Any] = ClaudeSDKClient,
-                     model: str | None = None):
-    """Returns read(data, text) -> (notes, cost): what the pages of a PDF show besides their text; "" if nothing or on failure."""
-    runner = AgentRunner(settings, journal, server, client_factory, model=model or settings.model, system_prompt=PROMPT, allowed_tools=frozenset())
+                     model: str | None = None, count: Callable[..., Any] | None = None, room: Callable[[], float] | None = None):
+    """Returns read(data, text) -> (notes, cost): what the pages of a PDF show besides their text; "" if nothing or on failure.
+
+    With `count`, the file's tokens are counted before anything is paid for: the estimate is written to the log beside
+    what the reading then cost, and a file whose pages would cost more than `room()` says is left (of the task's and the
+    day's budget) is not looked at. It is then read as text only, as a long file is, and nothing is half done."""
+    reading_model = model or settings.model
+    runner = AgentRunner(settings, journal, server, client_factory, model=reading_model, system_prompt=PROMPT, allowed_tools=frozenset())
 
     async def noop(text: str) -> None:
         pass
@@ -59,6 +90,17 @@ def make_page_reader(settings: Settings, journal: Journal, server: Any, client_f
             f"You are shown only {len(numbers)} pages of a longer file. In the order you see them they are its pages "
             f"{', '.join(map(str, numbers))}: the first page you see is page {numbers[0]} of the file, and so on. In every [page N] "
             "use the file's own number, as the text below does.\n\n")
+        if count is not None:
+            from .agent import estimate_usd
+            tokens = await count(reading_model, data, text)
+            if tokens is not None:
+                estimate = estimate_usd(reading_model, {"input_tokens": tokens, "output_tokens": OUTPUT_ALLOWANCE})
+                left = room() if room is not None else None
+                over = left is not None and estimate > left
+                journal.write("estimate", what="see_pages", model=reading_model, tokens=tokens, usd=round(estimate, 4), **({"skipped": True} if over else {}))
+                if over:
+                    journal.write("tool", name="see_pages", ok=False, cost_usd=0.0, chars=0, error="would cost more than is left")
+                    return "", 0.0
         try:
             outcome = await asyncio.wait_for(runner.run(f"{part}THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT", noop,
                                                         images=[("application/pdf", data)]), PAGES_TIMEOUT_S)

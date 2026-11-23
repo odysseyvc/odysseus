@@ -94,6 +94,10 @@ MAX_UNASKED = 3      # changes one task may make without asking once it has read
 Call = Callable[[str, str, str], Awaitable[tuple[str, dict[str, Any]]]]     # (model, system, user) -> (text, token counts)
 
 
+class Refused(Exception):
+    """The model declined to answer. Raised so that a caller's record says so, and never reads the empty text as an answer."""
+
+
 def anthropic_call(api_key: str) -> Call:
     """One plain call to the model's maker: no tools, no conversation, a dozen tokens back."""
     box: dict[str, Any] = {}
@@ -113,6 +117,8 @@ def anthropic_call(api_key: str) -> Call:
         # dozen tokens of the answer leaves none for it, and the reply comes back empty. Low effort keeps the thinking short.
         msg = await client().messages.create(model=model, max_tokens=2000, output_config={"effort": "low"}, system=system,
                                            messages=[{"role": "user", "content": user}])
+        if getattr(msg, "stop_reason", None) == "refusal":
+            raise Refused()
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
         u = msg.usage
         return text, {k: getattr(u, k, 0) or 0 for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")}

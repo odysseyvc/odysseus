@@ -298,6 +298,33 @@ class Errand:
 <p><span class="g v">Verified</span>: the partner evaluation runs the real model, program and gate against a fresh invented database for every trial; a do-nothing agent passes none of its errands (a unit test); 112 trials in three runs, then 28 under the new asking policy, then 34 with the deck errands, with the results above; no planted instruction was acted on in those runs. In the private-person suite, 194 of 201 passed in one run, and the do-nothing agent scores 0 of 67.</p>
 <p><span class="g u">Not tested</span>: a per-errand rate worth trusting; in the partner suite, requests reworded or typed in a hurry, or tools that fail; that the stand-in database behaves like the real one beyond what was checked live; that a high score predicts good behaviour on real accounts. Sixteen chances to obey a planted instruction, all written by the people who wrote the defences, are not a measure of how often a model obeys one. Status across the program is kept in {{ch:what-is-built}}.</p></div>
 
+<h2 id="practices">Four practices from the model maker's guides, and one that did not earn its place</h2>
+<p>The maker of the model publishes guides for building common products: a support agent, a ticket router, a moderator, a summariser of legal documents, a shop. None is this product, but their recommendations are general, and reading this program against them found most already held (staged changes approved outside the conversation, fixed output shapes read by code, facts only from tool results, "not given" in place of a guess) and five that did not. Each was then built or tried.</p>
+<div class="tbl"><table>
+<thead><tr><th>The recommendation</th><th>What was missing</th><th>What now holds</th></tr></thead>
+<tbody>
+<tr><th>Treat a refusal as an error and count it</th><td>A model that declined left empty text, which the short readers took for an answer in no usable shape, and the loop for a reply with nothing in it</td><td>The stop reason is read. In the loop a refusal is written to the log as one and the owner is told in a line; in the short readers it is raised and named. An evaluation run with a refusal in it fails</td></tr>
+<tr><th>Count tokens before choosing how to read a file</th><td>Cost was known only after it was spent</td><td>Before a PDF's pages are looked at, the maker's counting service, which is free and runs nothing, says how many tokens that would send. The estimate is logged beside the cost that follows, and a file that would cost more than is left of the task's or the day's budget is read as text only, with nothing half done</td></tr>
+<tr><th>Grade what rules cannot judge</th><td>A rule could say a take on a deck existed, not whether it was good</td><td>Each take is marked against eleven statements: four counted by code (the six parts in order, the length, the number of questions, the closing line), seven read by a model that answers yes or no to each</td></tr>
+<tr><th>Write the target down before the run</th><td>Evaluations counted passes with no bar to meet</td><td>Each group of errands has a stated target, a run prints met or missed for each, and the command fails when one is missed. The numbers are starting values for the owner to set</td></tr>
+<tr><th>Put worked examples in the prompt</th><td>The instructions were rules with almost no examples</td><td>Tried twice and not kept; see below</td></tr>
+</tbody>
+</table></div>
+<h3>A grader has to be graded</h3>
+<p>The first version of the grader marked three statements as failed on every one of nine replies. The replies were not at fault. One statement forbade any verdict, when the instructions ask for a closing line on whether to take a first call. One asked whether the take invented a view for the owner's firm, without showing the grader what the assistant had been told about the firm. Reading one reply beside its marks found both in a minute; the score alone would have sent the work in the wrong direction.</p>
+<p>The second finding was noise. The same nine replies graded twice gave different marks: one statement was met seven times in the first grading and four in the second. So each reply is now read three times and the majority decides each statement. After that, two gradings of the same replies agreed to within a point.</p>
+<h3>Examples that changed nothing</h3>
+<p>The guides say to include several worked examples. Two were written for a take on a deck, on made-up companies, and added to the standing instructions; then, because the guides also say to put such material beside the input, one was moved into the note that travels with a file. The same four errands were run three times each before and after.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>Rules passed</th><th>Graded score</th><th>Takes within the word limit</th></tr></thead>
+<tbody>
+<tr><th>Before</th><td>12 of 12</td><td>75%</td><td>5 of 9</td></tr>
+<tr><th>Two examples in the standing instructions</th><td>12 of 12</td><td>75%</td><td>3 of 9</td></tr>
+<tr><th>One example beside the file</th><td>12 of 12</td><td>77%</td><td>2 of 9</td></tr>
+</tbody>
+</table></div>
+<p>On nine replies a difference of two points is nothing, and the one thing the examples might have fixed, length, got worse. They were taken out again: an example in the standing instructions is paid for on every message, and nothing measured said it was worth it. Short examples were kept only inside the skills for a memo and a note to a founder, which cost nothing until a task calls for them and have not been measured at all. The target for decks, 85%, is missed at every setting; two of the grader's statements still fail about half the time whatever the instructions say, and whether that is the takes or the statements has not been settled. <span class="g u">Not tested</span>: more than three runs of each errand; any errand outside decks; a real refusal, which has only been simulated; a file large enough to be turned away by its count.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A test asks whether the program does the right thing when the model says X. An evaluation asks whether the whole system, real model included, does the right thing. An agent needs both.</li>

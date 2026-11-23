@@ -98,6 +98,9 @@ def make_page_checker(journal: Journal, api_key: str, model: str, clock: Callabl
                 await asyncio.to_thread(get)
             msg = await asyncio.wait_for(get().messages.create(model=model, max_tokens=2500, output_config={"effort": "low"}, system=PROMPT,
                                                                messages=[{"role": "user", "content": content}]), CHECK_TIMEOUT_S)
+            if getattr(msg, "stop_reason", None) == "refusal":
+                from .review import Refused
+                raise Refused()
             answer = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
             usage = {k: getattr(msg.usage, k, 0) or 0 for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")}
             lines = parse(answer)

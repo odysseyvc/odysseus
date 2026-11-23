@@ -30,6 +30,11 @@ Rules for every line:
 - No adjectives of praise. No "strong team", "huge market". Say what was done and how big.
 - If something you read looks wrong or too good, put it under Risks or Open questions, not in a footnote.
 
+Three lines on a made-up company, to show the form of a line:
+- The deck says 61 kitchens are let at 94% occupancy (deck p. 4). On the call the founder said 58 (call of 14 Oct). The two disagree.
+- Tenants stay 19 months on average, the deck says (deck p. 5). No lease lengths are given, so whether a tenant outlasts a lease is not known.
+- Gross margin: Not given.
+
 The file: two to four pages. If the owner has a document template (template), build a Word file from it. Otherwise make a PDF by writing one web page and printing it, as the instructions for documents say. Look at a trial of the pages before sending. In the chat, say in three lines what the memo holds and what is missing; do not paste the memo.
 
 Do not file, send or change anything while writing a memo. If the owner then asks, attach or link it on the deal's record.
