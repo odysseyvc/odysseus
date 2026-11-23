@@ -298,6 +298,12 @@ class FakeAttio:
         if name == "list-records-in-list":
             return text({"entries": [{"entry_id": e["entry_id"], "parent_record": {"object_slug": e["object"], "record_id": e["record_id"]},
                                       **self._view("", e["values"], LISTS[e["list"]]["attrs"])} for e in self.entries if e["list"] == a.get("list")], "has_more": False})
+        if name == "list-tasks":            # ten at a time and no more, as the real one gives them
+            if int(a.get("limit") or 10) > 10:
+                raise AppError("Input validation error: limit must be less than or equal to 10.")
+            off = int(a.get("offset") or 0)
+            rows = [t for t in getattr(self, "tasks", []) if a.get("is_completed") is None or bool(t.get("is_completed")) == bool(a.get("is_completed"))]
+            return text({"tasks": rows[off:off + 10], "has_more": off + 10 < len(rows)})
         if name == "search-notes-by-metadata":
             hits = [n for n in self.notes if not a.get("parent_record_id") or n["parent_record_id"] == a["parent_record_id"]]
             return text({"notes": [{"note_id": n["note_id"], "title": n["title"], "parent_object": n["parent_object"], "parent_record_id": n["parent_record_id"],

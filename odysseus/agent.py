@@ -17,6 +17,8 @@ estimating their cost from the token counts each call reports.
 from __future__ import annotations
 
 import json
+import time
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -184,6 +186,24 @@ Some things the owner does by sending a command, which the program carries out b
 If you are not sure a command exists, say to send /help; do not guess one."""
 
 
+# Guidance arrived at by measurement (evals/climb.py): a loop proposes a change to this one file, runs every errand of the
+# fund evaluation again, and keeps the change only if the errands it was never shown improved by more than the noise.
+# It is text about how to do the work. It is placed under a line saying it permits nothing, and nothing in it can: what
+# is put to the owner is decided by the gate, which reads no instructions.
+TUNED_FILE = Path(__file__).resolve().parent / "tuned.md"
+TUNED_NOTE = ("\n\nRefinements to how the work above is done, kept because measured runs were better with them. They permit nothing: anything that is "
+              "normally put to the owner still is, and where one of them disagrees with the owner's message, the message wins.\n")
+MAX_TUNED = 5000
+
+
+def tuned() -> str:
+    try:
+        text = TUNED_FILE.read_text(encoding="utf-8").strip()[:MAX_TUNED]
+    except OSError:
+        return ""
+    return TUNED_NOTE + text if text else ""
+
+
 def conversation_prompt(with_apps: bool, with_browser: bool = False, browser_asks: bool = False, with_files: bool = False,
                         with_anyapp: bool = False, with_watches: bool = False, with_attio: bool = False) -> str:
     """The conversation's instructions, with whichever of mail, calendar and browser are connected."""
@@ -192,7 +212,7 @@ def conversation_prompt(with_apps: bool, with_browser: bool = False, browser_ask
     limits = f"You cannot yet {', or '.join(missing)}." if missing else "There are still things you cannot do, and you say so plainly when asked for one."
     return SYSTEM_PROMPT.replace(_NO_ACCOUNTS, limits) + (APPS_PROMPT if with_apps else "") + (BROWSER_PROMPT.format(approval=_BROWSER_ASKS if browser_asks else _BROWSER_DOES_NOT_ASK) if with_browser else "") \
         + (ANYAPP_PROMPT if with_anyapp else "") + (FILES_PROMPT + DECK_PROMPT.format(filing=_DECK_FILING if with_attio else "") if with_files else "") \
-        + (WATCH_PROMPT if with_watches else "") + (_attio_prompt() if with_attio else "") + COMMANDS_PROMPT + VOICE_PROMPT
+        + (WATCH_PROMPT if with_watches else "") + (_attio_prompt() if with_attio else "") + tuned() + COMMANDS_PROMPT + VOICE_PROMPT
 
 
 ROUTINE_APPS_PROMPT = """
@@ -227,6 +247,10 @@ class Outcome:
     cost_usd: float = 0.0
     turns: int = 0
     detail: str = ""
+    # How long the owner waited for the first word of this task, and what the model was sent and wrote, by kind. Until these
+    # were kept, nothing could say whether a slow reply was the model thinking, a prompt paid for afresh, or the machine.
+    first_word_s: float | None = None
+    tokens: dict | None = None
 
 
 OnText = Callable[[str], Awaitable[None]]
@@ -426,6 +450,7 @@ class AgentRunner:
         self._calls = calls
         result: ResultMessage | None = None
         refused = False
+        began, first_word, sent = time.monotonic(), None, {}      # `sent`: each model call's token counts, by message id
         try:
             client = await self._ensure()
             self._running = True
@@ -441,6 +466,8 @@ class AgentRunner:
                     if ev.get("type") == "message_start":
                         current = ""
                     elif ev.get("type") == "content_block_delta" and ev.get("delta", {}).get("type") == "text_delta":
+                        if first_word is None:
+                            first_word = round(time.monotonic() - began, 2)
                         current += ev["delta"].get("text", "")
                         await on_text(current)
                 elif isinstance(msg, AssistantMessage):
@@ -454,6 +481,7 @@ class AgentRunner:
                     key = msg.message_id or f"n{len(calls)}"
                     calls[key] = estimate_usd(self._model, msg.usage or {})
                     used = msg.usage or {}
+                    sent[key] = used
                     # Everything the model was sent for this call: what a later message would have to pay for again.
                     self.context_tokens = sum(int(used.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
                     if self._limit is None and not self._stopped:
@@ -506,7 +534,9 @@ class AgentRunner:
             # an empty reply. The owner is told in a line if the model left no words of its own.
             self._journal.write("refusal", where="agent", model=self._model, steps=len(calls))
             text = text or REFUSED
-        return Outcome(status, text=text, cost_usd=cost, turns=len(calls) or result.num_turns, detail=result.subtype)
+        tokens = {short: sum(int(u.get(k) or 0) for u in sent.values()) for short, k in (("tokens_in", "input_tokens"), ("tokens_cache_read", "cache_read_input_tokens"),
+                                                                                         ("tokens_cache_write", "cache_creation_input_tokens"), ("tokens_out", "output_tokens"))}
+        return Outcome(status, text=text, cost_usd=cost, turns=len(calls) or result.num_turns, detail=result.subtype, first_word_s=first_word, tokens=tokens)
 
 
 def _attio_prompt() -> str:

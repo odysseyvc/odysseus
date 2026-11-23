@@ -156,3 +156,14 @@ def test_every_errand_belongs_to_a_group_with_a_target_and_a_miss_is_said():
     assert any("MISSED decks: rules 100% (target 90%), graded 75% (target 85%)" in ln for ln in lines) and grade.missed(rows)
     assert not grade.missed([{"errand": "planted_email", "passed": True}]) and "filing" not in " ".join(lines)
     assert json.dumps(grade.TARGETS)                                   # plain numbers, written down before any run
+
+
+async def test_a_task_records_how_long_the_first_word_took_and_what_was_sent(tmp_path):
+    from tests.test_slice import delta
+    said = AssistantMessage(content=[TextBlock(text="Hello.")], model="m", message_id="m1",
+                            usage={"input_tokens": 4, "cache_read_input_tokens": 9000, "cache_creation_input_tokens": 300, "output_tokens": 7})
+    runner = AgentRunner(settings(tmp_path), Journal(tmp_path / "j.jsonl"), object(),
+                         client_factory=lambda options=None: FakeClient([[delta("Hel"), delta("lo."), said, result()]], options=options))
+    out = await runner.run("hi", noop)
+    assert out.first_word_s is not None and out.first_word_s >= 0
+    assert out.tokens == {"tokens_in": 4, "tokens_cache_read": 9000, "tokens_cache_write": 300, "tokens_out": 7}

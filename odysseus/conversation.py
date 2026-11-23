@@ -105,6 +105,10 @@ class Conversation:
         # again. So after a long pause a new one is begun, with the last few exchanges written out by code (below).
         self._recent: deque[tuple[str, str]] = deque(maxlen=RECAP_EXCHANGES)
         self._last_end: datetime | None = None
+        # A conversation left alone long enough is closed (summarised) before the next message comes, not when it comes:
+        # the owner used to wait four or five seconds for that summary at the start of the first message after a pause.
+        self._closing: asyncio.Task | None = None
+        self._closed_early: tuple[Any, tuple[str, list[str]]] | None = None      # (the end it was made after, (summary, facts))
         # After a restart the saved conversation is picked up again, so the pause must be measured from before the
         # restart too: the time of the last task the journal holds. Without this the rule never fires after a restart.
         last = next((r.get("ts") for r in reversed(journal.read()) if r.get("kind") == "task_end" and "routine" not in r and "brief" not in r), None)
@@ -799,6 +803,30 @@ class Conversation:
         finally:
             self._stopping = False
 
+    def _close_when_cold(self) -> None:
+        """Once this conversation has been left long enough that the next message will begin a new one, write its summary
+        then, in the background. If a message comes first, nothing was done and nothing is lost."""
+        if self._closing is not None and not self._closing.done():
+            self._closing.cancel()
+        self._closed_early = None
+        if self._history is None or self._closer is None or self._s.fresh_after_min <= 0:
+            return
+        mark = self._last_end
+        wait = CACHE_COLD_S if self._runner.context_tokens > self._s.fresh_above_tokens else self._s.fresh_after_min * 60
+
+        async def later() -> None:
+            await asyncio.sleep(wait + 2)
+            if self._last_end != mark or self.busy or not self._fresh_reason() or self._ledger.spent_today() >= self._s.daily_usd:
+                return
+            known = [e.text for e in self._memory.profile()] if self._memory is not None else []
+            made = await self._closer(self._history.since(self._thread_from), known)
+            if self._last_end == mark:
+                self._closed_early = (mark, made)
+        try:
+            self._closing = asyncio.get_running_loop().create_task(later())
+        except RuntimeError:
+            self._closing = None
+
     def _fresh_reason(self) -> str:
         """Why the next message should begin a new conversation, or "" if it should carry on with this one.
 
@@ -1049,8 +1077,12 @@ class Conversation:
             # Close the old conversation before leaving it: a summary to carry forward, and facts worth saving put to the owner.
             summary, facts = "", []
             if self._history is not None and self._closer is not None and self._ledger.spent_today() < self._s.daily_usd:
-                known = [e.text for e in self._memory.profile()] if self._memory is not None else []
-                summary, facts = await self._closer(self._history.since(self._thread_from), known)
+                if self._closed_early is not None and self._closed_early[0] == self._last_end:
+                    summary, facts = self._closed_early[1]          # made while nobody was waiting
+                else:
+                    known = [e.text for e in self._memory.profile()] if self._memory is not None else []
+                    summary, facts = await self._closer(self._history.since(self._thread_from), known)
+            self._closed_early = None
             self._thread_from = time.time()
             self._journal.write("fresh", reason=why, tokens=self._runner.context_tokens, kept=len(self._recent), summary=bool(summary), proposed=len(facts))
             self._carry = (f"{SUMMARY_NOTE}\n{summary}\nEND\n\n" if summary else "") + self._recap()
@@ -1085,6 +1117,7 @@ class Conversation:
         browser_cost = self._browser.pop_cost() if self._browser is not None else 0.0
         # The ledger counts this from the line below: it is derived from the journal, and from nothing else.
         self._journal.write("task_end", status=outcome.status, cost_usd=outcome.cost_usd + browser_cost, browser_usd=browser_cost, turns=outcome.turns,
+                            **({"first_word_s": outcome.first_word_s} if getattr(outcome, "first_word_s", None) is not None else {}), **(getattr(outcome, "tokens", None) or {}),
                             detail=outcome.detail, seconds=round(time.monotonic() - started, 1), **({"background": True} if bg else {}))
         if trace is not None:
             # Scores computed by code, so that the tasks worth reading can be found: the ones that did not end as "done",
@@ -1111,6 +1144,7 @@ class Conversation:
         else:
             self._recent.append(exchange)
             self._last_end = self._now()
+            self._close_when_cold()
         note = notes.get(outcome.status)
         if note:
             body = f"{body}\n\n{note}" if body else note
