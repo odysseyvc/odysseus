@@ -212,7 +212,8 @@ class Conversation:
 
         # A reading note ("reading <book> p.120: ...") and its few companions are filed by code, with no model: booknotes.py.
         # A message that only looks like one (no such book, nothing filed lately) comes back and goes on as usual.
-        if self.reading is not None and material is None and not images and not background and not command.startswith("/")                 and await self.reading.take(text, chat, getattr(chat, "sent", None)):
+        if self.reading is not None and material is None and not images and not background and not command.startswith("/") \
+                and await self.reading.take(text, chat, getattr(chat, "sent_at", None)):
             self._journal.write("command", name="reading")
             return
 
@@ -336,7 +337,8 @@ class Conversation:
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
                             "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague."
                             + (" For reading notes on your website: \"reading <book> p.120: <thought>\", \"keep that private\", "
-                               "\"why <book>: <reason>\", \"finished <book>: <takeaway>\" and \"publish <book>\"." if self.reading is not None else ""))
+                               "\"why <book>: <reason>\", \"finished <book>: <takeaway>\" and \"publish <book>\"; \"save <link or title>\" for your To read list, "
+                               "\"must read <book>: <why>\", and \"problem <title>: <why>\" or \"problem <title> idea: <text>\" for open problems." if self.reading is not None else ""))
             return
         # Memory can be read and pruned by the owner directly. No model is involved.
         if self._memory is not None and command == "/memory":

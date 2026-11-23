@@ -15,6 +15,10 @@ cost and in no time, and a message that does not fit it goes to the model as any
   publish <book>                               the book goes public on the site, after the owner approves what will show
   finished <book>[: <takeaway>]                status, finished date and the takeaway
   why <book>: <reason>                         why the owner picked it up
+  save <link or title> / to read <...>         a book or link for the To read list (status queued, private)
+  must read <book>: <why everyone should>      the Must read shelf; makes it public, so it asks first
+  problem <title>: <why>                       a new open problem (src/content/problems), private
+  problem <title> idea|question|progress|resource: <text or link>    an entry under it
 
 The kind of a note (thought, quote, question, disagree, connection) is read from the message: quotation marks make a
 quote, a question mark a question, and so on; or the owner says it outright ("quote:", "question:").
@@ -46,9 +50,15 @@ import yaml
 # --- the site's schema (PersonalSite/src/content.config.ts, collection `reading`) ---------------------------------
 NOTE_KINDS = ("thought", "quote", "question", "disagree", "connection")
 BOOK_KINDS = ("book", "article", "paper", "essay", "podcast", "video")
-STATUSES = ("reading", "finished", "paused", "abandoned")
+STATUSES = ("queued", "reading", "finished", "paused", "abandoned")     # queued: on the To read list
 TOPICS = ("ai", "venture", "science", "ideas")        # PersonalSite/src/lib/topics.ts
 FOLDER = "src/content/reading"
+# Open problems (collection `problems`): the same shape, metadata then `notes:` last.
+PROBLEMS = "src/content/problems"
+PROBLEM_STATUSES = ("open", "exploring", "building", "solved", "parked")
+PROBLEM_KINDS = ("idea", "question", "progress", "resource", "connection")
+LINK_TYPES = ("writing", "notes", "reading", "problems", "projects", "zines")     # `links: ["type/slug"]`
+QUOTE_MAX = 600                                       # the site caps a quote at this many characters
 IST = timezone(timedelta(hours=5, minutes=30))        # the contract: `at` carries the +05:30 offset
 PRIVATE_FOR = timedelta(minutes=30)                   # how long after a note "keep that private" still means that note
 
@@ -81,10 +91,13 @@ class Note:
 
 @dataclass
 class Command:
-    action: str                   # note | private | publish | finish | why
-    book: str = ""                # the book as the owner wrote it
+    action: str                   # note | private | publish | finish | why | save | must | problem | entry
+    book: str = ""                # the book (or problem) as the owner wrote it
     note: Note | None = None
-    text: str = ""                # the takeaway, or the reason
+    text: str = ""                # the takeaway, the reason, the pitch, or a problem entry's text
+    url: str = ""                 # a link: the page to save, or a problem entry's resource
+    kind: str = ""                # a problem entry's kind
+    at: datetime | None = None    # when the owner sent it
 
 
 _KIND_WORDS = {"quote": "quote", "q": "quote", "question": "question", "disagree": "disagree", "disagreement": "disagree",
@@ -104,6 +117,13 @@ _PUBLISH = re.compile(r"(?is)^publish\s+(.+?)[.!]?$")
 _FINISH = re.compile(r"(?is)^(?:finished|done\s+with)\s+(.+?)(?:\s*:\s+(.+))?$")
 _WHY = re.compile(r"(?is)^why\s+(.+?)\s*:\s+(.+)$")
 _READING = re.compile(r"(?is)^reading\s+(.+)$")
+_SAVE = re.compile(r"(?is)^(?:save|to\s+read)\s*:?\s+(.+?)[.!]?$")
+_MUST = re.compile(r"(?is)^must[\s-]+read\s+(.+?)\s*:\s+(.+)$")
+_ENTRY = re.compile(r"(?is)^problem\s+(.+?)\s+(idea|question|progress|resource|link|connection)\s*:\s*(.+)$")
+_PROBLEM = re.compile(r"(?is)^problem\s+(.+?)\s*:\s+(.+)$")
+_URL = re.compile(r"https?://[^\s<>\"']+")
+# "save that", "save it to memory": not a book. Those go to the model as before.
+_NOT_A_TITLE = re.compile(r"(?i)^(?:that|this|it|these|those|them|me|my|the\s+last|for\s+later|later)\b|\b(?:memory|remember|draft|contact)\b")
 
 
 def where_of(loc: str) -> str:
@@ -185,12 +205,37 @@ def parse(text: str, at: datetime) -> Command | None:
     m = _PUBLISH.match(t)
     if m:
         return Command("publish", book=m.group(1).strip())
+    m = _MUST.match(t)
+    if m:
+        return Command("must", book=m.group(1).strip(), text=m.group(2).strip())
     m = _WHY.match(t)
     if m:
         return Command("why", book=m.group(1).strip(), text=m.group(2).strip())
     m = _FINISH.match(t)
     if m:
         return Command("finish", book=m.group(1).strip(), text=(m.group(2) or "").strip())
+    stamp = at.astimezone(IST).replace(microsecond=0)
+    m = _ENTRY.match(t)
+    if m:
+        body = m.group(3).strip()
+        link = _URL.search(body)
+        url = link.group(0).rstrip(").,;") if link else ""
+        rest = " ".join((body[:link.start()] + body[link.end():]).split()).strip(" -–—:,") if link else body
+        kind = "resource" if m.group(2).lower() == "link" else m.group(2).lower()
+        return Command("entry", book=m.group(1).strip(), kind=kind, text=rest, url=url, at=stamp)
+    m = _PROBLEM.match(t)
+    if m:
+        return Command("problem", book=m.group(1).strip(), text=m.group(2).strip(), at=stamp)
+    m = _SAVE.match(t)
+    if m:
+        what = m.group(1).strip()
+        link = _URL.search(what)
+        if link:
+            rest = " ".join((what[:link.start()] + what[link.end():]).split()).strip(" -–—:,")
+            return Command("save", book=rest, url=link.group(0).rstrip(").,;"), at=stamp)
+        if _NOT_A_TITLE.search(what) or len(what) > 200:
+            return None
+        return Command("save", book=what, at=stamp)
     m = _READING.match(t)
     if not m:
         return None
@@ -239,7 +284,24 @@ def _at(value: datetime) -> str:
     return value.astimezone(IST).replace(microsecond=0).isoformat()
 
 
-def render_note(note: Note, dash: int = 2) -> str:
+@dataclass
+class Entry:
+    """One entry under an open problem: an idea, a question, progress, a resource or a connection."""
+    at: datetime
+    kind: str = "idea"
+    text: str = ""
+    url: str = ""
+
+    def fields(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"kind": self.kind}
+        if self.text:
+            out["text"] = self.text
+        if self.url:
+            out["url"] = self.url
+        return out
+
+
+def render_note(note: Note | Entry, dash: int = 2) -> str:
     """The note as YAML lines, the dash indented by `dash` spaces."""
     pad = " " * dash
     lines = [f"{pad}- at: {_at(note.at)}"]
@@ -248,12 +310,24 @@ def render_note(note: Note, dash: int = 2) -> str:
     return "\n".join(lines) + "\n"
 
 
-def new_book(title: str, author: str, today: date, note: Note) -> str:
+def new_book(title: str, author: str, today: date, note: Note | None = None, status: str = "reading", kind: str = "book", url: str = "") -> str:
+    """A new book's file. Private. A book started now carries `started`; one saved for later is `queued`."""
     out = _scalar("title", title)
     if author:
         out += _scalar("author", author)
-    out += "kind: book\nstatus: reading\n" + f"started: {today.isoformat()}\n" + "public: false\nnotes:\n"
-    return out + render_note(note)
+    out += f"kind: {kind}\n"
+    if url:
+        out += _scalar("url", url)
+    out += f"status: {status}\nadded: {today.isoformat()}\n"
+    if status == "reading":
+        out += f"started: {today.isoformat()}\n"
+    out += "public: false\n"
+    return out + ("notes:\n" + render_note(note) if note is not None else "")
+
+
+def new_problem(title: str, why: str, today: date) -> str:
+    out = _scalar("title", title) + f"status: open\nadded: {today.isoformat()}\npublic: false\n"
+    return out + (_scalar("why", why) if why else "")
 
 
 def _lines(raw: str) -> list[str]:
@@ -293,7 +367,7 @@ def notes_block(raw: str) -> Block | None:
     return Block(key, key + 1, end, items, 2 if dash is None else dash)
 
 
-def append_note(raw: str, note: Note) -> str:
+def append_note(raw: str, note: Note | Entry) -> str:
     """The file with one more note at the end of `notes`. Nothing before it changes."""
     if not raw.endswith("\n"):
         raw += "\n"
@@ -367,8 +441,9 @@ def _is_date(v: Any) -> bool:
     return False
 
 
-def validate(raw: str) -> dict[str, Any]:
-    """The book, parsed, if it parses as YAML and fits the site's schema. Raises BookError saying what is wrong."""
+def validate(raw: str, folder: str = FOLDER) -> dict[str, Any]:
+    """The book (or, with folder=PROBLEMS, the problem), parsed, if it parses as YAML and fits the site's schema.
+    Raises BookError saying what is wrong."""
     try:
         book = yaml.safe_load(raw)
     except yaml.YAMLError as e:
@@ -391,19 +466,32 @@ def validate(raw: str) -> dict[str, Any]:
         if key in src and src[key] is not None and src[key] not in allowed:
             problems.append(f"{label}{key} must be one of {', '.join(allowed)}")
 
+    def address(value: Any) -> bool:
+        return isinstance(value, str) and bool(re.match(r"^[a-z][a-z0-9+.-]*://\S+$", value))
+
+    def a_date(key: str, src: dict | None = None, label: str = "") -> None:
+        src = book if src is None else src
+        if src.get(key) is not None and not _is_date(src[key]):
+            problems.append(f"{label}{key} must be a date")
+
+    is_problem = folder == PROBLEMS
     text("title", required=True)
-    for key in ("author", "why", "takeaway"):
+    for key in ("why",) if is_problem else ("author", "why", "takeaway", "pitch"):
         text(key)
-    one_of("kind", BOOK_KINDS)
-    one_of("status", STATUSES)
-    if book.get("url") is not None and not (isinstance(book["url"], str) and re.match(r"^[a-z][a-z0-9+.-]*://\S+$", book["url"])):
-        problems.append("url must be an address")
-    if not _is_date(book.get("started")):
-        problems.append("started must be a date")
-    if book.get("finished") is not None and not _is_date(book["finished"]):
-        problems.append("finished must be a date")
-    if "public" in book and not isinstance(book["public"], bool):
-        problems.append("public must be true or false")
+    one_of("status", PROBLEM_STATUSES if is_problem else STATUSES)
+    if not is_problem:
+        one_of("kind", BOOK_KINDS)
+        if book.get("url") is not None and not address(book["url"]):
+            problems.append("url must be an address")
+        for key in ("started", "finished"):
+            a_date(key)
+    a_date("added")
+    for key in ("public", "recommended"):
+        if book.get(key) is not None and not isinstance(book[key], bool):
+            problems.append(f"{key} must be true or false")
+    links = book.get("links")
+    if links is not None and not (isinstance(links, list) and all(isinstance(x, str) and re.match(rf"^({'|'.join(LINK_TYPES)})/[a-z0-9-]+$", x) for x in links)):
+        problems.append("links must be a list of type/slug, the types being " + ", ".join(LINK_TYPES))
     topics = book.get("topics")
     if topics is not None and not (isinstance(topics, list) and all(t in TOPICS for t in topics)):
         problems.append(f"topics must be a list from {', '.join(TOPICS)}")
@@ -417,14 +505,25 @@ def validate(raw: str) -> dict[str, Any]:
             continue
         if not _is_date(note.get("at")):
             problems.append(f"{label}at must be a date and time")
-        for key in ("where", "quote", "text"):
-            text(key, where=note, label=label)
-        one_of("kind", NOTE_KINDS, where=note, label=label)
+        if is_problem:
+            text("text", where=note, label=label)
+            one_of("kind", PROBLEM_KINDS, where=note, label=label)
+            if note.get("url") is not None and not (address(note["url"]) and note["url"].startswith(("http://", "https://"))):
+                problems.append(f"{label}url must be a web address")
+            if not note.get("text") and not note.get("url"):
+                problems.append(f"{label}needs text or a link")
+        else:
+            for key in ("where", "quote", "text"):
+                text(key, where=note, label=label)
+            one_of("kind", NOTE_KINDS, where=note, label=label)
+            if isinstance(note.get("quote"), str) and len(note["quote"]) > QUOTE_MAX:
+                problems.append(f"{label}a quote can be at most {QUOTE_MAX} characters (this one is {len(note['quote'])}); "
+                                "file the passage in parts, or the rest as text")
+            if not note.get("text") and not note.get("quote"):
+                problems.append(f"{label}needs text or a quote")
         for key in ("private", "resolved"):
             if note.get(key) is not None and not isinstance(note[key], bool):
                 problems.append(f"{label}{key} must be true or false")
-        if not note.get("text") and not note.get("quote"):
-            problems.append(f"{label}needs text or a quote")
     if problems:
         raise BookError("The file would not fit the site's schema: " + "; ".join(problems[:5]) + ".")
     return book
@@ -512,6 +611,53 @@ class Conflict(Exception):
 # --- the owner's side -------------------------------------------------------------------------------------------------
 
 Asker = Callable[[Any], Awaitable[None]]
+ATTEMPTS = 3          # the site's Studio writes the same files: a write against an old version is read again and redone
+
+
+def link_kind(url: str) -> str:
+    """What kind of thing a saved link is, from its address alone."""
+    u = url.lower()
+    if re.search(r"(youtube\.com|youtu\.be|vimeo\.com)/", u):
+        return "video"
+    if re.search(r"(arxiv\.org|biorxiv\.org|ssrn\.com|doi\.org)/", u) or u.split("?")[0].endswith(".pdf"):
+        return "paper"
+    if re.search(r"(podcasts\.apple\.com|open\.spotify\.com/episode|overcast\.fm|pca\.st)/", u):
+        return "podcast"
+    return "article"
+
+
+def _title_from_address(url: str) -> str:
+    from urllib.parse import unquote, urlparse
+    u = urlparse(url)
+    last = unquote(u.path.rstrip("/").split("/")[-1]) if u.path.strip("/") else ""
+    last = re.sub(r"\.(pdf|html?)$", "", last, flags=re.I)
+    words = " ".join(re.split(r"[-_+]+", last)).strip()
+    return string.capwords(words) if words and not words.isdigit() else u.netloc.removeprefix("www.")
+
+
+async def fetch_title(url: str) -> str:
+    """The title a page gives itself (og:title, else <title>), or a title made from its address. The page is someone
+    else's: what comes back is only ever used as a title, and is checked like any other field before it is written."""
+    import html as html_mod
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (odysseus-reading)"}) as client:
+            async with client.stream("GET", url) as r:
+                if r.status_code >= 400 or "html" not in r.headers.get("content-type", ""):
+                    return _title_from_address(url)
+                body = b""
+                async for chunk in r.aiter_bytes():
+                    body += chunk
+                    if len(body) > 512_000 or b"</head>" in body.lower():
+                        break
+    except Exception:
+        return _title_from_address(url)
+    page = body.decode("utf-8", "replace")
+    m = (re.search(r"<meta[^>]+property=[\"']og:title[\"'][^>]*content=[\"']([^\"']+)", page, re.I)
+         or re.search(r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:title", page, re.I)
+         or re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S))
+    title = " ".join(html_mod.unescape(m.group(1)).split())[:200] if m else ""
+    return title or _title_from_address(url)
 
 
 @dataclass
@@ -523,17 +669,26 @@ class Found:
     choices: list[str] = field(default_factory=list)      # more than one book fits what was written
 
 
-class Shelf:
-    """The owner's books, in their site's repository. One change at a time."""
+def _noun(folder: str) -> str:
+    return "problems" if folder == PROBLEMS else "reading"
 
-    def __init__(self, files: GitHubFiles, journal: Any, state: Path | None = None, now: Callable[[], datetime] | None = None):
+
+class Shelf:
+    """The owner's books and open problems, in their site's repository. One change at a time."""
+
+    def __init__(self, files: GitHubFiles, journal: Any, state: Path | None = None, now: Callable[[], datetime] | None = None,
+                 title_of_link: Callable[[str], Awaitable[str]] | None = None):
         self._files, self._journal, self._state = files, journal, state
         self._now = now or (lambda: datetime.now(IST))
+        self._title_of_link = title_of_link or fetch_title
         self._lock = asyncio.Lock()
 
-    # -- finding a book --
-    async def find(self, written: str, creating: bool = False) -> Found:
-        slugs = [n[:-5] if n.endswith(".yaml") else n[:-4] for n in await self._files.list(FOLDER) if n.endswith((".yaml", ".yml"))]
+    def _today(self) -> date:
+        return self._now().astimezone(IST).date()
+
+    # -- finding a book or a problem --
+    async def find(self, written: str, creating: bool = False, folder: str = FOLDER) -> Found:
+        slugs = [n[:-5] if n.endswith(".yaml") else n[:-4] for n in await self._files.list(folder) if n.endswith((".yaml", ".yml"))]
         written = " ".join(written.split()).strip(" .")
 
         def match(s: str) -> list[str]:
@@ -546,7 +701,7 @@ class Shelf:
 
         hits = match(slugify(written))
         title, author = written, ""
-        if not hits and " by " in written.lower():
+        if not hits and folder == FOLDER and " by " in written.lower():
             cut = written.lower().rfind(" by ")
             title, author = written[:cut].strip(), written[cut + 4:].strip()
             hits = match(slugify(title))
@@ -556,81 +711,155 @@ class Shelf:
             return Found(choices=hits)
         if not creating or not slugify(title):
             return Found()
-        return Found(slug=slugify(title), title=title_of(title), author=author)
+        return Found(slug=slugify(title)[:80].strip("-"), title=title_of(title), author=author)
 
-    async def _read(self, slug: str) -> tuple[str, str]:
-        got = await self._files.get(f"{FOLDER}/{slug}.yaml")
+    async def _read(self, slug: str, folder: str = FOLDER) -> tuple[str, str]:
+        got = await self._files.get(f"{folder}/{slug}.yaml")
         if got is None:
-            raise BookError("That book's file is not there any more.")
+            raise BookError("That file is not there any more.")
         return got
 
-    async def _commit(self, slug: str, change: Callable[[str], str], keep: Callable[[str], int]) -> tuple[dict[str, Any], str]:
-        """Read the book, apply `change`, check it, commit it. `keep(before)` is how many earlier notes must come
-        through byte for byte. One retry if the file moved underneath."""
-        for attempt in range(2):
-            before, sha = await self._read(slug)
+    async def _commit(self, slug: str, change: Callable[[str], str], keep: Callable[[str], int], folder: str = FOLDER) -> tuple[dict[str, Any], str]:
+        """Read the file, apply `change`, check it, commit it. `keep(before)` is how many earlier notes must come
+        through byte for byte. If the file moved underneath (the Studio, or a second device), read it and do it again."""
+        for _ in range(ATTEMPTS):
+            before, sha = await self._read(slug, folder)
             after = change(before)
-            book = validate(after)
+            book = validate(after, folder)
             if not earlier_kept(before, after, keep(before)):
                 raise BookError("That change would have altered earlier notes, so I did not make it.")
             try:
-                commit = await self._files.put(f"{FOLDER}/{slug}.yaml", after, sha, f"reading: {book['title']}")
+                commit = await self._files.put(f"{folder}/{slug}.yaml", after, sha, f"{_noun(folder)}: {book['title']}")
                 return book, commit
             except Conflict:
-                if attempt:
-                    raise BookError("The book's file kept changing while I wrote to it. Try again in a moment.")
-        raise AssertionError("unreachable")
+                continue
+        raise BookError("The file kept changing while I wrote to it. Try again in a moment.")
+
+    async def _create(self, slug: str, raw: str, folder: str = FOLDER) -> tuple[dict[str, Any], str] | None:
+        """Commit a new file. None if one appeared under that name meanwhile."""
+        book = validate(raw, folder)
+        try:
+            return book, await self._files.put(f"{folder}/{slug}.yaml", raw, None, f"{_noun(folder)}: {book['title']}")
+        except Conflict:
+            return None
 
     # -- the commands --
     async def add_note(self, cmd: Command) -> str:
         assert cmd.note is not None
+        note, started = cmd.note, False
         async with self._lock:
-            found = await self.find(cmd.book, creating=True)
-            if found.choices:
-                return "More than one book fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
-            if not found.slug:
-                return "I couldn't make a file name from that title."
-            note = cmd.note
-            if found.exists:
-                book, commit = await self._commit(found.slug, lambda raw: append_note(raw, note), lambda raw: len(_notes(raw)))
-                count = len(book.get("notes") or [])
-                new = False
+            for _ in range(ATTEMPTS):
+                found = await self.find(cmd.book, creating=True)
+                if found.choices:
+                    return "More than one book fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
+                if not found.slug:
+                    return "I couldn't make a file name from that title."
+                if found.exists:
+                    def change(raw: str) -> str:
+                        nonlocal started
+                        now = yaml.safe_load(raw) or {}
+                        if now.get("status") == "queued":
+                            # The first note on a book from the To read list: reading has started.
+                            raw = set_fields(raw, {"status": "reading", **({} if now.get("started") else {"started": self._today()})})
+                            started = True
+                        return append_note(raw, note)
+                    book, commit = await self._commit(found.slug, change, lambda raw: len(_notes(raw)))
+                    count, new = len(book.get("notes") or []), False
+                    break
+                made = await self._create(found.slug, new_book(found.title, found.author, note.at.astimezone(IST).date(), note))
+                if made is not None:
+                    (book, commit), count, new = made, 1, True
+                    break
             else:
-                raw = new_book(found.title, found.author, note.at.astimezone(IST).date(), note)
-                book = validate(raw)
-                try:
-                    commit = await self._files.put(f"{FOLDER}/{found.slug}.yaml", raw, None, f"reading: {book['title']}")
-                except Conflict:
-                    raise BookError("A file for that book appeared just now. Send the note again and it will go into it.")
-                count, new = 1, True
-            self._remember(found.slug, note.at)
+                raise BookError("That book's file kept changing while I wrote to it. Try again in a moment.")
+            self._remember(found.slug, note.at, FOLDER)
             self._journal.write("reading", action="note", new_book=new, note_kind=note.kind, commit=commit[:10])
         where = f" at {note.where}" if note.where else ""
         head = f"New book, private until you publish it: {book['title']}" + (f" by {book['author']}" if book.get("author") else "") + ".\n" if new else ""
-        return (f"{head}Filed a {note.kind}{where} in {book['title']} (note {count}). "
+        moved = f"Moved {book['title']} from To read to Reading.\n" if started else ""
+        return (f"{head}{moved}Filed a {note.kind}{where} in {book['title']} (note {count}). "
+                "Send \"keep that private\" to keep this one off the site for good.")
+
+    async def save(self, cmd: Command) -> str:
+        """A book or link for the To read list: a new private file with status `queued`."""
+        title, url = cmd.book, cmd.url
+        kind = link_kind(url) if url else "book"
+        if url and not title:
+            title = await self._title_of_link(url)
+        async with self._lock:
+            found = await self.find(title, creating=True)
+            if found.choices:
+                return "More than one book fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
+            if found.exists:
+                raw, _ = await self._read(found.slug)
+                book = yaml.safe_load(raw) or {}
+                return f"{book.get('title', found.slug)} is already on your shelf ({book.get('status', 'reading')})."
+            if not found.slug:
+                return "I couldn't make a file name from that title."
+            made = await self._create(found.slug, new_book(found.title, found.author, self._today(), None, status="queued", kind=kind, url=url))
+            if made is None:
+                return "A file for that appeared just now; it is on your shelf already."
+            book, commit = made
+            self._journal.write("reading", action="save", book_kind=kind, commit=commit[:10])
+        return (f"Saved to your To read list: {book['title']}" + (f" by {book['author']}" if book.get("author") else "")
+                + (f" ({kind})" if kind != "book" else "") + ". Private, like every new book.")
+
+    async def problem_new(self, cmd: Command) -> str:
+        async with self._lock:
+            found = await self.find(cmd.book, creating=True, folder=PROBLEMS)
+            if found.choices:
+                return "More than one problem fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
+            if found.exists:
+                raw, _ = await self._read(found.slug, PROBLEMS)
+                title = (yaml.safe_load(raw) or {}).get("title", found.slug)
+                return f"There is already a problem called {title}. Add to it with: problem {title} idea: …"
+            if not found.slug:
+                return "I couldn't make a file name from that title."
+            made = await self._create(found.slug, new_problem(found.title, cmd.text, self._today()), PROBLEMS)
+            if made is None:
+                return "A file for that problem appeared just now. Send it again to add to it."
+            book, commit = made
+            self._journal.write("reading", action="problem", commit=commit[:10])
+        return (f"New open problem, private until you publish it: {book['title']}. "
+                f"Add to it with: problem {book['title']} idea|question|progress|resource: …")
+
+    async def problem_entry(self, cmd: Command) -> str:
+        entry = Entry(at=cmd.at or self._now(), kind=cmd.kind, text=cmd.text, url=cmd.url)
+        if not entry.text and not entry.url:
+            return "That entry has nothing in it."
+        async with self._lock:
+            found = await self.find(cmd.book, folder=PROBLEMS)
+            if found.choices:
+                return "More than one problem fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
+            if not found.exists:
+                return f"I have no open problem called {cmd.book}. Start one with: problem {cmd.book}: why it matters."
+            book, commit = await self._commit(found.slug, lambda raw: append_note(raw, entry), lambda raw: len(_notes(raw)), PROBLEMS)
+            self._remember(found.slug, entry.at, PROBLEMS)
+            self._journal.write("reading", action="entry", entry_kind=entry.kind, commit=commit[:10])
+        return (f"Added {'an' if entry.kind[0] in 'aeiou' else 'a'} {entry.kind} to {book['title']} (entry {len(book.get('notes') or [])}). "
                 "Send \"keep that private\" to keep this one off the site for good.")
 
     async def private_last(self) -> str:
         last = self._last()
         if last is None:
             return ""       # nothing filed lately: the words were about something else
-        slug, at = last
+        slug, at, folder = last
         async with self._lock:
             def change(raw: str) -> str:
                 notes = _notes(raw)
                 if not notes or _at_of(notes[-1].get("at")) != at:
-                    raise BookError("A newer note has gone into that book since, so I did not guess which one you meant.")
+                    raise BookError("A newer note has gone in there since, so I did not guess which one you meant.")
                 return mark_last_private(raw)
-            book, commit = await self._commit(slug, change, lambda raw: len(_notes(raw)) - 1)
+            book, commit = await self._commit(slug, change, lambda raw: len(_notes(raw)) - 1, folder)
             self._journal.write("reading", action="private", commit=commit[:10])
-        return f"Done: that note in {book['title']} stays private, even after the book is published."
+        return f"Done: that {'entry' if folder == PROBLEMS else 'note'} in {book['title']} stays private, even after it is published."
 
     async def set_finished(self, written: str, takeaway: str) -> str:
         async with self._lock:
             found = await self.find(written)
             if not found.exists:
                 return self._not_found(found)
-            today = self._now().astimezone(IST).date()
+            today = self._today()
             values: dict[str, Any] = {"status": "finished", "finished": today}
             if takeaway:
                 values["takeaway"] = takeaway
@@ -653,6 +882,7 @@ class Shelf:
         replaced = f"\nIt said before: {old}" if old and old != why else ""
         return f"Saved why you picked up {book['title']}." + replaced
 
+    # -- changes that are shown first and wait for the owner's tap --
     async def publish_question(self, written: str) -> tuple[str, dict[str, Any]] | str:
         """(the question for the owner, the inputs to approve), or a line saying why there is nothing to ask."""
         found = await self.find(written)
@@ -673,31 +903,51 @@ class Shelf:
             self._journal.write("reading", action="publish", commit=commit[:10])
         return f"Published {book['title']}. The site rebuilds in a few minutes."
 
+    async def must_question(self, written: str, pitch: str) -> tuple[str, dict[str, Any]] | str:
+        found = await self.find(written)
+        if found.choices:
+            return self._not_found(found)
+        if not found.exists:
+            return f"I have no book called {written}. Save it first with: save {written}"
+        raw, sha = await self._read(found.slug)
+        book = validate(raw)
+        return must_text(book, found.slug, pitch), {"book": found.slug, "sha": sha, "pitch": pitch}
+
+    async def must_read(self, slug: str, sha: str, pitch: str) -> str:
+        async with self._lock:
+            raw, now_sha = await self._read(slug)
+            if now_sha != sha:
+                return "The book changed after I asked you, so I changed nothing. Send must read again to see it as it is now."
+            book, commit = await self._commit(slug, lambda r: set_fields(r, {"public": True, "recommended": True, "pitch": pitch}),
+                                              lambda r: len(_notes(r)))
+            self._journal.write("reading", action="must", commit=commit[:10])
+        return f"{book['title']} is on your Must read shelf now, and public. The site rebuilds in a few minutes."
+
     def _not_found(self, found: Found) -> str:
         if found.choices:
             return "More than one book fits that: " + ", ".join(found.choices) + ". Write a little more of the title."
         return ""
 
     # -- the last note filed, so that "keep that private" knows which one --
-    def _remember(self, slug: str, at: datetime) -> None:
-        self._last_note = (slug, _at(at), self._now())
+    def _remember(self, slug: str, at: datetime, folder: str = FOLDER) -> None:
+        self._last_note = (slug, _at(at), self._now(), folder)
         if self._state is not None:
             try:
-                self._state.write_text(json.dumps({"slug": slug, "at": _at(at), "filed": self._now().isoformat()}), encoding="utf-8")
+                self._state.write_text(json.dumps({"slug": slug, "at": _at(at), "filed": self._now().isoformat(), "folder": folder}), encoding="utf-8")
             except OSError:
                 pass
 
-    def _last(self) -> tuple[str, str] | None:
+    def _last(self) -> tuple[str, str, str] | None:
         last = getattr(self, "_last_note", None)
         if last is None and self._state is not None and self._state.exists():
             try:
                 saved = json.loads(self._state.read_text(encoding="utf-8"))
-                last = (saved["slug"], saved["at"], datetime.fromisoformat(saved["filed"]))
+                last = (saved["slug"], saved["at"], datetime.fromisoformat(saved["filed"]), saved.get("folder", FOLDER))
             except (OSError, ValueError, KeyError):
                 last = None
         if last is None or self._now() - last[2] > PRIVATE_FOR:
             return None
-        return last[0], last[1]
+        return last[0], last[1], last[3]
 
 
 def _notes(raw: str) -> list[dict[str, Any]]:
@@ -712,20 +962,12 @@ def _at_of(value: Any) -> str:
     return str(value)
 
 
-def publish_text(book: dict[str, Any], slug: str, each: int = 240, most: int = 40) -> str:
-    """What the owner is shown before a book goes public: everything that will appear, and what will not."""
+def _shown_notes(book: dict[str, Any], each: int = 240, most: int = 40) -> list[str]:
     notes = [n for n in book.get("notes") or [] if isinstance(n, dict)]
     shown = [n for n in notes if not n.get("private")]
     hidden = len(notes) - len(shown)
-    lines = [f"Publish \"{book['title']}\"" + (f" by {book['author']}" if book.get("author") else "") + " on your website?", ""]
-    lines.append(f"Status: {book.get('status', 'reading')}" + (f", finished {book['finished']}" if book.get("finished") else "")
-                 + f", started {book.get('started')}.")
-    if book.get("why"):
-        lines.append(f"Why: {book['why']}")
-    if book.get("takeaway"):
-        lines.append(f"Takeaway: {book['takeaway']}")
-    lines.append("")
-    lines.append(f"{len(shown)} note{'s' if len(shown) != 1 else ''} will be public" + (f"; {hidden} private note{'s stay' if hidden != 1 else ' stays'} off the site." if hidden else "."))
+    lines = [f"{len(shown)} note{'s' if len(shown) != 1 else ''} will be public"
+             + (f"; {hidden} private note{'s stay' if hidden != 1 else ' stays'} off the site." if hidden else ".")]
     for n in shown[:most]:
         body = (f"“{n['quote']}” " if n.get("quote") else "") + (n.get("text") or "")
         body = " ".join(body.split())
@@ -734,9 +976,43 @@ def publish_text(book: dict[str, Any], slug: str, each: int = 240, most: int = 4
         lines.append(f"- {n.get('kind', 'thought')}{where}: {body}")
     if len(shown) > most:
         lines.append(f"…and {len(shown) - most} more, the newest.")
+    return lines
+
+
+def publish_text(book: dict[str, Any], slug: str, each: int = 240, most: int = 40) -> str:
+    """What the owner is shown before a book goes public: everything that will appear, and what will not."""
+    lines = [f"Publish \"{book['title']}\"" + (f" by {book['author']}" if book.get("author") else "") + " on your website?", ""]
+    lines.append(f"Status: {book.get('status', 'reading')}" + (f", finished {book['finished']}" if book.get("finished") else "")
+                 + (f", started {book['started']}" if book.get("started") else "") + ".")
+    if book.get("why"):
+        lines.append(f"Why: {book['why']}")
+    if book.get("takeaway"):
+        lines.append(f"Takeaway: {book['takeaway']}")
+    lines.append("")
+    lines += _shown_notes(book, each, most)
     lines.append("")
     lines.append(f"It becomes readable at /reading/{slug} once the site rebuilds (a few minutes after you approve).")
     return "\n".join(lines)
+
+
+def must_text(book: dict[str, Any], slug: str, pitch: str) -> str:
+    """The question before a book goes on the Must read shelf: each field before and after, and, if the book is still
+    private, everything that going public will show."""
+    def yes(v: Any) -> str:
+        return "yes" if v is True else "no"
+    public = book.get("public") is True
+    lines = [f"Put \"{book['title']}\"" + (f" by {book['author']}" if book.get("author") else "") + " on your Must read shelf?", ""]
+    lines.append(f"Must read: {yes(book.get('recommended'))} → yes")
+    lines.append(f"Public: {yes(book.get('public'))} → yes")
+    lines.append(f"Pitch: {book['pitch'] if book.get('pitch') else '(none)'} → {pitch}")
+    if not public:
+        lines += ["", "The book is private now, so this also publishes it."] + _shown_notes(book)
+    lines += ["", f"It shows at /reading/{slug} and on the Must read shelf once the site rebuilds."]
+    return "\n".join(lines)
+
+
+PUBLISH_TOOL = "reading_publish"
+MUST_TOOL = "reading_must_read"
 
 
 class Desk:
@@ -747,27 +1023,38 @@ class Desk:
         self._jobs: set[asyncio.Task] = set()
         if gate is not None:
             from .gate import ASK
-            gate.rule(PUBLISH_TOOL, ASK, describe=lambda a: a["question"])
+            for tool in (PUBLISH_TOOL, MUST_TOOL):
+                gate.rule(tool, ASK, describe=lambda a: a["question"])
 
     async def take(self, text: str, chat: Any, at: datetime | None = None) -> bool:
         cmd = parse(text, at or datetime.now(IST))
         if cmd is None:
             return False
+        s = self._shelf
         try:
             if cmd.action == "note":
-                reply = await self._shelf.add_note(cmd)
+                reply = await s.add_note(cmd)
             elif cmd.action == "private":
-                reply = await self._shelf.private_last()
+                reply = await s.private_last()
             elif cmd.action == "finish":
-                reply = await self._shelf.set_finished(cmd.book, cmd.text)
+                reply = await s.set_finished(cmd.book, cmd.text)
             elif cmd.action == "why":
-                reply = await self._shelf.set_why(cmd.book, cmd.text)
+                reply = await s.set_why(cmd.book, cmd.text)
+            elif cmd.action == "save":
+                reply = await s.save(cmd)
+            elif cmd.action == "problem":
+                reply = await s.problem_new(cmd)
+            elif cmd.action == "entry":
+                reply = await s.problem_entry(cmd)
             else:
-                asked = await self._shelf.publish_question(cmd.book)
+                if cmd.action == "publish":
+                    asked, tool = await s.publish_question(cmd.book), PUBLISH_TOOL
+                else:
+                    asked, tool = await s.must_question(cmd.book, cmd.text), MUST_TOOL
                 if isinstance(asked, str):
                     reply = asked
                 else:
-                    job = asyncio.get_running_loop().create_task(self._publish(*asked, chat))
+                    job = asyncio.get_running_loop().create_task(self._approve(tool, *asked, chat))
                     self._jobs.add(job)
                     job.add_done_callback(self._jobs.discard)
                     return True
@@ -784,34 +1071,35 @@ class Desk:
         await chat.send(reply)
         return True
 
-    async def _publish(self, question: str, args: dict[str, Any], chat: Any) -> None:
+    async def _approve(self, tool: str, question: str, args: dict[str, Any], chat: Any) -> None:
+        """Put the change to the owner through the gate, and make it only on Approve."""
         inputs = {**args, "question": question}
 
         async def ask_owner(approval: Any) -> None:
             await chat.ask(approval.text, approval.id)
 
         key = f"reading-{args['book']}"
-        self._gate.begin_task(key, ask_owner, f"The owner said: publish {args['book']}")
+        self._gate.begin_task(key, ask_owner, f"The owner said: {tool} {args['book']}")
         try:
-            approved, why, _ = await self._gate.ask(PUBLISH_TOOL, inputs)
+            approved, why, _ = await self._gate.ask(tool, inputs)
         finally:
             self._gate.end_task(key)
         if not approved:
             if "declined" in why:
-                await chat.send("Left private.")
+                await chat.send("Left as it was.")
             elif "in time" in why:
-                await chat.send("You didn't answer, so the book stays private.")
+                await chat.send("You didn't answer, so nothing changed.")
             return
-        if not self._gate.guard(PUBLISH_TOOL, inputs):
-            await chat.send("That approval did not match, so nothing was published.")
+        if not self._gate.guard(tool, inputs):
+            await chat.send("That approval did not match, so nothing was changed.")
             return
         try:
-            await chat.send(await self._shelf.publish(args["book"], args["sha"]))
+            if tool == PUBLISH_TOOL:
+                await chat.send(await self._shelf.publish(args["book"], args["sha"]))
+            else:
+                await chat.send(await self._shelf.must_read(args["book"], args["sha"], args["pitch"]))
         except BookError as e:
-            await chat.send(f"Not published: {e}")
+            await chat.send(f"Not changed: {e}")
         except Exception as e:
-            self._journal.write("error", where="reading.publish", error=type(e).__name__)
-            await chat.send(f"I couldn't reach your site's repository ({type(e).__name__}). Nothing was published.")
-
-
-PUBLISH_TOOL = "reading_publish"
+            self._journal.write("error", where=f"reading.{tool}", error=type(e).__name__)
+            await chat.send(f"I couldn't reach your site's repository ({type(e).__name__}). Nothing was changed.")

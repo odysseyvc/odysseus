@@ -168,7 +168,8 @@ def test_set_fields_leaves_the_notes_alone():
 
 
 @pytest.mark.parametrize("bad, words", [
-    ("title: X\n", "started"),
+    ("started: 2026-11-24\n", "title"),
+    ("title: X\nstarted: someday\n", "started"),
     ("title: X\nstarted: 2026-11-24\nstatus: done\n", "status"),
     ("title: X\nstarted: 2026-11-24\nnotes:\n  - at: 2026-11-24T10:00:00+05:30\n    kind: thought\n", "text or a quote"),
     ("title: X\nstarted: 2026-11-24\nnotes:\n  - at: 2026-11-24T10:00:00+05:30\n    where: 120\n    text: t\n", "where"),
@@ -365,7 +366,7 @@ async def test_declined_publish_leaves_the_book_private(tmp_path):
         await asyncio.sleep(0.01)
     gate.resolve(chat.asks[0][1], False)
     await asyncio.wait_for(chat.sent_event.wait(), 2)
-    assert chat.sent == ["Left private."] and yaml.safe_load(repo.files[PATH])["public"] is False
+    assert chat.sent == ["Left as it was."] and yaml.safe_load(repo.files[PATH])["public"] is False
 
 
 async def test_desk_passes_on_what_is_not_a_reading_command(tmp_path):
