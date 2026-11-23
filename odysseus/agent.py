@@ -192,7 +192,7 @@ def conversation_prompt(with_apps: bool, with_browser: bool = False, browser_ask
     limits = f"You cannot yet {', or '.join(missing)}." if missing else "There are still things you cannot do, and you say so plainly when asked for one."
     return SYSTEM_PROMPT.replace(_NO_ACCOUNTS, limits) + (APPS_PROMPT if with_apps else "") + (BROWSER_PROMPT.format(approval=_BROWSER_ASKS if browser_asks else _BROWSER_DOES_NOT_ASK) if with_browser else "") \
         + (ANYAPP_PROMPT if with_anyapp else "") + (FILES_PROMPT + DECK_PROMPT.format(filing=_DECK_FILING if with_attio else "") if with_files else "") \
-        + (WATCH_PROMPT if with_watches else "") + (_attio_prompt() if with_attio else "") + VOICE_PROMPT + COMMANDS_PROMPT
+        + (WATCH_PROMPT if with_watches else "") + (_attio_prompt() if with_attio else "") + COMMANDS_PROMPT + VOICE_PROMPT
 
 
 ROUTINE_APPS_PROMPT = """
