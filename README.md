@@ -7,8 +7,9 @@ person or cannot be undone is shown to you first and needs a button press.
 
 **Status: in development, used by one person.** It has 672 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
-once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
-few minutes, and nothing has been proven over weeks. The book's closing chapter
+once, often on an invented example. Sending mail has run only in tests. It runs on a small server, moved there from
+a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has sent and
+has never received. The book's closing chapter
 (`site/content/chapters/what-is-built.html`) says for each part what was and was not tested.
 
 ## What you need
@@ -68,8 +69,8 @@ For a firm that keeps its companies, people and deals in Attio. Run
 `python scripts/connect_attio.py` on the machine whose browser you will use, open the link
 it prints, sign in to Attio and approve. No key is created; the sign-in is kept in the data
 folder. Restart the bot. Reading Attio runs at once. Additions (a new record, a note) run and are listed in the
-reply; a change to anything already there asks you first. Records have been filed in a real workspace through it; it
-does not yet work on a remote server.
+reply; a change to anything already there asks you first. Records have been filed in a real workspace through it. On
+a server, sign in from the chat instead with `/connect attio`: the script's sign-in returns to the machine it runs on.
 `python scripts/live_attio.py` checks the connection without changing anything.
 
 ## A record of your own activity (optional)
@@ -88,11 +89,19 @@ says what it needs first, which is an app of your own at X's developer site.
 
 ## Put it on a server
 
-`Dockerfile` and `fly.toml` deploy it to Fly.io with a persistent disk. The full guide,
-including what went wrong, is `site/content/deploy.html` (built into the site as
-`deploy.html`). Two things to know first: a Fly.io account with no payment card stops
-every machine after five minutes, and you must set `ODYSSEUS_TZ` to your time zone or
-reminders fire in UTC.
+`Dockerfile` and `fly.toml` deploy it to Fly.io as one always-on machine with a persistent disk and one public port
+(sign-ins coming back, WhatsApp, and `/health`). The full guide, including what went wrong and how to move a copy
+that is already in use, is `site/content/deploy.html` (built into the site as `deploy.html`). Know these first:
+
+- Put a payment card on the account before deploying; the first attempt here, without one, was stopped after five minutes.
+- Set `ODYSSEUS_TZ` to your time zone or reminders fire in UTC.
+- Run one copy. Stop the one on your computer before the server's starts, and do not start it again afterwards: besides
+  taking Telegram's messages, it would spend sign-in renewals the server's copy needs.
+- Measured there: about 770 MB with one person's agents connected. 1 GB works for one person with the swap that
+  `fly.toml` switches on; use 2 GB before inviting anyone.
+- In Singapore the machine costs about $8.50 a month and the disk 15 cents, at the host's published prices when this
+  was written; 2 GB costs more.
+- A service that runs on your own computer (the record of your own activity, below) cannot be reached from a server.
 
 ## Know before you use it
 

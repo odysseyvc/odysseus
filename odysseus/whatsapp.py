@@ -11,6 +11,12 @@ Because there is now a door, three checks stand at it:
   the signature   every delivery is signed with the app's secret; one that is not is dropped unread
   the sender      only the owner's own number is listened to; anyone else gets no reply at all
 
+Meta no longer promises the number. A delivery always names its sender by an id Meta makes for that person and this
+business (`from_user_id`), and leaves the phone number out for a person who has taken a username and has not written
+to this number in thirty days. So the first time the owner's number arrives, the id that came with it is kept in the
+data folder, and a later delivery with no number is the owner's only if it carries that id. Both values are inside
+the signed delivery. A person whose id is not known and whose number is not given gets no reply, as before.
+
 All decisions are still made in conversation.py. This file only carries messages,
 as telegram.py does.
 
@@ -102,7 +108,8 @@ class WhatsApp:
     """Receives what Meta delivers, checks it, and hands the owner's messages to the conversation."""
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, phone_id: str, owner_number: str,
-                 app_secret: str, verify_token: str, owner_id: int, clock: Callable[[], float] = time.time):
+                 app_secret: str, verify_token: str, owner_id: int, clock: Callable[[], float] = time.time,
+                 ids_file: Any = None):
         self._conv, self._journal, self._http = conversation, journal, http
         self._clock = clock
         self._unsigned, self._unsigned_logged = 0, 0.0      # unsigned posts since the last log line, and when that was
@@ -110,6 +117,27 @@ class WhatsApp:
         self._phone_id, self._owner, self._secret, self._verify, self._owner_id = phone_id, digits(owner_number), app_secret, verify_token, owner_id
         self._seen: deque[str] = deque(maxlen=500)      # Meta retries for 36 hours, so the same message can arrive twice
         self._tasks: set[asyncio.Task] = set()
+        self._ids_file, self._owner_user = ids_file, ""       # the id Meta gives the owner, learned from a delivery that also had the number
+        try:
+            if ids_file is not None and ids_file.exists():
+                self._owner_user = str(json.loads(ids_file.read_text(encoding="utf-8")).get("owner_user_id") or "")
+        except (OSError, ValueError, AttributeError):
+            self._owner_user = ""
+
+    def _is_owner(self, m: dict[str, Any]) -> bool:
+        number, user = digits(m.get("from", "")), str(m.get("from_user_id") or "")
+        if number:
+            if number != self._owner:
+                return False
+            if user and user != self._owner_user:
+                self._owner_user = user
+                try:
+                    if self._ids_file is not None:
+                        self._ids_file.write_text(json.dumps({"owner_user_id": user}), encoding="utf-8")
+                except OSError as e:
+                    self._journal.write("error", where="whatsapp.ids", error=type(e).__name__)
+            return True
+        return bool(user) and user == self._owner_user
 
     def chat(self) -> WhatsAppChat:
         return WhatsAppChat(self._http, self._phone_id, self._owner, self._journal)
@@ -151,7 +179,7 @@ class WhatsApp:
             if m.get("id") in self._seen:
                 return
             self._seen.append(m.get("id"))
-            if digits(m.get("from", "")) != self._owner:
+            if not self._is_owner(m):
                 self._journal.write("dropped", what="whatsapp message from a number that is not the owner's")
                 return
             chat, kind = self.chat(), m.get("type")
@@ -187,6 +215,9 @@ class WhatsApp:
                 data, size = await self._download((m.get("audio") or {}).get("id", ""))
                 # WhatsApp does not say how long a recording is, so only its size is checked here.
                 await self._conv.handle_voice(self._owner_id, data, "voice.ogg", size, 0, chat)
+            elif kind == "system":
+                # Meta's own notice (the person changed their number or their id), not something the owner wrote.
+                self._journal.write("whatsapp", notice=str((m.get("system") or {}).get("type", ""))[:40])
             else:
                 await chat.send(OTHER_NOTE)
         except Exception as e:

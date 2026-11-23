@@ -66,17 +66,22 @@ pip install -r requirements.txt</code></pre></div>
 <div class="stage"><div class="num">4</div><div>
 <h2>Give it a server</h2>
 <p>On a laptop, reminders only fire while the laptop is awake. A small always-on server fixes that. These steps use Fly.io, which is what this project used; any host that can run a container with a persistent disk will do.</p>
-<div class="callout bad"><p><b>Add a payment card first. Skipping it cost two failed deployments.</b> On a new Fly.io account with no card, every machine is stopped five minutes after it starts. Nothing in the deploy output says so. The bot starts, answers for five minutes and goes silent. The only trace is one line in the machine's log: "Trial machine stopping".</p></div>
+<div class="callout bad"><p><b>Add a payment card first. Skipping it cost two failed deployments.</b> On a new Fly.io account with no card, every machine was stopped five minutes after it started. Nothing in the deploy output said so. The bot started, answered for five minutes and went silent. The only trace was one line in the machine's log: "Trial machine stopping". The host's published terms for accounts without a card have changed since; the advice has not.</p></div>
+<div class="callout info"><p><b>What the server costs.</b> One always-on shared machine with 1 GB of memory in Singapore is listed at about $8.50 a month, the 1 GB disk at 15 cents, and the shared address at nothing. Prices differ by region and change; read the host's own list.</p></div>
 <h3>Create the app and its disk</h3>
 <p>Install the <code>fly</code> command from Fly.io, then:</p>
 <div class="cmd"><pre><code>fly auth login
 fly apps create your-app-name
 fly volumes create odysseus_data --app your-app-name --region sin --size 1</code></pre></div>
-<p>Open <code>fly.toml</code> and change three things: <code>app</code> to the name you just chose, <code>primary_region</code> to a region near you (<code>fly platform regions</code> lists them), and <code>ODYSSEUS_TZ</code> to your own time zone, for example <code>Europe/London</code>.</p>
+<p>Open <code>fly.toml</code> and change four things: <code>app</code> to the name you just chose, <code>primary_region</code> to a region near you (<code>fly platform regions</code> lists them), <code>ODYSSEUS_TZ</code> to your own time zone, for example <code>Europe/London</code>, and <code>ODYSSEUS_PUBLIC_URL</code> to <code>https://your-app-name.fly.dev</code>.</p>
+<p>Then give the app its public addresses. An app made with <code>fly apps create</code> has none, and the deployment will look healthy from the host's side while its address does not exist for anyone else:</p>
+<div class="cmd"><pre><code>fly ips allocate-v4 --shared --app your-app-name
+fly ips allocate-v6 --app your-app-name</code></pre></div>
 <div class="callout"><p><b>Do not skip the time zone.</b> A server's clock is UTC. Without <code>ODYSSEUS_TZ</code>, "remind me at 7am" fires at 7am UTC, and nothing reports an error.</p></div>
 <h3>Send your keys as secrets</h3>
-<div class="cmd"><div class="lab">macOS and Linux</div><pre><code>grep -E '^[A-Z_]+=.+' .env | fly secrets import --app your-app-name --stage</code></pre></div>
-<div class="cmd"><div class="lab">Windows (PowerShell)</div><pre><code>Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=.+' } | fly secrets import --app your-app-name --stage</code></pre></div>
+<p>Every filled-in line of <code>.env</code> except the data folder, which on the server is set by <code>fly.toml</code>. A path from your own computer sent along with the rest would override it.</p>
+<div class="cmd"><div class="lab">macOS and Linux</div><pre><code>grep -E '^[A-Z_0-9]+=.+' .env | grep -v '^ODYSSEUS_DATA_DIR=' | fly secrets import --app your-app-name --stage</code></pre></div>
+<div class="cmd"><div class="lab">Windows (PowerShell)</div><pre><code>Get-Content .env | Where-Object { $_ -match '^[A-Z_0-9]+=.+' -and $_ -notmatch '^ODYSSEUS_DATA_DIR=' } | fly secrets import --app your-app-name --stage</code></pre></div>
 <h3>Deploy</h3>
 <p>Stop the copy on your laptop first. Then:</p>
 <div class="cmd"><pre><code>fly deploy --ha=false</code></pre></div>
@@ -85,10 +90,33 @@ fly volumes create odysseus_data --app your-app-name --region sin --size 1</code
 <div class="cmd"><pre><code>fly status
 fly logs</code></pre></div>
 <p>You should see a line reading <code>odysseus start</code>, then one line per step as you use it: statuses and numbers, never the contents of your messages. Message the bot. <b>Then check again after ten minutes.</b> The first deployment was reported as working thirty seconds after launch, and it was switched off four and a half minutes later.</p>
-<h3>Optional: WhatsApp as a second channel</h3>
-<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. This channel was built and tested without Meta and has not yet been connected, so treat these steps as untried.</p>
+<p>The host asks the program's <code>/health</code> address every thirty seconds and shows the answer under CHECKS in <code>fly status</code>. That check runs inside the host's network. Ask from outside as well:</p>
+<div class="cmd"><pre><code>curl -i https://your-app-name.fly.dev/health</code></pre></div>
+<p>It should answer <code>200</code> and <code>ok</code>. Every other address answers 404, apart from the sign-in page and WhatsApp's.</p>
+<div class="callout"><p><b>Memory.</b> Measured on this machine size: about 770 MB with one person's agents connected, of 1 GB. <code>fly.toml</code> switches on swap, which costs nothing and keeps the program alive when memory runs short. Before you invite anyone, change <code>memory</code> to <code>"2gb"</code>.</p></div>
+<h3>If your copy is already in use: moving its data</h3>
+<p>A copy that has been running on your computer has a conversation, memory, a schedule and sign-ins in its data folder. To take them along, the server must be built without the bot starting, because a started bot polls Telegram and yours is still running. These are the steps that were run.</p>
 <ol>
-<li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions.</li>
+<li>Add two lines above <code>[env]</code> in <code>fly.toml</code>, and <code>processes = ["app"]</code> under <code>[http_service]</code>, so that the machine sleeps:
+<div class="cmd"><pre><code>[processes]
+  app = "sleep infinity"</code></pre></div>
+Take the <code>[[http_service.checks]]</code> section out for now, deploy, and start the machine: <code>fly deploy --ha=false</code>, then <code>fly machine start</code> with the id that <code>fly status</code> shows.</li>
+<li>Wait until your bot is doing nothing, then stop it, and make sure it has stopped.</li>
+<li>Pack the data folder and send it. Leave out the token of any service that runs on your own computer; a server cannot reach it.
+<div class="cmd"><pre><code>tar -czf data.tgz -C /path/to/the/folder/above your-data-folder
+fly ssh sftp put data.tgz /tmp/data.tgz</code></pre></div></li>
+<li>Unpack it on the server, and rename the folder the conversation is filed under. The agent library names that folder after the directory the program was started in, which on the server is <code>/app</code>:
+<div class="cmd"><pre><code>fly ssh console
+tar -xzf /tmp/data.tgz -C /data --strip-components=1
+find /data -type d -path '*/agent/projects/*' -prune    # shows the folder; rename each one to -app with mv
+chown -R app:app /data</code></pre></div></li>
+<li>Take the three lines out of <code>fly.toml</code> again, put the checks back, and run <code>fly deploy --ha=false</code>.</li>
+</ol>
+<div class="callout bad"><p><b>Do not start the old copy again.</b> Its folder still holds the sign-in renewals as they were when you moved. Each is good for one use; the old copy would spend them, and the server's sign-ins would stop at their next renewal. Keep the folder as a backup and leave it alone.</p></div>
+<h3>Optional: WhatsApp as a second channel</h3>
+<p>Telegram needs nothing to reach your server. WhatsApp does: Meta calls an address you own each time a message arrives. {{ch:channels}} of the book explains what that changes. Sending has run for real; receiving has not yet, so treat steps 4 and 5 as untried.</p>
+<ol>
+<li>At developers.facebook.com, create an app and add the WhatsApp product. It gives you a test number, a phone number id, and under the app's basic settings an app secret. Create a permanent token for a system user with the two WhatsApp permissions. The token the set-up page shows lasts a couple of hours: a bot left with that one sends nothing by the next day and does not say so.</li>
 <li>Add your own WhatsApp number as an allowed recipient of the test number.</li>
 <li>Set <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_ID</code>, <code>WHATSAPP_APP_SECRET</code>, <code>OWNER_WHATSAPP</code> (your number with country code) and <code>WHATSAPP_VERIFY_TOKEN</code> (any phrase you choose) as secrets.</li>
 <li>The <code>[http_service]</code> section at the end of <code>fly.toml</code> opens the port; it is already on if you kept it for sign-ins. Deploy.</li>
@@ -96,7 +124,12 @@ fly logs</code></pre></div>
 </ol>
 <div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>
 <h3>Updating later</h3>
-<p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update.</p>
+<p>Pull the new code and run <code>fly deploy --ha=false</code> again. Your memory, schedule and log live on the disk and are not touched by an update. The bot is away for under a minute; a task it was in the middle of is announced when it returns, not carried on.</p>
+<h3>Going back</h3>
+<p>To go back to the code as it was, list the earlier images and deploy one:</p>
+<div class="cmd"><pre><code>fly releases --image
+fly deploy --ha=false --image registry.fly.io/your-app-name:deployment-XXXX</code></pre></div>
+<p>The host keeps earlier images for a while and does not promise to. The data does not go back with the code. The host photographs the disk once a day (<code>fly volumes snapshots list</code> with the volume's id), and restoring one means creating a new volume from it. The disk is on one physical machine and nothing else copies it; that is not yet built. Neither of these two steps has been run here.</p>
 </div></div>
 
 <h2>Settings worth knowing</h2>
@@ -134,6 +167,9 @@ fly logs</code></pre></div>
 <thead><tr><th>What you see</th><th>Likely cause</th></tr></thead>
 <tbody>
 <tr><th>The bot answers for five minutes after a deploy, then nothing</th><td>No payment card on a new Fly.io account. Look for "Trial machine stopping" in <code>fly logs</code>.</td></tr>
+<tr><th><code>fly status</code> shows the check passing, and the app's address does not load</th><td>The app has no public address. Run the two <code>fly ips allocate</code> commands above.</td></tr>
+<tr><th>After a move, "I was restarted and could not pick up our earlier conversation"</th><td>The conversation's folder under <code>/data/agent/projects</code> still has the name it had on your computer. Rename it to <code>-app</code>.</td></tr>
+<tr><th>The machine restarts by itself under load</th><td>Out of memory. Raise <code>memory</code> in <code>fly.toml</code>.</td></tr>
 <tr><th>No reply at all, and you are sure it is running</th><td><code>OWNER_TELEGRAM_ID</code> is not your ID, or a second copy is running somewhere and taking the messages</td></tr>
 <tr><th>"Missing settings: …" at start-up</th><td>A required line in <code>.env</code> is empty. The message names which.</td></tr>
 <tr><th>Reminders arrive hours off</th><td><code>ODYSSEUS_TZ</code> is not set on the server</td></tr>

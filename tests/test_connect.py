@@ -332,6 +332,10 @@ async def test_the_door_serves_the_page_and_whatever_else_is_put_behind_it(tmp_p
             assert await waiting == ("abc", "m1", None)
             async with http.get(f"http://127.0.0.1:{port}/whatsapp") as r:
                 assert await r.text() == "hello"
+            async with http.get(f"http://127.0.0.1:{port}/health?x=<script>") as r:
+                assert r.status == 200 and await r.text() == "ok", "the host's check: alive, and nothing more is said"
+            async with http.post(f"http://127.0.0.1:{port}/health") as r:
+                assert r.status == 404
             off()
             for path in ("/whatsapp", "/", "/anything"):
                 async with http.get(f"http://127.0.0.1:{port}{path}") as r:

@@ -87,6 +87,34 @@ async def test_only_the_owners_number_is_listened_to(tmp_path):
     assert any(r["kind"] == "dropped" for r in x.journal.read())
 
 
+async def test_a_delivery_with_no_number_is_the_owners_only_by_the_id_that_once_came_with_the_number(tmp_path):
+    # Meta leaves the number out for a person with a username who has not written lately, and always sends its own id.
+    def build():
+        sent, conv, journal = [], FakeConversation(), Journal(tmp_path / "journal.jsonl")
+
+        async def http(method, url, body):
+            sent.append(body)
+            return 200, {}
+        return SimpleNamespace(conv=conv, sent=sent, journal=journal, wa=WhatsApp(
+            conv, journal, http, phone_id="1065", owner_number=OWNER, app_secret=SECRET, verify_token="p", owner_id=7, ids_file=tmp_path / "whatsapp.json"))
+    x = build()
+    nameless = {"from_user_id": "IN.111", "id": "wamid.a", "type": "text", "text": {"body": "before the id is known"}}
+    assert x.wa.receive(*delivery(nameless)) == 200
+    await x.wa.wait()
+    assert x.conv.texts == [] and x.sent == [], "an id nobody has vouched for is a stranger"
+    x.wa.receive(*delivery({**text("hello", mid="wamid.b"), "from_user_id": "IN.111"},
+                           {**text("me too", sender=STRANGER, mid="wamid.c"), "from_user_id": "GB.999"}))
+    await x.wa.wait()
+    assert x.conv.texts == [(7, "hello")] and "IN.111" in (tmp_path / "whatsapp.json").read_text(), "the stranger's id is not learned"
+    y = build()         # a restart: the id is read back from the data folder
+    y.wa.receive(*delivery({"from_user_id": "IN.111", "id": "wamid.d", "type": "text", "text": {"body": "no number this time"}},
+                           {"from_user_id": "GB.999", "id": "wamid.e", "type": "text", "text": {"body": "nor here"}},
+                           {"from": OWNER, "from_user_id": "IN.111", "id": "wamid.f", "type": "system", "system": {"type": "user_changed_number"}}))
+    await y.wa.wait()
+    assert y.conv.texts == [(7, "no number this time")]
+    assert [m["to"] for m in y.sent] == [OWNER], "the reply still goes to the number, and Meta's own notice is not answered"
+
+
 # --- carrying messages ------------------------------------------------------------------------
 
 async def test_a_message_delivered_twice_is_handled_once(tmp_path):

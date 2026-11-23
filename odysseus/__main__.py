@@ -380,7 +380,8 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     if host and settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp:
         http, close_http = make_http(settings.whatsapp_token)
         whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
-                            app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id)
+                            app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id,
+                            ids_file=settings.data_dir / "whatsapp.json")
     # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
     telegram = TelegramChat(bot, settings.owner_id)
     on_whatsapp = whatsapp is not None and settings.notify_on == "whatsapp"

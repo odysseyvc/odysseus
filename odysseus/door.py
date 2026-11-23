@@ -6,6 +6,8 @@ Telegram needs no door: the program fetches its messages. Two things do need one
                 (connect.py). Without a public address the browser lands on a page that does not load and the person
                 copies its address into the chat; with one, they see "Connected" and nothing more is asked of them.
   /whatsapp     Meta's deliveries, if WhatsApp is switched on (whatsapp.py).
+  /health       answers "ok" and nothing else, for the host's own check that the process is running and its loop is
+                turning. It says nothing about who runs this or what is connected, and reads nothing that was sent.
 
 What /callback will accept. Every sign-in begins with a long random mark (the standard's `state`) that the service
 returns in the address. The connector tells the door which mark it is waiting for; an address carrying any other mark
@@ -74,6 +76,8 @@ class Door:
             ok = self.came_back({k: v for k, v in request.query.items() if k in ("code", "state", "iss")})
             return web.Response(status=200 if ok else 400, text=DONE if ok else NOT_WAITING, content_type="text/html",
                                 headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
+        if request.method == "GET" and request.path == "/health":
+            return web.Response(text="ok", headers={"Cache-Control": "no-store"})
         handler = self._routes.get((request.method, request.path))
         return await handler(request) if handler is not None else web.Response(status=404)
 
