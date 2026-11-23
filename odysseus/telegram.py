@@ -71,6 +71,10 @@ class TelegramChat:
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
 
+    async def typing(self) -> None:
+        """Show "typing..." in the chat. It lasts a few seconds, which covers the wait for the first step."""
+        await self._bot.send_chat_action(self._chat_id, "typing")
+
     async def choose(self, text: str, approval_id: str, options: list[str]) -> None:
         """A question with one button for each answer. The buttons carry the question's id and the answer's position."""
         await self._bot.send_message(self._chat_id, text, parse_mode=None, reply_markup=_choices(approval_id, options))

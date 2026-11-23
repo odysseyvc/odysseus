@@ -30,7 +30,7 @@ def test_code_says_what_it_can_measure_and_which_faults_an_exchange_carries(tmp_
     j.write("gate", tool="mail_send", verdict="declined")
     j.write("task_end", status="turn_limit", seconds=75.0, turns=9, first_word_s=11.2)
     m = insight.measured(j.read())
-    assert m == {"status": "turn_limit", "seconds": 75.0, "first_word_s": 11.2, "calls": 9, "tools_failed": 1, "declined": 1, "refused": 0}      # the last task only
+    assert m == {"status": "turn_limit", "seconds": 75.0, "first_word_s": 11.2, "calls": 9, "tools_failed": 1, "declined": 1, "refused": 0, "claimed_not_done": 0}      # the last task only
     assert insight.faults({**m, "took": "CORRECTED", "outcome": "COULD_NOT"}) == ["not_finished", "tool_failed", "declined", "corrected", "could_not", "slow", "many_calls"]
     assert insight.faults({"status": "done", "seconds": 4.0, "calls": 2, "took": "CARRIED_ON", "outcome": "ANSWERED"}) == []
     assert set(f for f in insight.faults({**m, "took": "ASKED_AGAIN", "outcome": "FAILED", "refused": 1})) <= set(insight.FAULTS)

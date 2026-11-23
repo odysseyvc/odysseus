@@ -57,6 +57,25 @@ class Chat(Protocol):
     async def ask(self, text: str, approval_id: str) -> None: ...   # a message with Approve and Decline buttons; with thread=True, a third
 
 
+STEPS = (("attio", "Looking in Attio"), ("pipeline_review", "Going through the pipeline"), ("portfolio", "Looking at the companies' figures"),
+         ("round_maths", "Working out the round"), ("mail_", "Reading your mail"), ("inbox_", "Reading my own mailbox"), ("calendar", "Checking your calendar"),
+         ("web_search", "Searching the web"), ("browse", "Opening the page"), ("run_code", "Working on the file"), ("template", "Looking at your template"),
+         ("skill_read", "Reading how you like this done"), ("files_", "Looking through your files"), ("recall", "Looking back through our conversations"),
+         ("remember", "Making a note"), ("note", "Making a note"), ("schedule", "Setting that up"), ("watch", "Setting up the watch"),
+         ("who_to_ask_about", "Looking for people worth asking about"), ("colleague", "Asking your colleague's assistant"), ("app_", "Looking in your apps"))
+
+
+def progress_line(tool: str, inputs: dict | None = None) -> str:
+    """A few fixed words on what a tool call is doing, from its name alone. For a connected service, its name."""
+    short = str(tool).rsplit("__", 1)[-1]
+    for start, line in STEPS:
+        if short.startswith(start):
+            return line + "..."
+    if short.endswith(("_find", "_run")):
+        return f"Looking in {short.rsplit('_', 1)[0].replace('_', ' ').title()}..."
+    return "Working on it..."
+
+
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     parts = []
     while len(text) > limit:
@@ -1077,8 +1096,24 @@ class Conversation:
         # The first words are kept so that, after a restart, the owner can be told what was interrupted.
         self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80], **({"background": True} if bg else {}))
 
+        shown = {"words": False, "step": ""}
+
+        async def on_step(name: str, inputs: dict) -> None:
+            # Until the reply's own words begin, say in a few fixed words what is being done. Written by code from the name
+            # of the tool, so it costs nothing and shows nothing of what was read. Before this, a task that looked something
+            # up first showed nothing at all for most of its length.
+            line = progress_line(name, inputs)
+            if shown["words"] or bg or line == shown["step"]:
+                return
+            shown["step"] = line
+            try:
+                await chat.draft(draft_id, line)
+            except Exception:
+                pass
+
         async def on_text(text_so_far: str) -> None:
             nonlocal last_draft
+            shown["words"] = shown["words"] or bool(text_so_far.strip())
             now = time.monotonic()
             if now - last_draft < DRAFT_INTERVAL_S:
                 return
@@ -1149,14 +1184,21 @@ class Conversation:
         # what it has spent reaches what was left of the day when it began or since (agent.py).
         if getattr(runner, "day_room", None) is None and hasattr(runner, "within"):         # set where the agents are assembled; this is for a runner made elsewhere
             runner.within(self._ledger, self._s.daily_usd)
+        # Only the real agent takes a report of its steps; a stand-in for it in a test need not.
+        steps = {"on_step": on_step} if "on_step" in getattr(getattr(runner.run, "__code__", None), "co_varnames", ()) else {}
+        if not bg and hasattr(chat, "typing"):
+            try:
+                await chat.typing()                 # "typing..." at once, before the first call to the model has come back
+            except Exception:
+                pass
         try:
             if bg:
                 await runner.forget_session()       # each job in the background starts clean
                 outcome: Outcome = await runner.run(prompt + stamp, on_text, self._bg_preamble)
             elif images:
-                outcome = await runner.run(prompt + stamp, on_text, self._preamble, images=images)
+                outcome = await runner.run(prompt + stamp, on_text, self._preamble, images=images, **steps)
             else:
-                outcome = await runner.run(prompt + stamp, on_text, self._preamble)
+                outcome = await runner.run(prompt + stamp, on_text, self._preamble, **steps)
         except BaseException:
             if trace is not None:
                 trace.__exit__(None, None, None)
@@ -1190,6 +1232,16 @@ class Conversation:
             "error": "Something went wrong and I could not finish. The details are in the log.",
         }
         body = outcome.text.strip()
+        # A claim in the model's own words that something was sent, booked, deleted or filed, with nothing in the log behind
+        # it, gets a line under the reply written by code (claims.py), and is counted.
+        try:
+            from . import claims
+            missing = claims.unbacked(body, self._journal.read()[-800:], time.time()) if outcome.status == "done" and body else []
+        except Exception:
+            missing = []
+        if missing:
+            self._journal.write("claim", unbacked=missing)
+            body += "\n\n" + claims.note(missing)
         exchange = (self._words(prompt), " ".join(body.split())[:RECAP_REPLY] or f"(no reply: {outcome.status})")
         if self._history is not None:
             self._history.add(*exchange)

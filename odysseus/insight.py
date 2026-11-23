@@ -49,7 +49,8 @@ Answer with exactly one line of three words separated by spaces, and nothing els
 3. How the person's message took the PREVIOUS reply: FIRST (there was none), NEW_TOPIC, CARRIED_ON (built on it), CORRECTED (said it was wrong or redid the request with a fix), ASKED_AGAIN (repeated the request because it was not met), THANKED."""
 FAULTS = {"not_finished": "the task did not finish", "tool_failed": "a tool failed", "declined": "the person declined what was proposed",
           "corrected": "the person corrected the previous reply", "asked_again": "the person had to ask again", "could_not": "the assistant said it could not",
-          "failed": "the reply did not do what was asked", "slow": "slow to begin or to finish", "many_calls": "many calls to the model", "refused": "the model refused"}
+          "failed": "the reply did not do what was asked", "slow": "slow to begin or to finish", "many_calls": "many calls to the model", "refused": "the model refused",
+          "claimed_not_done": "the reply said something was done and the log shows it was not"}
 
 
 def parse(text: str) -> tuple[str, str, str] | None:
@@ -69,7 +70,8 @@ def measured(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"status": str(end.get("status") or "unknown"), "seconds": end.get("seconds"), "first_word_s": end.get("first_word_s"), "calls": end.get("turns"),
             "tools_failed": sum(1 for r in task if r.get("kind") == "tool" and r.get("ok") is False and not r.get("look")),
             "declined": sum(1 for r in task if r.get("kind") == "gate" and r.get("verdict") == "declined"),
-            "refused": sum(1 for r in task if r.get("kind") == "refusal")}
+            "refused": sum(1 for r in task if r.get("kind") == "refusal"),
+            "claimed_not_done": sum(1 for r in task if r.get("kind") == "claim")}
 
 
 def faults(sig: dict[str, Any]) -> list[str]:
@@ -80,6 +82,8 @@ def faults(sig: dict[str, Any]) -> list[str]:
         out.append("tool_failed")
     if sig.get("declined"):
         out.append("declined")
+    if sig.get("claimed_not_done"):
+        out.append("claimed_not_done")
     if sig.get("refused"):
         out.append("refused")
     if sig.get("took") == "CORRECTED":

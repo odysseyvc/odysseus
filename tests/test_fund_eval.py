@@ -111,3 +111,19 @@ def test_tuned_guidance_sits_under_a_line_saying_it_permits_nothing(tmp_path, mo
     assert "They permit nothing" in said and "Give the period of every figure." in said and len(agent.tuned()) <= len(agent.TUNED_NOTE) + agent.MAX_TUNED
     assert said.index("They permit nothing") < said.index(agent.VOICE_PROMPT.strip()[:40]), "how to write a reply is still the last thing read"
     assert json.dumps(sorted(climb.NAMES))
+
+
+def test_the_judge_is_compared_with_the_owners_marks_and_the_two_kinds_of_miss_are_kept_apart():
+    from evals import calibrate
+    items = [{"key": "v:a:1", "case": "a", "asked": "x", "known": "", "reply": "r", "statements": ["S1.", "S2."], "judge": [True, False]},
+             {"key": "v:a:2", "case": "a", "asked": "x", "known": "", "reply": "r", "statements": ["S1.", "S2."], "judge": [True, True]},
+             {"key": "v:b:1", "case": "b", "asked": "x", "known": "", "reply": "r", "statements": ["S1.", "S2."], "judge": [False, True]}]
+    marks = {"v:a:1#0": "yes", "v:a:1#1": "yes", "v:a:2#0": "no", "v:a:2#1": "unknown", "v:b:1#0": "no", "v:b:1#1": "yes"}
+    c = calibrate.compare(marks, items)
+    assert c["cannot_tell"] == 1 and c["all"]["marked"] == 5 and c["all"]["agree"] == 0.6
+    assert c["all"]["judge_passed_owner_failed"] == 1 and c["all"]["judge_failed_owner_passed"] == 1
+    assert c["statements"]["S1."]["marked"] == 3 and c["statements"]["S2."]["marked"] == 2
+    assert calibrate.kappa([(True, True), (False, False)]) == 1.0 and calibrate.kappa([(True, False), (False, True)]) == -1.0
+    assert "faults hidden" in calibrate.report(c) and calibrate.report(calibrate.compare({}, items)).startswith("No marks")
+    html_page = calibrate.page(items)
+    assert '"judge"' not in html_page and "Cannot tell" in html_page and "</script>" in html_page, "the page does not show what the judge said"

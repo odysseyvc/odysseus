@@ -279,6 +279,7 @@ class AgentRunner:
         self._system_prompt = system_prompt
         self._allowed = allowed_tools
         self._policy = tool_policy if allowed_tools is ALLOWED_TOOLS else make_policy(allowed_tools)
+        self._gated = gate is not None
         if gate is not None:
             # With a gate, only tools it always allows skip the question; everything else goes through it.
             self._allowed = frozenset(gate.always_allowed())
@@ -340,6 +341,10 @@ class AgentRunner:
             can_use_tool=self._policy,         # anything not listed above is refused by code
             setting_sources=[],                # ignore settings files on the machine
             include_partial_messages=True,
+            # How hard the model thinks before each step, when the owner has set it (ODYSSEUS_EFFORT). Unset, the model's own
+            # default stands: medium was measured on the fund suite and moved neither score, calls nor cost. Only the
+            # agents that do the owner's work behind the gate take the setting.
+            **({"effort": self._s.effort} if self._gated and getattr(self._s, "effort", "") else {}),
             hooks={"PreCompact": [HookMatcher(hooks=[self._on_compact])]},
             resume=self.session_id,            # after a restart of the client, carry the conversation on
             # The agent library writes a transcript of every run. It is kept inside the data folder for every agent
@@ -474,7 +479,7 @@ class AgentRunner:
         yield {"type": "user", "message": {"role": "user", "content": content}, "parent_tool_use_id": None, "session_id": "default"}
 
     async def run(self, prompt: str, on_text: OnText, preamble: Preamble | None = None,
-                  images: list[tuple[str, bytes]] | None = None) -> Outcome:
+                  images: list[tuple[str, bytes]] | None = None, on_step: Any = None) -> Outcome:
         self._stopped = False
         self._limit = None
         current = ""      # text of the assistant message being written now
@@ -510,6 +515,11 @@ class AgentRunner:
                     for b in msg.content:
                         if isinstance(b, ToolUseBlock):
                             self._journal.write("tool_request", name=b.name, input=b.input)
+                            if on_step is not None:
+                                try:
+                                    await on_step(b.name, b.input if isinstance(b.input, dict) else {})
+                                except Exception:
+                                    pass            # showing progress must never break the work
                     # One model call can arrive as several messages sharing an id; count it once.
                     key = msg.message_id or f"n{len(calls)}"
                     calls[key] = estimate_usd(self._model, msg.usage or {})
