@@ -130,6 +130,10 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
   labels read-only run unasked; everything else asks. Only you can do this; the assistant cannot connect anything.
 - iMessage, if you switch it on, is bought from Linq, which then carries every message on that channel. It only
   answers; reminders stay on Telegram. An approval there is a vote in a poll.
+- Before you put this on WhatsApp at all, read Meta's terms for the WhatsApp Business Platform, section 4.7. They bar
+  general-purpose AI assistants where the assistant is the main thing offered, at Meta's sole discretion, whether
+  you connect directly or through a provider, with exceptions only in some countries. Whether a private assistant
+  that answers only you is covered is not settled by the text. Meta can suspend the number or the account.
 - WhatsApp through Vobiz, if you switch it on, means Vobiz carries and keeps every message on that number. It cannot
   send buttons.
 - Where a channel has no buttons (WhatsApp through Vobiz; iMessage when no poll can be made), an approval question is
