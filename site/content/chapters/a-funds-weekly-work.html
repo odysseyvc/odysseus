@@ -1,0 +1,164 @@
+<div class="box objectives"><div class="label">After this chapter you should be able to</div>
+<ul>
+<li>Sort the recurring work of an investment firm into what is a comparison of dates or numbers, what is reading, and what is a procedure, and give each to code, to the model, or to a skill.</li>
+<li>Build a weekly review of a pipeline from a database's own layout, with no model call and no object or stage named in the code.</li>
+<li>Keep figures that companies report as numbers only, and say why that is a safety property as well as a tidy one.</li>
+<li>Take arithmetic away from the model by giving it a calculator with stated conventions.</li>
+<li>Ship procedures with a program in the same form the owner teaches their own, so that the owner's always wins.</li>
+</ul></div>
+
+<h2 id="problem">The problem</h2>
+<p>A partner at an investment firm does a handful of things every week that nobody would call judgement. Before the Monday meeting they go down the pipeline looking for deals nobody has touched, next steps whose date has passed, and founders who wrote and were not answered. When a company they invested in sends its monthly update, they mean to compare it with last month's. When a term sheet arrives they work out what the round does to everybody's share. They write the same kinds of document again and again: a memo on a deal, a note letting a founder down, a pack for the partners, a first reading of a data room.</p>
+<p>An assistant with a model and tools could be asked to do each of these from scratch each time. It would cost a model's time, the answer would vary from week to week, and in two of the cases (the dates and the sums) it would sometimes be wrong while sounding right. This chapter sorts the work by what it is made of, and gives each kind to whatever does it reliably.</p>
+
+<h2 id="concepts">Three kinds of work</h2>
+<div class="tbl"><table>
+<thead><tr><th>The work is</th><th>Example</th><th>Who does it</th><th>Why</th></tr></thead>
+<tbody>
+<tr><th>A comparison of dates or numbers</th><td>Which deals have gone quiet; what a 10% option pool costs the founders</td><td>Code</td><td>It is the same question every time, it has one right answer, and code gives that answer for nothing</td></tr>
+<tr><th>Reading</th><td>Finding "revenue was 181k after we lost a large customer" in an email</td><td>The model</td><td>A figure in a sentence can only be found by reading the sentence</td></tr>
+<tr><th>A procedure</th><td>What a memo contains, in what order, with what rules</td><td>A skill the model follows</td><td>It is long, needed only for one kind of task, and each firm wants its own</td></tr>
+</tbody>
+</table></div>
+<p>Most real tasks are a mix, and the design work is cutting them at the right place. Recording a founder's update is reading (the model finds the figures) followed by a comparison (code says what fell). A pack for the partners is a procedure (the skill) that begins by calling a comparison (the review) and must not redo it.</p>
+<div class="box definition"><div class="label">Definitions</div>
+<p>A <strong>pipeline</strong> is the set of deals a firm is considering, each at a <strong>stage</strong> (first contact, diligence, a decision, invested, passed). <strong>Pre-money</strong> is what a company is valued at before new money comes in; <strong>post-money</strong> is that plus the new money. <strong>Dilution</strong> is the fall in a holder's share when new shares are issued. A <strong>SAFE</strong> or <strong>convertible note</strong> is money put in earlier that turns into shares at the next round, on terms set by a <strong>cap</strong> (a ceiling on the valuation it converts at) or a <strong>discount</strong>. <strong>Pro rata</strong> is an existing investor's right to buy enough of a new round to hold their share. <strong>Burn</strong> is cash spent per month; <strong>runway</strong> is cash divided by burn, in months.</p></div>
+
+<h2 id="review">The pipeline review, by code</h2>
+<p>The review answers five questions: what is open, what is new, what has gone quiet, what is overdue, and who is owed a reply. Every one is a comparison of dates. No model is called.</p>
+<h3>Finding the pipeline without naming it</h3>
+<p>A firm's database has its own objects, lists and stage names, and they change. Code that said "read the deals object and treat Passed as closed" would work for one firm on one day. The review reads the layout the program already keeps ({{ch:a-firms-database}}) and takes a pipeline to be any object or list that has a stage field. The database calls that field's type "status", and that type is the only thing the code looks for.</p>
+<pre><code>stage = next((a for a in attrs if a.get("type") == "status" and a.get("api_slug")), None)
+if stage is None:
+    continue</code></pre>
+<p>The rest is found the same way. A deadline is a date field whose name says so (due, next, follow, deadline, again), which leaves out the date of a first meeting. A next step is a text field with "next" in its name. Whether a stage is closed cannot be read from the layout, because the database gives a stage a title and an order and nothing else. So a stage is closed if its name says so (won, lost, passed, invested, declined and a few more), and every review prints the stages it took as closed. A wrong guess is then seen, and one sentence from the owner corrects it for good.</p>
+<div class="box warn"><div class="label">A guess the owner can see</div>
+<p>A rule that reads meaning from names will be wrong for some firm. The remedy is to print what the rule decided, every time, next to the result it affects, and to give the owner a cheap way to overrule it. A guess that is hidden is a fault waiting to be found; a guess that is printed is a default.</p></div>
+<h3>Gone quiet, overdue, owed</h3>
+<div class="tbl"><table>
+<thead><tr><th>Question</th><th>How code answers it</th><th>What it reads</th></tr></thead>
+<tbody>
+<tr><th>Gone quiet</th><td>An open entry whose company and people the firm has not dealt with for three weeks, with no meeting ahead. If the firm has never dealt with them, the day the entry was made is used, and the review says so</td><td>The database's own record of the last and next email or meeting with each linked company and person</td></tr>
+<tr><th>Overdue</th><td>A deadline field on an open entry with a past date; any open task past its deadline</td><td>The entry; the database's tasks</td></tr>
+<tr><th>Owed a reply</th><td>A person on an open entry whose latest email to the owner is newer than the owner's latest email to them, and more than a day old</td><td>Two mail searches for every twenty people, made by code: one of the inbox, one of sent mail</td></tr>
+<tr><th>New</th><td>Entries made in the last seven days</td><td>The entry</td></tr>
+</tbody>
+</table></div>
+<p>"Last dealt with" is bought, not built: the database works it out from the mail and calendars its members have synced. The review reads that field and does not count emails itself.</p>
+<h3>Three faults the first live run showed</h3>
+<p>The unit tests passed against text written by hand to look like the database's answers. The first run against a real database then failed in three places, none of which a hand-written answer would have had.</p>
+<div class="tbl"><table>
+<thead><tr><th>What the real answer did</th><th>What went wrong</th><th>What now holds</th></tr></thead>
+<tbody>
+<tr><th>Records fetched by id come back as a list with no name</th><td>The code asked for a list called "records" and found none, so no company's last contact and no person's address was read. The review still looked complete</td><td>The nameless list is read; the test's stand-in answers in the same shape</td></tr>
+<tr><th>Tasks are given ten at a time and no more</th><td>Asking for fifty was refused. The review said tasks could not be read, which was true and unhelpful</td><td>Tasks are read ten at a time</td></tr>
+<tr><th>A date is written as 03/11 with nothing to say which is the day</th><td>Nothing yet, but one reading is eight months off</td><td>The order is read off the values: a number above twelve settles it; failing that, a "last dealt with" date that would lie in the future one way round is the other way round</td></tr>
+</tbody>
+</table></div>
+<p>The first of these is the dangerous kind. Nothing failed. A review with no company gone quiet is a normal review, and only the count of mail searches in the script's output (zero, when there were people to check) gave it away. A live check that prints counts of what was read, as well as what was concluded, is what caught it.</p>
+<h3>The message and the file</h3>
+<p>The review is one message short enough for a phone, with at most twelve lines of each kind, and one PDF that carries everything. The PDF is a web page written by this program from a fixed layout and printed by the browser on the rented machine ({{ch:files-pictures-and-voice}}). Every word that came from the database is escaped before it goes into the page, since a company's name is something a stranger chose. The model takes no part: the page is not designed afresh each week, so there is nothing for it to do.</p>
+<p>It is sent by itself on one morning a week, once, and it is also a tool. The owner can ask for it at any time; a routine can call it; the pack for the partners starts from it. Where the model is given the review, it arrives marked as material, because the names and next steps in it were filed from what other people wrote.</p>
+
+<h2 id="figures">What companies report, kept as numbers</h2>
+<p>A founder's update is prose. Reading it is the model's work. Everything after the reading is code.</p>
+<pre><code>portfolio_record(company="Corvid Freight", period="2026-10",
+                 figures={"revenue": 181000, "cash": 1200000, "burn": 260000, "headcount": 21},
+                 currency="USD")</code></pre>
+<p>The tool accepts a company, a period (a month or a quarter: the period the figures are for, not the day the email came), and numbers under a short fixed list of names: revenue, recurring revenue by month or year, value passed through, burn, cash, runway, headcount, customers, gross margin. A name outside the list is refused. A figure given as text ("1.2m") is refused. A period that has not happened is refused. The model is told to pass only numbers the update states, and not to work one out, convert a currency or carry one forward.</p>
+<div class="box warn"><div class="label">Why only numbers</div>
+<p>The update was written by someone outside the firm, and the notebook is read back in later conversations. If a sentence from the update were kept, it would be a way for a stranger's email to place words in front of the model weeks later ({{ch:untrusted-content}}). A number under a fixed name cannot carry an instruction. The one free text kept is the company's name, cut to sixty characters with everything but letters, digits and a few marks removed, and it is shown back marked as material.</p></div>
+<p>Against the period before, code points out: revenue, customers or headcount that fell by a twentieth or more; burn that rose by a quarter or more; cash that fell by more than the stated burn accounts for; runway under nine months, as the company states it or as cash divided by burn, and it says which; and a company whose latest figures are more than a period overdue. A month is compared with a month and a quarter with a quarter. Each figure recorded is shown to the owner by code under the reply, so that a misread number is seen on the day it is kept.</p>
+<p>The check on cash was added after the first run in the real chat. The model, given two months of made-up figures, noticed by itself that cash had fallen by 700 thousand against a burn of 260 thousand, and said so. The observation was right and useful, and it was arithmetic done by a model: it would be made some weeks and not others. It is now a rule in code, made every time.</p>
+<h3>Finding the updates</h3>
+<p>Each morning code searches the last days of the inbox for mail whose sender's domain belongs to a company the firm holds and whose subject reads like an update. The domains come from two places: any list in the database with "portfolio" in its name, and the senders of updates already recorded. Each message found is handed to the assistant as an ordinary task, once, with the email named as material that other people wrote. Finding costs nothing; the model runs only when there is an update to read. An update the owner forwards or pastes is recorded in the same way.</p>
+<p>Nothing is written to the firm's database by any of this. The figures live in the assistant's own notebook. If the database has fields for runway or the date of the last update, filling them is a change to the firm's record and goes through the gate like any other.</p>
+
+<h2 id="rounds">Round maths: a calculator, with its conventions</h2>
+<p>A language model asked what a round does to ownership will produce figures. They are right often enough to be trusted and wrong often enough to matter, and nothing in the reply tells the two apart. So the model's part is to read the numbers off the term sheet or the message and hand them over. The sums are done by one function, the same way every time.</p>
+<p>The function needs conventions, because a term sheet can be read more than one way, and it states them under every answer:</p>
+<div class="tbl"><table>
+<thead><tr><th>Term</th><th>How it is taken</th></tr></thead>
+<tbody>
+<tr><th>Pre-money valuation</th><td>Covers the shares in issue, the notes and SAFEs once converted, and any top-up of the option pool. Conversion and the top-up therefore dilute the existing holders and not the new money. This is the usual reading</td></tr>
+<tr><th>A post-money SAFE with a cap</th><td>Converts into its amount divided by its cap, as a share of the company after all notes have converted and before the new money</td></tr>
+<tr><th>A pre-money SAFE or a note with a cap</th><td>Converts at the cap divided by the shares in issue before any conversion</td></tr>
+<tr><th>A discount</th><td>Converts at the round's price less the discount; with a cap as well, whichever gives more shares. A cap above the round's own valuation does nothing</td></tr>
+<tr><th>The option pool</th><td>Topped up before the round to the stated share of the company after it</td></tr>
+</tbody>
+</table></div>
+<p>These depend on each other. The price depends on how many shares the notes become; a post-money SAFE's share count depends on the total after conversion; the pool's size depends on the total after the round. The function starts from the cap table as it stands and repeats the three calculations until nothing moves. If they never settle (notes and a pool that between them claim the whole company), it refuses and says so; it does not return the last figures it reached.</p>
+<p>It also says what it does not handle: liquidation preferences, participation, anti-dilution, interest on a note, warrants. The model is told to report that line with the figures, and to say so to the owner if the term sheet uses another convention, never to adjust the result.</p>
+<h3 id="example">A worked example</h3>
+<p>A made-up round, put to the assistant in one sentence: a company raises 3 million at 12 million pre-money; there is one post-money SAFE of 500 thousand at a cap of 5 million; the term sheet wants an option pool of 10% after the round; the firm held 8% before. What does it hold after if it puts in nothing, and what does its pro rata cost?</p>
+<div class="tbl"><table>
+<thead><tr><th>Holder</th><th>Before</th><th>After</th></tr></thead>
+<tbody>
+<tr><th>Everyone holding shares before</th><td>100%</td><td>63%</td></tr>
+<tr><th>The SAFE</th><td></td><td>7% (10% at its cap, then diluted by the new money)</td></tr>
+<tr><th>Option pool</th><td></td><td>10%</td></tr>
+<tr><th>New money</th><td></td><td>20%</td></tr>
+<tr><th>The firm, putting in nothing</th><td>8%</td><td>5.04%</td></tr>
+</tbody>
+</table></div>
+<p>The pro rata costs 189 thousand: 6.3% of the round, which is the firm's holding just before the new money, once the SAFE has converted and the pool is topped up. Holding exactly 8% after the round would take 444 thousand. The two differ because the SAFE and the pool have already diluted the firm before its right is measured, which is the kind of distinction a model's own arithmetic blurs. In the real chat this took one call to the tool, 16 seconds and 7 cents. The model added a currency nobody had named; the tool's description now says not to.</p>
+
+<h2 id="playbooks">Procedures that come with the program</h2>
+<p>The rest of the list is procedure: what a memo contains, how a pass is worded, what a pack for the partners holds, what a data room at a given stage should have. {{ch:memory}} describes skills, which are procedures the owner teaches in a message. Four now come with the program, in the same format and the same folder layout, read by the same tool:</p>
+<div class="tbl"><table>
+<thead><tr><th>Skill</th><th>What it fixes</th><th>What it leaves to the owner</th></tr></thead>
+<tbody>
+<tr><th>Investment memo</th><td>The order of gathering (the record, the deck, the call notes, then the web); ten sections that stay in even when empty; a source in brackets after every fact; ownership figures from the calculator</td><td>The recommendation, left as a heading with an empty box</td></tr>
+<tr><th>Note to a founder</th><td>A pass that says so in the first three lines; a follow-up listing what each side promised; the owner's voice learned from their own sent mail</td><td>The reason for a pass. If the owner gave none, none is written, and the owner is told it was left out</td></tr>
+<tr><th>Pack for the partners</th><td>Starts from the review and does not recount it; one paragraph on each new deal; what needs chasing</td><td>Every decision. The model's two sentences on a deal are headed "My take" and are never the firm's view</td></tr>
+<tr><th>Data room</th><td>Read everything first; a list of what a room at each stage normally holds; every place where two files, or a file and the deck, disagree</td><td>What to do about it. It says once that it is a first reading, not legal or accounting advice</td></tr>
+</tbody>
+</table></div>
+<p>Three rules govern how they sit beside the owner's own:</p>
+<ul>
+<li><strong>The owner's wins.</strong> A skill taught under the same name stands in front of the one that came with the program. Nothing is merged. Deleting the owner's brings the program's back.</li>
+<li><strong>It can be turned off.</strong> Removing one that came with the program records its name in a small file in the owner's folder; the program's own files are never written.</li>
+<li><strong>It is labelled.</strong> The list the model sees marks each as having come with the program, and its body arrives under a line saying the owner has not taught their own and that if they say how they want it done, that should be saved under the same name.</li>
+</ul>
+<p>The reason to ship them as skills and not as instructions in the standing prompt is cost and ownership. A standing prompt is paid for on every message; a skill costs one line until a task fits it. And a firm's memo format is the firm's: the mechanism by which the owner replaces it should be the ordinary one.</p>
+<p>Like any skill, these permit nothing. A note to a founder is still put to the owner before it is sent ({{ch:the-gate}}).</p>
+
+<h2 id="wrong">What goes wrong</h2>
+<h3>A review that is quietly empty</h3>
+<p>Described above: a read that returns nothing looks the same as a pipeline in good order. The defence is a live check that prints how much was read, and a review that names what it could not read (mail not connected, tasks refused) at its foot.</p>
+<h3>Meaning read from names</h3>
+<p>Closed stages and deadline fields are found by their names. A firm that calls its last stage "Graduated" will see closed deals counted as open until it says so once. The review prints what it assumed.</p>
+<h3>Stale by the wrong clock</h3>
+<p>"Last dealt with" is only as good as the mail and calendars synced to the database. A partner who has not connected theirs makes every one of their deals look quiet. The review cannot tell; it reports the field as it is.</p>
+<h3>A figure for the wrong period</h3>
+<p>An update sent in November is about October. The tool asks for the period the figures are for and refuses one that has not happened, but it cannot catch a model that files October's figures under November. The line code prints under the reply, naming the company and the period, is the owner's chance to see it.</p>
+<h3>A convention the term sheet does not share</h3>
+<p>If a term sheet puts the pool top-up after the round, the calculator's answer is wrong for that term sheet and right for its stated convention. It says which convention it used every time; it cannot read the term sheet.</p>
+
+<h2 id="testing">How to test it</h2>
+<p>The calculator is tested against rounds worked by hand: a plain round, a post-money SAFE at its cap, a cap above the round, a discounted note, a pool top-up, and the two costs of keeping a share. The notebook is tested on what it refuses as much as on what it keeps. The review is tested against a stand-in database that answers in the real one's text format, with five made-up deals chosen so that each rule has one case that fires and one that nearly does: quiet with a meeting booked, written to but answered, written to an hour ago.</p>
+<p><span class="g v">Verified</span>, live: the review against a real database and mailbox, once, in 14 seconds with no model call; its PDF printed in 12 seconds for a twentieth of a cent; sent by itself on its morning. In the real chat, on made-up numbers: the worked round above; a question about the pipeline answered from the review in 7 seconds for under a cent; two months of a made-up company's figures recorded in 5 seconds for just over a cent, with the fall in revenue and headcount, the rise in burn and the short runway pointed out by code.</p>
+<p><span class="g u">Not tested</span>: the review on a pipeline of real size, or with real people on its deals (the database it ran against held three open entries and no addresses, so "owed a reply" made no mail search and has only its unit test). No real update has been found in the inbox by the morning search. None of the four procedures has been followed in the real chat. Nothing here has been used through a working week.</p>
+
+<div class="box summary"><div class="label">Summary</div>
+<ul>
+<li>Sort recurring work by what it is made of: comparisons go to code, reading to the model, procedures to skills. Most tasks are a mix, and the design is where to cut.</li>
+<li>A pipeline is any object or list with a stage field, found from the layout. Closed stages and deadline fields are found by name, and the review prints what it assumed.</li>
+<li>The review is one message and one PDF, made with no model call, sent once a week and available as a tool.</li>
+<li>Companies' figures are kept as numbers under fixed names. That keeps a stranger's sentences out of a notebook the model reads later.</li>
+<li>When the model does useful arithmetic unasked, move it into code, so that it is done every time.</li>
+<li>The round calculator states its conventions and what it does not handle under every answer, and refuses numbers that do not settle.</li>
+<li>Procedures shipped with a program use the same form as the owner's own, are labelled, can be turned off, and lose to the owner's.</li>
+<li>A check against hand-written answers passes where the real service's answers differ. Print counts of what was read.</li>
+</ul></div>
+
+<div class="box exercises"><div class="label">Exercises</div>
+<ol>
+<li>For each of these, say which of the three kinds of work it is and where you would cut it: preparing a list of co-investors to call; checking that a cap table adds up; writing the quarterly letter to the fund's own backers.</li>
+<li>The rule for a closed stage reads names. Propose a second source of evidence in the database itself (for example, how long entries stay in a stage) and say what it would get wrong.</li>
+<li>"Owed a reply" compares the latest inbound and outbound message for each address. Give two cases where it is wrong (one false alarm, one miss) and a change that fixes one of them without a model.</li>
+<li>Add "net revenue retention" to the notebook. Decide its name, its unit, and whether a fall should be pointed out. What did you have to decide that the existing metrics had already settled?</li>
+<li>Extend the calculator to a term sheet whose pool top-up comes after the round. Work the example above by hand under that convention first, and write the test from your figures.</li>
+<li>The owner teaches a memo format of their own and later deletes it. Trace which skill the model reads at each step, and what the owner is told.</li>
+<li>(Hard, open.) The cash check moved an observation from the model into code. Design a way to find such observations systematically: what would you log, and how would you decide that one had recurred often enough to become a rule?</li>
+</ol></div>

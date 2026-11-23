@@ -103,10 +103,10 @@ def describe_routine(args: dict[str, Any], now=None, with_apps: bool = False, re
             f"Instructions it will follow:\n{text}")
 
 
-def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -> frozenset[str]:
+def routine_tools(with_apps: bool, services: Any = (), attio: Any = None, extra: Any = ()) -> frozenset[str]:
     """What an unattended routine may use: reading only, including the owner's mail and calendar once connected, and the
     reading tools of any other connected service."""
-    extra = {f"mcp__odysseus__{s.slug}_{t}" for s in services for t in ("find", "run")}
+    extra = {f"mcp__odysseus__{s.slug}_{t}" for s in services for t in ("find", "run")} | {_name(n) for n in extra}
     if attio is not None:
         extra |= {attio_mod.ATTIO_FIND, attio_mod.ATTIO_RUN}
     return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset()) | frozenset(extra)
@@ -204,6 +204,11 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(skills_mod.SKILL_SAVE, lambda a: ASK if _after_reading(taint, skill_text(a)) else ALLOW,
               lambda a: skills_mod.describe_save(a, _after_reading(taint, skill_text(a))))
     gate.rule(_name("skill_read"), ALLOW)
+    # Three tools that are code reading or code calculating. The round's sums change nothing. The pipeline review only
+    # reads. Recording a company's figures writes numbers, and nothing else, to the assistant's own notebook, and code
+    # shows the owner each one under the reply.
+    for name in ("round_maths", "pipeline_review", "portfolio_record", "portfolio_show"):
+        gate.rule(_name(name), ALLOW)
     gate.rule(_name("skill_remove"), ALLOW)
     # A search is allowed unless it carries details recognised from the owner's accounts, or more that is not the owner's
     # own words than may leave unasked (taint.py); then the owner is asked.
@@ -360,7 +365,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
                      checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None, peers: Any = None,
-                     skills: Any = None):
+                     skills: Any = None, portfolio: Any = None, reviewer: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -428,6 +433,13 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
             h = attio.handlers()
             h["attio_run"] = unattended(attio, h["attio_run"], journal)
             reading += [tool(n, attio_mod.SCHEMAS[n][0], attio_mod.SCHEMAS[n][1])(h[n]) for n in ("attio_find", "attio_run")]
+        if reviewer is not None:            # the pipeline review, which only reads, and the companies' recorded figures, to read
+            from . import pipeline as pipeline_mod
+            reading.append(tool("pipeline_review", pipeline_mod.SCHEMA[0], pipeline_mod.SCHEMA[1])(reviewer.handler(getattr(attio, "taint", None), unattended=True)))
+        if portfolio is not None:
+            from . import portfolio as portfolio_mod
+            reading.append(tool("portfolio_show", portfolio_mod.SCHEMAS["portfolio_show"][0], portfolio_mod.SCHEMAS["portfolio_show"][1])(
+                portfolio.handlers(journal)["portfolio_show"]))
         mail = [app_tools[n] for n in ("mail_search", "mail_read", "calendar_list") if n in app_tools]
         if mail_only:       # the agent that judges incoming mail: no search to carry anything out, no memory to write to
             return create_sdk_mcp_server(name=SERVER, tools=mail)
@@ -591,6 +603,15 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         from . import sandbox as sandbox_mod
         described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)))
         tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described if n in code]
+    from . import rounds as rounds_mod
+    tools.append(tool("round_maths", rounds_mod.SCHEMA[0], rounds_mod.SCHEMA[1])(rounds_mod.handler(journal)))
+    if portfolio is not None:
+        from . import portfolio as portfolio_mod
+        ph = portfolio.handlers(journal, getattr(gate, "taint", None))
+        tools += [tool(n, portfolio_mod.SCHEMAS[n][0], portfolio_mod.SCHEMAS[n][1])(ph[n]) for n in portfolio_mod.SCHEMAS]
+    if reviewer is not None:
+        from . import pipeline as pipeline_mod
+        tools.append(tool("pipeline_review", pipeline_mod.SCHEMA[0], pipeline_mod.SCHEMA[1])(reviewer.handler(getattr(gate, "taint", None))))
     if skills is not None:
         from . import skills as skills_mod
         sk = skills.handlers(journal, getattr(gate, "taint", None))

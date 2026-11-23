@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 625 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 648 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -126,7 +126,18 @@ reminders fire in UTC.
   `/files remove` with an id deletes one.
 - Tell it how you want a kind of task done ("learn how we write a memo: ...") and it keeps that as a skill, a
   `SKILL.md` file in the data folder, and follows it from then on. `/skills` lists them, `/skills show` with a name
-  prints one and `/skills remove` with a name deletes it.
+  prints one and `/skills remove` with a name deletes it. Four come with it, for an investment firm's regular work: a
+  first-draft memo, a note to a founder (a pass or a follow-up), the pack for a partner meeting, and a first reading
+  of a data room. Teach it your own way under the same name and yours replaces the one that came with it.
+- With Attio connected, it sends a review of the pipeline once a week, worked out by code with no model call: what is
+  open, new, gone quiet, overdue, and who is owed a reply, as a message and a PDF. Ask for it at any time. It finds
+  the pipeline from your workspace's own layout and tells you which stages it took as closed.
+- It keeps the figures your companies report (revenue, cash, burn, headcount and a few more) by company and period,
+  and points out a fall, rising burn, cash going faster than burn explains, short runway and an overdue update. Each
+  morning it looks for such updates in your inbox from companies on a list named portfolio in your database; forward
+  or paste one and it is recorded the same way. `/portfolio` shows what is kept.
+- Ask what a round does to ownership, what notes and SAFEs convert into, or what a pro rata costs, and the sums are
+  done by code with the conventions stated, not by the model.
 - With Langfuse keys set, your messages and the replies are also recorded there. Keys are removed, and the text of mail,
   calendar and app results is replaced by its length unless you set `LANGFUSE_FULL_CONTENT=1`.
 

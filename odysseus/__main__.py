@@ -226,7 +226,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     decisions = Decisions(settings.data_dir / "decisions.jsonl")       # the owner's verdict beside each take on a deck
     checkins = Checkins(settings.data_dir / "checkins.json", today=lambda: now().date())      # people to keep in touch with
     from .skills import SkillStore
-    skills = SkillStore(settings.data_dir / "skills", now=now)       # ways of doing a task that the owner taught (skills.py)
+    from .skills import PLAYBOOKS
+    skills = SkillStore(settings.data_dir / "skills", now=now, builtin=PLAYBOOKS)       # ways of doing a task: the owner's, and those that come with the program (skills.py)
+    from .portfolio import Portfolio
+    portfolio = Portfolio(settings.data_dir / "portfolio.json", today=lambda: now().date())       # figures the firm's companies report (portfolio.py)
     shelf = Shelf(settings.data_dir / "files", now=now)       # what the owner sends is kept, to be handed back when asked for (files.py)
     own_chat = TelegramChat(bot, settings.owner_id)           # a kept file goes to this person's own chat and nowhere else
     # An email address of the assistant's own (mailbox.py), if there is a key. It is made when the person sends /address.
@@ -312,11 +315,25 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         peer_tools = board.handlers(settings.owner_id, now, settings.tz)
         me.closers.append(drafter.runner.close)
 
+    # The weekly look at the pipeline (pipeline.py): code over the firm's database and the owner's mail. Also a tool.
+    reviewer = None
+    if attio is not None:
+        from zoneinfo import ZoneInfo
+        from .pipeline import Reviewer
+        printer = None
+        if settings.e2b_api_key and settings.sandbox_template:
+            from .sandbox import E2B
+            printer = E2B(settings.e2b_api_key, settings.sandbox_template)
+        reviewer = Reviewer(attio, journal, now=now, state_file=settings.data_dir / "pipeline.json",
+                            messages=apps.messages_for_code if apps is not None else None, zone=ZoneInfo(settings.tz) if settings.tz else None,
+                            printer=printer, send_file=lambda name, data, caption: own_chat.send_file(name, data=data, caption=caption),
+                            at=settings.pipeline_review_at)
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
                                 files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
-                                peers=peer_tools, skills=skills)
+                                peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -338,6 +355,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation
     conversation._inbox = inbox
+    conversation._portfolio = portfolio
     if board is not None:
         conversation.alone = lambda: not board.colleagues(settings.owner_id)
     conversation.own_chat = own_chat        # where work offered before a restart reports, once approved
@@ -362,9 +380,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     notify = me.notify = whatsapp.chat() if on_whatsapp else telegram
 
     # Routines run on their own agent, which can only read. In a private chat the chat id is the user's id.
+    reads_too = (("pipeline_review",) if reviewer is not None else ()) + ("portfolio_show",)
     run_routine = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True, apps=apps, attio=attio,
-                                                                           services=services),
-                                      memory, now, with_apps=apps is not None, services=services, attio=attio)
+                                                                           services=services, portfolio=portfolio, reviewer=reviewer),
+                                      memory, now, with_apps=apps is not None, services=services, attio=attio, extra_tools=reads_too)
     scheduler = Scheduler(schedule, notify, journal, ledger, settings.daily_usd,
                           run_routine, now=now, on_delivered=conversation.record_delivery,
                           fallback=telegram if on_whatsapp else None, history_file=settings.data_dir / "routine_history.json")     # WhatsApp refuses messages outside its 24-hour window
@@ -457,6 +476,22 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         capture = Capture(apps.events_between, apps.messages_for_code, apps.my_address, in_database, propose, journal, now=now,
                           state_file=settings.data_dir / "captured.json", at=settings.capture_at, zone=ZoneInfo(settings.tz) if settings.tz else None)
         me.tasks.append(asyncio.create_task(capture.run_forever()))
+    # Once a week: the pipeline review, by code (pipeline.py). Each morning: updates from the firm's companies, found by
+    # code and handed to the assistant one by one to read and record (portfolio.py).
+    if reviewer is not None and settings.pipeline_review_at != "off":
+        me.tasks.append(asyncio.create_task(reviewer.run_forever(notify.send, conversation.record_delivery)))
+    if apps is not None and re.fullmatch(r"\d\d:\d\d", settings.updates_at):
+        from zoneinfo import ZoneInfo
+        from .portfolio import MATERIAL as UPDATE_MATERIAL
+        from .portfolio import UpdateLoop, portfolio_domains
+
+        async def company_domains() -> set:
+            return await portfolio_domains(attio) if attio is not None else set()
+        updates = UpdateLoop(portfolio, apps.messages_for_code, company_domains,
+                             lambda prompt: conversation.handle(settings.owner_id, prompt, own_chat, material=UPDATE_MATERIAL, background=True),
+                             journal, now=now, state_file=settings.data_dir / "updates.json", at=settings.updates_at,
+                             zone=ZoneInfo(settings.tz) if settings.tz else None)
+        me.tasks.append(asyncio.create_task(updates.run_forever()))
     # Connecting a service from the chat (connect.py). Afterwards only this person's assistant is built again, so
     # nobody else notices. Where the sign-in comes back to: a page of this program's own if it has a public address;
     # otherwise this machine for the host, and for an invited person, whose browser cannot reach this machine, the

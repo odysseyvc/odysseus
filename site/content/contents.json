@@ -178,6 +178,12 @@
         },
         {
           "n": 24,
+          "slug": "a-funds-weekly-work",
+          "title": "A fund's weekly work: the review, the figures and the sums",
+          "summary": "How to sort a firm's recurring work into comparisons, reading and procedure: a pipeline review made by code from the database's own layout, companies' reported figures kept as numbers, round maths taken away from the model, and procedures shipped as skills the owner can replace."
+        },
+        {
+          "n": 25,
           "slug": "what-is-built",
           "title": "What is built, what is not, and what comes next",
           "summary": "How to keep an honest status map of an agent, grading each capability by the kind of run behind it, and the map itself: what has run live, what never has, the known faults, and the open problems in order."

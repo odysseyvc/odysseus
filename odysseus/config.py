@@ -29,6 +29,8 @@ class Settings:
     suggest_people: bool = True           # with a check-in that is due, and on request: up to three people to ask that person about, from a web search. 0: off
     checkins_at: str = "09:30"            # when each working day to ask about check-ins that are due and remind colleagues; "off": never
     capture_at: str = "08:30"             # when each day to ask about people met or heard from who are not in the database; "off": never
+    pipeline_review_at: str = "mon 08:00"   # the weekday and time the pipeline review is sent (pipeline.py); "off": only when asked for
+    updates_at: str = "08:45"             # when each day to look for updates from the firm's companies and record their figures (portfolio.py); "off": never
     meeting_briefs: bool = True           # a short brief before each meeting with someone outside the firm; 0 turns it off
     viewer_email: str = ""                # the address given to a document site that asks who is viewing. Empty: the connected mailbox's
     pages_model: str = ""                 # the model that looks at a PDF's pages (pages.py). Empty: the main model
@@ -142,6 +144,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         browser_ask_signed_in=merged.get("ODYSSEUS_BROWSER_ASK_SIGNED_IN", "").strip().lower() not in ("0", "false", "no", "off"),
         background_jobs=_how_many(merged.get("ODYSSEUS_BACKGROUND_JOBS", "")),
         capture_at=(merged.get("ODYSSEUS_CAPTURE_AT", "") or "08:30").strip().lower(),
+        pipeline_review_at=" ".join((merged.get("ODYSSEUS_PIPELINE_REVIEW_AT", "") or "mon 08:00").lower().split()),
+        updates_at=(merged.get("ODYSSEUS_UPDATES_AT", "") or "08:45").strip().lower(),
         checkins_at=(merged.get("ODYSSEUS_CHECKINS_AT", "") or "09:30").strip().lower(),
         suggest_people=merged.get("ODYSSEUS_SUGGEST_PEOPLE", "").strip().lower() not in ("0", "false", "no", "off"),
         meeting_briefs=merged.get("ODYSSEUS_MEETING_BRIEFS", "").strip().lower() not in ("0", "false", "no", "off"),

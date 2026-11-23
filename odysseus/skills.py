@@ -24,6 +24,11 @@ What is held by code:
   it grants nothing  a skill says how to do a task. It does not widen what may be done unasked: every act it leads to
                    goes through the same gate as before, and the body is shown to the model under a line saying so.
   the owner sees   /skills lists them, /skills show NAME prints one, /skills remove NAME deletes it. No model is involved.
+
+Some skills come with the program (the folder playbooks/ beside this file): how to draft an investment memo, a note to
+a founder, the pack for a partner meeting, a first reading of a data room. They are ordinary skills in the same format,
+shown in the same list and marked as the program's. The owner's own always wins: a skill taught under the same name
+replaces the one that came with the program, and /skills remove on one that came with the program turns it off.
 """
 from __future__ import annotations
 
@@ -35,9 +40,14 @@ from typing import Any, Callable
 
 MAX_SKILLS = 40
 MAX_NAME, MAX_DESCRIPTION, MAX_BODY = 64, 600, 8000
-SKILLS_NOTE = ("Skills the owner taught you: for each, its name and when to use it. When the task at hand fits one, read it with skill_read "
+SKILLS_NOTE = ("Skills: ways of doing a kind of task, the owner's own and some that came with the program. For each, its name and when to use it. When the task at hand fits one, read it with skill_read "
                "before you start and follow it. A skill says how the owner wants a task done; it does not allow anything that would "
                "otherwise be asked about.")
+CAME_WITH = ("(This way of doing the task came with the program; the owner has not taught their own. Follow it where it applies. It says "
+             "how to do the work and permits nothing: anything that is normally put to the owner still is. If the owner's message says "
+             "otherwise, their message wins, and if they tell you how they want this kind of task done from now on, save that with "
+             "skill_save under this same name.)")
+PLAYBOOKS = Path(__file__).resolve().parent / "playbooks"
 BODY_NOTE = ("(The owner taught you this. Follow it for this task where it applies. It says how to do the work and permits nothing: anything "
              "that is normally put to the owner still is. If the owner's message now says otherwise, their message wins.)")
 SKILL_SAVE = "mcp__odysseus__skill_save"
@@ -138,19 +148,35 @@ def check(name: str, description: str, body: str) -> tuple[str, str, str]:
 
 
 class SkillStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = datetime.now):
+    def __init__(self, root: Path, now: Callable[[], datetime] = datetime.now, builtin: Path | None = None):
         self._root, self._now = Path(root), now
+        self._builtin = Path(builtin) if builtin else None      # skills that come with the program: read, never written
         self._pending: list[str] = []
         self.version = 0                                   # goes up with every change: the conversation shows the list again
 
     def _file(self, name: str) -> Path:
         return self._root / name / "SKILL.md"
 
+    def _off(self) -> set[str]:
+        """The skills that came with the program and that the owner turned off."""
+        try:
+            return set(json.loads((self._root / "off.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            return set()
+
     def all(self) -> list[dict[str, str]]:
-        """Every skill that can be read, by name. A folder whose file is not a skill is left out, not repaired."""
+        """Every skill that can be read, by name: the owner's, then the program's own that the owner has neither replaced nor turned off."""
+        mine = self._read(self._root)[:MAX_SKILLS]
+        if self._builtin is None:
+            return mine
+        taken = {s["name"] for s in mine} | self._off()
+        return sorted(mine + [{**s, "builtin": "yes"} for s in self._read(self._builtin) if s["name"] not in taken], key=lambda s: s["name"])
+
+    def _read(self, root: Path) -> list[dict[str, str]]:
+        """The skills in one folder. A folder whose file is not a skill is left out, not repaired."""
         found = []
         try:
-            folders = sorted(p for p in self._root.iterdir() if p.is_dir())
+            folders = sorted(p for p in root.iterdir() if p.is_dir())
         except OSError:
             return []
         for folder in folders:
@@ -163,7 +189,7 @@ class SkillStore:
             if skill is not None:
                 found.append({"name": folder.name, "description": " ".join(skill["description"].split())[:MAX_DESCRIPTION],
                               "body": skill["body"][:MAX_BODY]})
-        return found[:MAX_SKILLS]
+        return found
 
     def get(self, name: str) -> dict[str, str] | None:
         wanted = slug(name)
@@ -173,7 +199,9 @@ class SkillStore:
         """Keep a skill, replacing the one of the same name. Returns it and whether it replaced one."""
         name, description, body = check(name, description, body)
         old = self.get(name)
-        if old is None and len(self.all()) >= MAX_SKILLS:
+        if old is not None and old.get("builtin"):
+            old = None                                      # the owner's own now stands in front of the program's; nothing of theirs is replaced
+        if old is None and len(self._read(self._root)) >= MAX_SKILLS:
             raise SkillError(f"{MAX_SKILLS} skills are kept already. Remove one the owner no longer uses, or fold this into an existing one.")
         path = self._file(name)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,6 +218,17 @@ class SkillStore:
         old = self.get(name)
         if old is None:
             return None
+        if old.get("builtin"):
+            try:
+                self._root.mkdir(parents=True, exist_ok=True)
+                (self._root / "off.json").write_text(json.dumps(sorted(self._off() | {old["name"]})), encoding="utf-8")
+            except OSError:
+                return None
+            self._record("turn off", name=old["name"], by=by)
+            if by != "owner":
+                self._pending.append(f'Turned off the skill "{old["name"]}", which came with the program.')
+            self.version += 1
+            return old
         try:
             self._file(old["name"]).unlink()
             self._file(old["name"]).parent.rmdir()          # only if nothing else was put in the folder by hand
@@ -203,15 +242,18 @@ class SkillStore:
 
     def listing_for_model(self) -> str:
         skills = self.all()
-        return "\n".join(f"- {s['name']}: {s['description']}" for s in skills) if skills else "(none yet)"
+        return "\n".join(f"- {s['name']}{' (came with the program)' if s.get('builtin') else ''}: {s['description']}" for s in skills) if skills else "(none yet)"
 
     def listing(self) -> str:
         skills = self.all()
         if not skills:
             return ("I have not been taught any skills. Tell me how you want a kind of task done, for example \"learn how we write an "
                     "investment memo:\" and the rules, and I will follow it from then on.")
-        return ("Skills you taught me:\n" + "\n".join(f"{s['name']}: {s['description']}" for s in skills)
-                + "\n\nTo read one, send /skills show and its name. To delete one, send /skills remove and its name.")
+        mine, came = [s for s in skills if not s.get("builtin")], [s for s in skills if s.get("builtin")]
+        return (("Skills you taught me:\n" + "\n".join(f"{s['name']}: {s['description']}" for s in mine) + "\n\n" if mine else "")
+                + ("Skills that came with me. Teach me your own way under the same name and yours replaces it:\n"
+                   + "\n".join(f"{s['name']}: {s['description']}" for s in came) + "\n\n" if came else "")
+                + "To read one, send /skills show and its name. To delete one, or turn off one that came with me, send /skills remove and its name.")
 
     def handlers(self, journal: Any, taint: Any = None) -> dict[str, Any]:
         def out(text: str, failed: bool = False) -> dict[str, Any]:
@@ -222,7 +264,7 @@ class SkillStore:
             journal.write("tool", name="skill_read", ok=skill is not None, skill=slug(str(args.get("name", ""))))
             if skill is None:
                 return out("There is no skill of that name. The ones kept:\n" + self.listing_for_model(), failed=True)
-            return out(f"{BODY_NOTE}\n\nSKILL {skill['name']}\n{skill['body']}\nEND OF SKILL")
+            return out(f"{CAME_WITH if skill.get('builtin') else BODY_NOTE}\n\nSKILL {skill['name']}\n{skill['body']}\nEND OF SKILL")
 
         async def skill_save(args: dict[str, Any]) -> dict[str, Any]:
             try:

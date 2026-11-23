@@ -46,8 +46,13 @@ async def _bounded(runner: AgentRunner, journal: Journal, prompt: str, seconds: 
 def make_routine_runner(settings: Settings, journal: Journal, read_only_server: Any, memory: MemoryStore,
                         now: Callable[[], datetime] = datetime.now,
                         client_factory: Callable[..., Any] = ClaudeSDKClient, with_apps: bool = False, services: Any = (), attio: Any = None,
-                        model: str | None = None, program_tasks: bool = False):
+                        model: str | None = None, program_tasks: bool = False, extra_tools: Any = ()):
     reads = "".join(s.routine_prompt() for s in services)
+    if "pipeline_review" in extra_tools:
+        reads += ("\n\npipeline_review gives the review of the firm's pipeline as code works it out: what is open, gone quiet, overdue, "
+                  "owed a reply and new. Use it for any such question, and do not work those out yourself.")
+    if "portfolio_show" in extra_tools:
+        reads += "\n\nportfolio_show gives the figures recorded from the firm's companies' updates and what code points out in them."
     if attio is not None:
         reads += ("\n\nYou can read Attio, the firm's customer database, with attio_find and attio_run, for example to check whether a "
                   "company or person is already known to the firm. You cannot file or change anything there.")
@@ -58,7 +63,7 @@ def make_routine_runner(settings: Settings, journal: Journal, read_only_server: 
         base = base.replace(OWNERS_ROUTINE, PROGRAMS_TASK)
     runner = AgentRunner(settings, journal, read_only_server, client_factory, model=model or settings.background_model,
                          system_prompt=base + (ROUTINE_APPS_PROMPT if with_apps else "") + reads,
-                         allowed_tools=routine_tools(with_apps, services, attio))
+                         allowed_tools=routine_tools(with_apps, services, attio, extra_tools))
 
     async def noop(text: str) -> None:
         pass

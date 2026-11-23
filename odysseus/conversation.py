@@ -119,6 +119,7 @@ class Conversation:
         self._checkins = checkins          # people to keep in touch with: checkins.py
         self._skills = skills              # ways of doing a task that the owner taught: skills.py
         self._shown_skills = -1            # the version of the list of skills the model last saw
+        self._portfolio = None             # the figures the firm's companies report (portfolio.py); set by whoever builds the assistant
         self._files = files                # what the owner sent, kept to be handed back: files.py
         # What the program has put to the owner, by the id on its buttons: a fact to save, or work to run. Kept in a file,
         # so that a question still waiting when the program restarts can still be answered (offers.py).
@@ -286,7 +287,7 @@ class Conversation:
                             "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
                             "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
                             "/checkins shows the people I remind you to keep in touch with. "
-                            "/files shows the files you sent that I am keeping. /skills shows what you have taught me to do your way. /address shows my own email address. "
+                            "/files shows the files you sent that I am keeping. /skills shows what you have taught me to do your way and the ways that came with me. /portfolio shows the figures recorded from your companies' updates. /address shows my own email address. "
                             "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
                             "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague.")
             return
@@ -342,6 +343,12 @@ class Conversation:
             else:
                 await chat.send("Send /files to list them, /files send and an id to get one back, or /files remove and an id to delete one.")
             return
+        # The figures recorded from the firm's companies' updates, shown by code. No model is involved.
+        if command.split()[0] == "/portfolio":
+            self._journal.write("command", name="/portfolio")
+            await chat.send((self._portfolio.show(text.split(None, 1)[1] if len(text.split()) > 1 else "")[:3900]) if self._portfolio is not None
+                            else "No company figures are kept here.")
+            return
         # Skills the owner taught, listed, read or deleted by the owner directly. No model is involved.
         if command.split()[0] == "/skills":
             words = command.split()
@@ -358,7 +365,8 @@ class Conversation:
                     await chat.send(f"{skill['name']}\nWhen: {skill['description']}\n\n{skill['body']}")
                 else:
                     self._skills.remove(words[2], by="owner")
-                    await chat.send(f"Deleted the skill \"{skill['name']}\". I will no longer follow it.")
+                    await chat.send(f"Turned off the skill \"{skill['name']}\", which came with me. I will no longer follow it." if skill.get("builtin")
+                                    else f"Deleted the skill \"{skill['name']}\". I will no longer follow it.")
             else:
                 await chat.send("Send /skills to list them, /skills show and a name to read one, or /skills remove and a name to delete one.")
             return
@@ -1014,6 +1022,8 @@ class Conversation:
                 self._memory.pop_changes()   # anything pending is not from this task
             if self._skills is not None:
                 self._skills.pop_changes()
+            if self._portfolio is not None:
+                self._portfolio.pop_changes()
             if self._schedule is not None:
                 self._schedule.pop_changes()
             if self._watches is not None:
@@ -1112,6 +1122,9 @@ class Conversation:
             body += "\n\nMemory: " + "; ".join(changes) + "."
         # So is every skill it saved, changed or removed: a standing instruction never appears without the owner being told.
         for line in (self._skills.pop_changes() if self._skills is not None else []):
+            body += "\n\n" + line
+        # And every figure it recorded from a company's update, so that a misread number is seen the day it is kept.
+        for line in (self._portfolio.pop_changes() if self._portfolio is not None else []):
             body += "\n\n" + line
         acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else []) \
             + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()] \
