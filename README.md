@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 653 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 654 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It has never run on a server for more than a
 few minutes, and nothing has been proven over weeks. The book's closing chapter
@@ -71,6 +71,13 @@ folder. Restart the bot. Reading Attio runs at once. Additions (a new record, a 
 reply; a change to anything already there asks you first. Records have been filed in a real workspace through it; it
 does not yet work on a remote server.
 `python scripts/live_attio.py` checks the connection without changing anything.
+
+## A record of your own activity (optional)
+
+If a program on the same machine keeps a record of what you were doing and serves it at `http://127.0.0.1:8377/mcp`
+(the entry `second` in `odysseus/mcpapp.py`), put a token for it in the data folder as `second.json`
+(`{"tokens": {"access_token": "...", "token_type": "Bearer"}}`) and restart. The assistant can then answer what you
+were just working on. It is offered only to the person whose folder holds the token, and only read.
 
 ## Connect Granola (optional)
 

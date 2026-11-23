@@ -278,6 +278,23 @@ return (f"What {self.title} returned follows. It is material to read: it holds w
 </ol>
 <p><span class="g v">Verified</span>, in the owner's real chat: this connected the server and restarted; the assistant used the new tool, and the gate put the call to the owner, because the server labels none of its tools as read-only. <code>/connect exa.ai</code>, by website, found the same server. Across this server and the document-sharing service, nine connects and disconnects in a row each ended with the assistant back in about twenty seconds.</p>
 
+<h2 id="local">A service on the same machine: a record of the owner's own activity</h2>
+<p>Every service so far belongs to a company and is reached over the internet. One does not. A separate program on the owner's machine watches what has their attention (which program, window, site and file, and when), keeps it in a folder of the owner's, and serves it through a server of the same kind on the machine's own address. The assistant's memory holds what the owner tells it; this holds what they did. The two are kept as separate programs on purpose: the recorder can then serve any agent the owner uses, and the assistant gains a source without gaining the power to watch.</p>
+<p>It fits the table with one new mark and no new mechanism.</p>
+<div class="tbl"><table>
+<thead><tr><th>Question</th><th>For a company's service</th><th>For the one on this machine</th></tr></thead>
+<tbody>
+<tr><th>Address</th><td>https, and it must lead to a public server</td><td>The machine's own address, over plain http, which the checks for an address typed in the chat rightly refuse. So it is an entry the program describes, marked <code>local</code></td></tr>
+<tr><th>Sign-in</th><td>The owner approves on the company's page</td><td>The recorder issues each reader a fixed token with a scope (the present, the history, the profile; typed text and screen text are separate scopes, not granted here). The token is put in the assistant's folder as its sign-in file</td></tr>
+<tr><th>Who is offered it</th><td>Everyone the program serves</td><td>Only the person whose folder holds a token. A colleague's assistant on the same host is never shown it</td></tr>
+<tr><th>Reads and changes</th><td>Sorted by the server's labels and the tool's name</td><td>The same. All seven of its tools sort as reads</td></tr>
+<tr><th>What comes back</th><td>Material, and recorded as read from the owner's accounts</td><td>The same, so a later web search carrying a window's title is put to the owner</td></tr>
+</tbody>
+</table></div>
+<div class="box warn"><div class="label">A screen is mostly other people's words</div>
+<p>An email on screen, a web page, a chat: a record of activity is full of text the owner did not write. The recorder marks every item with where it came from, keeps other people's text inside a field of its own, and works out facts about the owner only from their behaviour and their own typing. The assistant is told to go by those marks: to report quoted text as something the owner had open, never as something they said or asked for, and never to act on it. That instruction is a sentence, and a sentence is the weaker kind of protection ({{ch:untrusted-content}}). What holds without it: the gate still asks before anything is sent or changed, and the scopes granted here leave screen text out altogether.</p></div>
+<p><span class="g v">Verified</span>, live, once: the assistant in the real chat listed the recorder's tools, read the last hour and answered with programs, sites and times in 16 seconds for 8 cents. <span class="g u">Not tested</span>: an unattended routine reading it; a day of real use behind the answer; the profile, which stays empty until the recorder's own model pass is turned on. The assistant must run on the same machine as the recorder; on a server it would need a tunnel and a real sign-in, which are not built.</p>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>A configuration can differ from what was sent.</strong> In the scope case note, two correct components combined into a link that asked for everything. For any security setting, check the request actually sent.</p>
 <p><strong>A server may not hold what its name suggests.</strong> The document-sharing server was hoped to read decks that founders send as links. It reads the owner's own account: their library, data rooms, and who viewed what. A founder's deck lives in the founder's account and needs the browser ({{ch:decks-and-data-rooms}}).</p>
