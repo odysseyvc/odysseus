@@ -112,8 +112,8 @@ APPS["docsend"] = {
 # marked `local`: it is known only to the person whose folder holds a token for it, is never offered by /connect, and
 # is never reached by an assistant running anywhere but beside it. Most of what a screen shows was written by other
 # people, so its own marks of where each item came from are what the model is told to go by.
-APPS["second"] = {
-    "title": "Second",
+APPS["athena"] = {
+    "title": "Athena",
     "url": "http://127.0.0.1:8377/mcp",
     "scope": None,
     "local": True,

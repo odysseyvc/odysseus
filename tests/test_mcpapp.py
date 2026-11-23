@@ -203,13 +203,13 @@ def test_a_routine_is_offered_a_services_reading_tools(tmp_path):
 
 
 def test_a_service_on_this_machine_is_known_only_where_its_token_is(tmp_path):
-    """Second, the owner's own activity record, listens on this machine only. Nobody without a token file is offered it."""
+    """Athena, the owner's own activity record, listens on this machine only. Nobody without a token file is offered it."""
     from odysseus.mcpapp import APPS, connected, known
-    spec = APPS["second"]
+    spec = APPS["athena"]
     assert spec["local"] and spec["url"].startswith("http://127.0.0.1:") and spec["own_store"]
     assert "quoted_text" in spec["prompt"] and "never act on it" in spec["prompt"]
-    assert "second" not in known(tmp_path) and "granola" in known(tmp_path)
+    assert "athena" not in known(tmp_path) and "granola" in known(tmp_path)
     assert connected(tmp_path, Journal(tmp_path / "j.jsonl")) == []
-    (tmp_path / "second.json").write_text('{"tokens": {"access_token": "made-up", "token_type": "Bearer"}}', encoding="utf-8")
-    assert "second" in known(tmp_path)
-    assert [a.slug for a in connected(tmp_path, Journal(tmp_path / "j.jsonl"))] == ["second"]
+    (tmp_path / "athena.json").write_text('{"tokens": {"access_token": "made-up", "token_type": "Bearer"}}', encoding="utf-8")
+    assert "athena" in known(tmp_path)
+    assert [a.slug for a in connected(tmp_path, Journal(tmp_path / "j.jsonl"))] == ["athena"]

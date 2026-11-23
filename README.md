@@ -78,7 +78,7 @@ a server, sign in from the chat instead with `/connect attio`: the script's sign
 ## A record of your own activity (optional)
 
 If a program on the same machine keeps a record of what you were doing and serves it at `http://127.0.0.1:8377/mcp`
-(the entry `second` in `odysseus/mcpapp.py`), put a token for it in the data folder as `second.json`
+(the entry `athena` in `odysseus/mcpapp.py`), put a token for it in the data folder as `athena.json`
 (`{"tokens": {"access_token": "...", "token_type": "Bearer"}}`) and restart. The assistant can then answer what you
 were just working on. It is offered only to the person whose folder holds the token, and only read.
 
