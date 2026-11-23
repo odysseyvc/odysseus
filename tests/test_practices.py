@@ -201,3 +201,70 @@ async def test_what_was_read_stays_on_the_record_for_as_long_as_the_conversation
     await conv.handle(OWNER, "Hello again.", chat)
     await conv.wait()
     assert gate.taint.sources == set()
+
+
+async def test_an_agent_writes_down_once_what_its_tools_weigh_and_whether_any_were_held_back(tmp_path):
+    """The agent library decides by itself whether to send every tool in full or hold some back; the journal says which."""
+    class Weighed(FakeClient):
+        asked = 0
+
+        async def get_context_usage(self):
+            Weighed.asked += 1
+            return {"totalTokens": 15200, "categories": [{"name": "System prompt", "tokens": 5800}, {"name": "MCP tools", "tokens": 8400}, {"name": "Free space", "tokens": 0}],
+                    "mcpTools": [{"name": "mail_read", "tokens": 400, "isLoaded": True}, {"name": "recall", "tokens": 300, "isLoaded": True},
+                                 {"name": "browse", "tokens": 900, "isLoaded": False}]}
+    journal = Journal(tmp_path / "j.jsonl")
+    runner = AgentRunner(settings(tmp_path), journal, object(), client_factory=lambda options=None: Weighed([[result()]], options=options))
+    await runner.run("hi", noop)
+    await runner.run("again", noop)
+    lines = [r for r in journal.read() if r.get("kind") == "context"]
+    assert Weighed.asked == 1 and len(lines) == 1, "asked once for each run of the program, not at every message"
+    assert (lines[0]["tools"], lines[0]["sent_in_full"], lines[0]["held_back"], lines[0]["tool_tokens"]) == (3, 2, 1, 700)
+    assert lines[0]["weights"] == {"system_prompt": 5800, "mcp_tools": 8400}
+
+    class Broken(FakeClient):
+        async def get_context_usage(self):
+            raise RuntimeError("no")
+    other = AgentRunner(settings(tmp_path), journal, object(), client_factory=lambda options=None: Broken([[result(text="Fine.")]], options=options))
+    assert (await other.run("hi", noop)).text == "Fine.", "a failed measurement never costs the owner their reply"
+
+
+def test_the_tools_that_only_read_are_labelled_so_and_nothing_that_sends_or_changes_is(tmp_path):
+    from odysseus import tools
+    from odysseus.gate import ASK
+
+    async def h(args):
+        return {}
+    label = tools.tool("mail_read", "d", {"type": "object", "properties": {}})(h).annotations
+    assert label.model_dump(by_alias=True, exclude_none=True) == {"readOnlyHint": True}, "as it is written on the wire, whichever spelling the library uses inside"
+    for name in ("web_search", "remember", "mail_send", "mail_attachment", "attio_run", "app_run", "schedule", "files_send", "skill_save"):
+        assert tools.tool(name, "d", {"type": "object", "properties": {}})(h).annotations is None, name
+    service = SimpleNamespace(slug="granola")
+    assert tools.only_reads("granola_find", [service]) and not tools.only_reads("granola_run", [service])
+    # Whatever is labelled as reading is something the rules never put to the owner: a question cannot be asked twice at once.
+    gate = tools.make_gate(Journal(tmp_path / "j.jsonl"), with_apps=True, with_watches=True)
+    for name in tools.READS:
+        rule = gate._rules.get(f"mcp__odysseus__{name}")
+        if rule is not None:
+            assert rule.decide({}) != ASK, name
+
+
+def test_the_hour_long_cache_is_off_unless_asked_for_and_only_the_conversation_gets_it(tmp_path):
+    from dataclasses import replace
+    from odysseus.agent import estimate_usd
+    from odysseus.conversation import CACHE_COLD_1H_S, CACHE_COLD_S, Conversation
+    from odysseus.journal import Ledger
+    from odysseus.memory import MemoryStore
+    s, journal = settings(tmp_path), Journal(tmp_path / "j.jsonl")
+    make = lambda st, **kw: AgentRunner(st, journal, object(), client_factory=lambda options=None: FakeClient([[result()]], options=options), **kw)
+    assert "ENABLE_PROMPT_CACHING_1H" not in make(s, persist=True).options().env
+    on = replace(s, cache_1h=True)
+    assert make(on, persist=True).options().env["ENABLE_PROMPT_CACHING_1H"] == "1"
+    assert "ENABLE_PROMPT_CACHING_1H" not in make(on).options().env, "an agent that starts clean each time never reads it back"
+    # What is waited before a large conversation is begun again follows the cache's life.
+    conv = lambda st: Conversation(st, journal, Ledger(journal), make(st), MemoryStore(tmp_path / "memory"))
+    assert (conv(s)._cold_s, conv(on)._cold_s) == (CACHE_COLD_S, CACHE_COLD_1H_S)
+    # The estimate that the budgets run on prices an hour-long write at twice the input price.
+    five = estimate_usd("claude-sonnet-5-5", {"cache_creation_input_tokens": 1_000_000})
+    hour = estimate_usd("claude-sonnet-5-5", {"cache_creation_input_tokens": 1_000_000, "cache_creation": {"ephemeral_1h_input_tokens": 1_000_000}})
+    assert (five, hour) == (2.50, 4.00)

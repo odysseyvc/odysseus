@@ -18,7 +18,8 @@ import json
 
 from typing import Any
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+from claude_agent_sdk import ToolAnnotations, create_sdk_mcp_server
+from claude_agent_sdk import tool as _sdk_tool
 
 from . import apps as apps_mod
 from .apps import Apps
@@ -125,6 +126,27 @@ def describe_search(args: dict[str, Any], taint: Taint) -> str:
                 f"sent to a search company.\n\nDetails recognised: {', '.join(found)}\n\n{shown}")
     return ("Search the web with this? I have read your mail, calendar or apps, a search is sent to a search company, and "
             f"{taint.spill(_sent(args)) or 'this one is more than I send unasked'}.\n\n{shown}")
+
+
+# Tools that change nothing and send nothing anywhere but to the owner's own accounts to fetch from them. They are
+# labelled as reading, which is what lets the agent library run several of them at once when the model asks for
+# several in one step (three messages read together, not one after another). The list is short on purpose:
+# - a web search is not on it: each one is counted against an hour's allowance of what may leave unasked, and two at
+#   once would each be checked before either was counted;
+# - reading an attachment is not: it keeps the file, and may pay for its pages against what is left of the budget;
+# - the `..._run` tools are not: one name covers reading and changing, and a label belongs to the name.
+READS = frozenset({"recall", "list_schedule", "checkin_list", "list_watches", "skill_read", "portfolio_show", "round_maths",
+                   "mail_search", "mail_read", "calendar_list", "inbox_list", "inbox_read", "files_find", "attio_find", "app_find"})
+_READING = ToolAnnotations(readOnlyHint=True)
+
+
+def only_reads(name: str, services: Any = ()) -> bool:
+    return name in READS or any(name == f"{s.slug}_find" for s in services)
+
+
+def tool(name: str, description: str, schema: Any, services: Any = ()):
+    """The agent library's own way of making a tool, with the label for the ones that only read."""
+    return _sdk_tool(name, description, schema, annotations=_READING if only_reads(name, services) else None)
 
 
 def empty_server() -> Any:
@@ -428,7 +450,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         for service in services:            # another connected service: its reads only, checked by code (mcpapp.unattended)
             h, schemas = service.handlers(), service.schemas()
             h[f"{service.slug}_run"] = unattended(service, h[f"{service.slug}_run"], journal)
-            reading += [tool(n, schemas[n][0], schemas[n][1])(h[n]) for n in schemas]
+            reading += [tool(n, schemas[n][0], schemas[n][1], services)(h[n]) for n in schemas]
         if attio is not None:               # the firm's database, to read; filing is never offered to a routine
             h = attio.handlers()
             h["attio_run"] = unattended(attio, h["attio_run"], journal)
@@ -701,7 +723,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         short = f"{service.slug}_run"
         if gate is not None:
             h[short] = gate.guarded(service.run_tool, h[short])   # lock 2
-        tools += [tool(n, schemas[n][0], schemas[n][1])(h[n]) for n in schemas]
+        tools += [tool(n, schemas[n][0], schemas[n][1], services)(h[n]) for n in schemas]
     if attio is not None:
         h = attio.handlers()
         if gate is not None:

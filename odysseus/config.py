@@ -79,6 +79,7 @@ class Settings:
     daily_usd: float = 3.00      # spending limit for one calendar day
     fresh_after_min: int = 120   # after this long without a message, the next one starts a new conversation. 0: never
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
+    cache_1h: bool = False       # keep the conversation's cache for an hour, not five minutes: a dearer write, fewer of them (agent.py)
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
     people_max: int = 10         # how many people this copy serves at most, the host included (people.py)
@@ -199,6 +200,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         max_turns=int(merged.get("ODYSSEUS_MAX_TURNS", 25)),
         fresh_after_min=int(merged.get("ODYSSEUS_FRESH_AFTER_MIN", 120)),
         fresh_above_tokens=int(merged.get("ODYSSEUS_FRESH_ABOVE_TOKENS", 40000)),
+        cache_1h=merged.get("ODYSSEUS_CACHE_1H", "").strip().lower() in ("1", "true", "yes", "on"),
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),

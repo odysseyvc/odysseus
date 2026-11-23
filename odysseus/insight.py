@@ -126,10 +126,21 @@ def usage(rows: list[dict[str, Any]], since: float) -> dict[str, Any]:
     first = sorted(float(s["first_word_s"]) for s in sigs if s.get("first_word_s") is not None)
     secs = sorted(float(s["seconds"]) for s in sigs if s.get("seconds") is not None)
     cost = sum(float(r.get("cost_usd") or 0) for r in rows if r.get("kind") in ("task_end", "tool") and float(r.get("ts") or 0) >= since)
+    ends = [r for r in rows if r.get("kind") == "task_end" and float(r.get("ts") or 0) >= since]
     return {"exchanges": len(sigs), "intents": Counter(s.get("intent", "UNLABELLED") for s in sigs), "outcomes": Counter(s.get("outcome", "UNLABELLED") for s in sigs),
             "faults": Counter(f for s in sigs for f in s.get("faults") or []), "with_a_fault": sum(1 for s in sigs if s.get("faults")),
             "fault_by_intent": Counter(s.get("intent", "UNLABELLED") for s in sigs if s.get("faults")),
-            "first_word_s": first[len(first) // 2] if first else None, "seconds": secs[len(secs) // 2] if secs else None, "cost_usd": round(cost, 2)}
+            "first_word_s": first[len(first) // 2] if first else None, "seconds": secs[len(secs) // 2] if secs else None, "cost_usd": round(cost, 2),
+            "cache_read_share": cache_read_share(ends)}
+
+
+def cache_read_share(ends: list[dict[str, Any]]) -> float | None:
+    """Of every token the model was sent in these tasks, the share it had been sent before and read back from the cache,
+    at a tenth of the price. None when no task recorded its tokens. A low share on a long conversation means the cache
+    is expiring between messages, or that something near the top of what is sent changes from message to message."""
+    read = sum(int(r.get("tokens_cache_read") or 0) for r in ends)
+    sent = read + sum(int(r.get("tokens_in") or 0) + int(r.get("tokens_cache_write") or 0) for r in ends)
+    return round(read / sent, 3) if sent else None
 
 
 def _top(c: Counter, n: int = 5) -> str:
@@ -152,6 +163,8 @@ def digest(people: list[tuple[str, dict[str, Any]]], days: int) -> str:
             lines.append(f"\n{who}: nothing in this time.")
             continue
         speed = (f"first word after {u['first_word_s']:.1f} s, " if u["first_word_s"] is not None else "") + (f"done in {u['seconds']:.0f} s (medians)" if u["seconds"] is not None else "")
+        share = u.get("cache_read_share")
+        speed += f"; {share:.0%} of what the model was sent was read back from the cache" if share is not None else ""
         lines.append(f"\n{who}: {u['exchanges']} exchanges, ${u['cost_usd']:.2f}. {speed}\n  Asked for: {_top(u['intents'])}.\n"
                      f"  Fell short in {u['with_a_fault']}: " + (", ".join(f"{FAULTS.get(k, k)} {v}" for k, v in u["faults"].most_common(6)) or "none") + ".")
     if len(people) > 1 and n:

@@ -108,3 +108,14 @@ def test_the_hosts_own_faults_are_matched_to_their_words():
     history = [{"ts": 950.0, "said": "a", "reply": "b"}, {"ts": 1990.0, "said": "c", "reply": "d"}, {"ts": 100.0, "said": "old", "reply": "old"}]
     got = harvest.faulty(journal, history, since=500.0)
     assert [(g["said"], g["signal"]["faults"]) for g in got] == [("a", ["corrected"])]          # the slow one has no words within two minutes: left out
+
+
+def test_the_share_of_what_was_sent_that_came_back_from_the_cache():
+    rows = [{"kind": "task_end", "ts": 10, "tokens_in": 100, "tokens_cache_read": 8000, "tokens_cache_write": 1900, "tokens_out": 50},
+            {"kind": "task_end", "ts": 11, "tokens_in": 0, "tokens_cache_read": 10000, "tokens_cache_write": 0},
+            {"kind": "task_end", "ts": 1, "tokens_in": 99999},                       # before the time asked about
+            {"kind": "signal", "ts": 10, "intent": "MAIL", "outcome": "ANSWERED"}]
+    u = insight.usage(rows, since=5)
+    assert u["cache_read_share"] == 0.9
+    assert "90% of what the model was sent was read back from the cache" in insight.digest([("a", u)], 7)
+    assert insight.usage([{"kind": "task_end", "ts": 10}], since=5)["cache_read_share"] is None, "tasks that recorded no tokens say nothing"

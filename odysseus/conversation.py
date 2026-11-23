@@ -46,6 +46,7 @@ THREAD_APPROVED = ("Approved. Further replies in this thread to the same people 
 RECAP_EXCHANGES = 3      # how many of the last exchanges a new conversation is told about
 RECAP_SAID, RECAP_REPLY = 500, 1500
 CACHE_COLD_S = 600       # after this long idle, the whole conversation is charged for afresh whatever its size
+CACHE_COLD_1H_S = 3600   # ...and the same when the cache is kept for an hour (Settings.cache_1h)
 FILE_TIMEOUT_S = 180     # how long the text-recognition or speech service gets before the owner is told it failed
 DRAFT_INTERVAL_S = 0.8   # Telegram asks for about one message a second per chat
 
@@ -852,7 +853,7 @@ class Conversation:
         if self._history is None or self._closer is None or self._s.fresh_after_min <= 0:
             return
         mark = self._last_end
-        wait = CACHE_COLD_S if self._runner.context_tokens > self._s.fresh_above_tokens else self._s.fresh_after_min * 60
+        wait = self._cold_s if self._runner.context_tokens > self._s.fresh_above_tokens else self._s.fresh_after_min * 60
 
         async def later() -> None:
             await asyncio.sleep(wait + 2)
@@ -867,6 +868,10 @@ class Conversation:
         except RuntimeError:
             self._closing = None
 
+    @property
+    def _cold_s(self) -> int:
+        return CACHE_COLD_1H_S if getattr(self._s, "cache_1h", False) else CACHE_COLD_S
+
     def _fresh_reason(self) -> str:
         """Why the next message should begin a new conversation, or "" if it should carry on with this one.
 
@@ -880,7 +885,7 @@ class Conversation:
         idle_s = (self._now() - self._last_end).total_seconds()
         if idle_s >= self._s.fresh_after_min * 60:
             return "pause"
-        if idle_s >= CACHE_COLD_S and self._runner.context_tokens > self._s.fresh_above_tokens:
+        if idle_s >= self._cold_s and self._runner.context_tokens > self._s.fresh_above_tokens:
             return "size"
         return ""
 

@@ -16,6 +16,7 @@ estimating their cost from the token counts each call reports.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -92,16 +93,23 @@ PRICES = {
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
 }
+HOUR_WRITE = 2.0     # a cache write kept for an hour, as a multiple of the plain input price
 DEAREST = max(PRICES.values())   # used for a model not in the table, so the estimate errs high
 
 
 def estimate_usd(model: str, usage: dict[str, Any]) -> float:
     p_in, p_out, p_read, p_write = PRICES.get(model, DEAREST)
+    # A write kept for an hour (Settings.cache_1h) costs twice the plain input price, not the five-minute rate. The
+    # usage says how many of the written tokens were of that kind; without that it is all taken as five-minute.
+    written = usage.get("cache_creation_input_tokens") or 0
+    kinds = usage.get("cache_creation")
+    hour = min(written, int((kinds.get("ephemeral_1h_input_tokens") if isinstance(kinds, dict) else 0) or 0))
     return (
         (usage.get("input_tokens") or 0) * p_in
         + (usage.get("output_tokens") or 0) * p_out
         + (usage.get("cache_read_input_tokens") or 0) * p_read
-        + (usage.get("cache_creation_input_tokens") or 0) * p_write
+        + (written - hour) * p_write
+        + hour * p_in * HOUR_WRITE
     ) / 1_000_000
 
 
@@ -238,6 +246,7 @@ def make_policy(allowed: frozenset[str]):
 tool_policy = make_policy(ALLOWED_TOOLS)
 
 
+WEIGH_TIMEOUT_S = 5.0     # for the one question put to the agent library about what the tools weigh
 REFUSED = "The model declined to go on with this one, so nothing more was done. If that looks wrong, say it another way."
 
 
@@ -301,6 +310,7 @@ class AgentRunner:
         # ended when its own estimated cost reaches it, so the daily figure is a ceiling and not only a threshold.
         self.day_room: Callable[[], float] | None = None
         self.compacted = False
+        self._weighed = False       # whether this agent has yet written down what its tools weigh (once per run of the program)
 
     @property
     def in_flight(self) -> float:
@@ -334,7 +344,10 @@ class AgentRunner:
             resume=self.session_id,            # after a restart of the client, carry the conversation on
             # The agent library writes a transcript of every run. It is kept inside the data folder for every agent
             # (conversation, routines, triage), so that mail text never ends up in a folder nobody chose.
-            env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key, "CLAUDE_CONFIG_DIR": str(self._transcripts.resolve())},
+            # Only the agent that keeps a conversation going is given the hour-long cache, and only when the owner has
+            # switched it on: an agent that starts clean each time never reads back what it would pay more to write.
+            env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key, "CLAUDE_CONFIG_DIR": str(self._transcripts.resolve()),
+                 **({"ENABLE_PROMPT_CACHING_1H": "1"} if self._persist and getattr(self._s, "cache_1h", False) else {})},
         )
 
     def _load_session(self) -> str | None:
@@ -392,6 +405,25 @@ class AgentRunner:
                 await client.connect()
             self._client = client
         return self._client
+
+    async def _weigh(self, client: Any) -> None:
+        """Once for each agent in each run of the program, after its first task: what the model is sent before anyone
+        speaks. How many tools there are, how many of them the agent library sent in full and how many it held back to be
+        looked up when wanted, and what the tools and the instructions weigh in tokens. The library decides the holding
+        back by itself, and nothing else says which it chose. It asks the library and not the model, and costs nothing."""
+        if self._weighed or not hasattr(client, "get_context_usage"):
+            return
+        self._weighed = True
+        try:
+            got = await asyncio.wait_for(client.get_context_usage(), WEIGH_TIMEOUT_S)
+            tools = [t for t in got.get("mcpTools") or [] if isinstance(t, dict)]
+            sent = [t for t in tools if t.get("isLoaded", True)]
+            parts = {str(c.get("name", "")).lower().replace(" ", "_"): int(c.get("tokens") or 0) for c in got.get("categories") or [] if isinstance(c, dict)}
+            self._journal.write("context", model=self._model, tools=len(tools), sent_in_full=len(sent), held_back=len(tools) - len(sent),
+                                tool_tokens=sum(int(t.get("tokens") or 0) for t in sent), total_tokens=int(got.get("totalTokens") or 0),
+                                weights={k: v for k, v in parts.items() if k and v})
+        except Exception as e:
+            self._journal.write("error", where="agent.weigh", error=type(e).__name__)
 
     async def reset(self) -> None:
         """Throw the client away. The next task starts a new one and resumes the session."""
@@ -513,6 +545,7 @@ class AgentRunner:
             await self.reset()
             return Outcome("stopped" if self._stopped else "error", text=last or current, turns=len(calls), detail="no result")
 
+        await self._weigh(client)
         total = float(result.total_cost_usd or 0.0)
         continued = bool(result.session_id) and result.session_id == self.session_id
         cost = max(0.0, total - self._session_cost) if continued else total
