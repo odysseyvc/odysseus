@@ -282,8 +282,13 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     code_tools = None
     if settings.e2b_api_key:
         from .sandbox import E2B, CodeRunner
-        code_tools = CodeRunner(E2B(settings.e2b_api_key, settings.sandbox_template), journal, ledger, settings.daily_usd, gate.taint).handlers(
-            shelf, lambda entry: deliver(shelf, entry, own_chat))
+        code_runner = CodeRunner(E2B(settings.e2b_api_key, settings.sandbox_template), journal, ledger, settings.daily_usd, gate.taint)
+        if settings.review_model.lower() != "off":
+            # Before a document goes, its pages are read once more against what the owner asked, by a model that did not write it (pagecheck.py).
+            from .pagecheck import make_page_checker
+            code_runner.checker = make_page_checker(journal, settings.anthropic_api_key, settings.pages_check_model or settings.background_model)
+            code_runner.request = lambda: gate.request
+        code_tools = code_runner.handlers(shelf, lambda entry: deliver(shelf, entry, own_chat))
 
     # Asking a colleague's assistant (peers.py): this person's desk at the switchboard, and the tool that uses it.
     peer_tools = drafter = None

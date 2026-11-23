@@ -351,6 +351,32 @@ return file_block(name, result, sights)</code></pre>
 </table></div>
 <p>Run once in the real chat, on an invented company: a two-page investment memo with five figures in cards across the top, a revenue chart, a table of growth by month, a table of the round, risks, a list of what was not given, a boxed section left open for the owner's recommendation, and a numbered footer on each page. One trial, then the sending run. It took 293 seconds and 33 cents; the first attempt to start the machine failed on a dropped connection, and the time includes it. <span class="g u">Not tested</span>: a document of ten pages or more, where page breaks go wrong most often; the owner's own look applied to a printed PDF, since the template mechanism below is for PowerPoint and Word files only.</p>
 
+<h3 id="second-reader">A second reader for the pages</h3>
+<p>In a trial the model that wrote the document looks at its own pages. It checks what it thought to check. A comparison with a hosted service whose grader reads the result in a context of its own ({{ch:build-or-buy}}) showed the gap: the writer had put a currency sign on every amount, which the request never gave, looked at its pages, and sent them.</p>
+<p>So a trial now ends with one more reading, by a model that did not write the file. It is the same idea as the second reader for outgoing mail ({{ch:a-second-reading}}), applied to a document.</p>
+<div class="tbl"><table>
+<thead><tr><th>Question</th><th>Answer</th></tr></thead>
+<tbody>
+<tr><th>What is it given?</th><td>The owner's request with the exchanges before it; the words on the pages, taken by fixed code on the machine; and the same small picture the writer sees. The picture alone would not do: at the size that fits twelve pages on a sheet, body text cannot be read. No tools</td></tr>
+<tr><th>What may it say?</th><td>Lines that begin with one of four fixed words (missing, wrong, added, layout) and say what in a few words; at most eight; or one word for nothing found. Code drops every other line</td></tr>
+<tr><th>Where does its answer go?</th><td>To the writer, under the trial's pictures, marked as the notes of a reader that can be wrong. The owner does not see it</td></tr>
+<tr><th>What can it decide?</th><td>Nothing. It cannot stop or send a file. The writer corrects its code or does not</td></tr>
+<tr><th>What if it fails?</th><td>A failed, slow or shapeless answer adds nothing, and the trial comes back as it did before</td></tr>
+</tbody>
+</table></div>
+<p>"Added" needs a limit, or it would fire on every memo built from a deck the reader cannot see. The reader is told to report an addition only when the request itself gives the facts or says to use only what is given, and that a section nobody asked for, with nothing false in it, is not a fault.</p>
+<p>Which model reads was settled by trying both on the memo that had the fault, and on the same memo with the fault taken out.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>The small model</th><th>The main model</th></tr></thead>
+<tbody>
+<tr><th>Found the currency sign</th><td>Yes</td><td>Yes</td></tr>
+<tr><th>Lines in all, on the faulty memo</th><td>3</td><td>5, two of them about figures that followed from the request, one about a bracket lost in taking the text off the page</td></tr>
+<tr><th>Cost of one reading</th><td>Under a tenth of a cent</td><td>Two thirds of a cent</td></tr>
+<tr><th>Time</th><td>5 to 15 seconds</td><td>2 to 3 seconds</td></tr>
+</tbody>
+</table></div>
+<p>The small model reads by default: it found the fault, said less that was not one, and costs a ninth as much. Then the whole path was run once in the real chat on the same request: the reader returned three lines on the trial, the writer changed its code, and the memo that was sent had no currency sign. That run took 68 seconds and 14 cents, against 76 seconds and 17 cents for the run without the reader; one run each, so the difference in time is not a finding. <span class="g u">Not tested</span>: a slide deck; a document built from material the reader cannot see; how often its lines are wrong and the writer follows them anyway.</p>
+
 <h2 id="templates">Starting from the owner's own template</h2>
 <p>A deck made from a blank file is correct and looks like nobody's. A firm has its own: a slide master with its colours, typefaces and logo, a memo with its header and its named styles. A model asked to imitate these from a description gets them nearly right, which is worse than plain. So the look is not described to the model at all. The owner sends the file once and says it is the template, and after that the look comes out of the file.</p>
 <div class="tbl"><table>
