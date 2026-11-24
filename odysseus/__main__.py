@@ -484,6 +484,15 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     me.tasks.append(asyncio.create_task(scheduler.run_forever()))
     if briefer is not None:
         me.tasks.append(asyncio.create_task(briefer.run_forever()))
+    # Each morning: three of the owner's own past notes from their site, and the questions still open (resurface.py).
+    # Code only, reads only, the host's alone. Telegram, for the links and the italics.
+    if host and settings.reading_repo and settings.reading_token and re.fullmatch(r"\d\d:\d\d", settings.review_at):
+        from .booknotes import GitHubFiles
+        from .resurface import Review
+        review = Review(GitHubFiles(settings.reading_repo, settings.reading_token, settings.reading_branch), telegram.send_html, journal,
+                        state_file=settings.data_dir / "review.json", at=settings.review_at, studio=settings.reading_studio,
+                        on_delivered=conversation.record_delivery)
+        me.tasks.append(asyncio.create_task(review.run_forever()))
     # Once a week: has anything happened to the companies the owner passed on (decisions.py). A read-only run on the small model.
     watch_runner = make_routine_runner(settings, journal, make_tool_server(search, journal, memory, read_only=True), memory, now, program_tasks=True)
     passwatch = PassWatch(decisions, watch_runner, notify.send, journal, ledger, settings.daily_usd, now=now,

@@ -70,6 +70,15 @@ class TelegramChat:
             await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
             await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW, **self._quoting())
 
+    async def send_html(self, text: str) -> None:
+        """A message the program wrote itself, with Telegram's HTML for bold, italics and links. Anything taken from
+        elsewhere must be escaped by the caller (resurface.py does). No link previews, as with send."""
+        try:
+            await self._bot.send_message(self._chat_id, text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
+            await self._bot.send_message(self._chat_id, text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
+
     async def draft(self, draft_id: int, text: str) -> None:
         await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
 
