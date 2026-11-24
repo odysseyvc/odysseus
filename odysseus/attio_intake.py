@@ -31,6 +31,7 @@ from .gate import ALLOW, ASK, Gate
 
 ATTIO_PLAN, ATTIO_FILE = "mcp__odysseus__attio_plan", "mcp__odysseus__attio_file"
 PLAN_KEEPS_S = 20 * 60
+NOTE_MOST = 4000         # characters of one note; the owner is shown every character that is filed
 MATCH_BY = {"companies": ("domains", "name"), "people": ("email_addresses", "linkedin", "name"), "deals": ("name",)}
 MAX_STEPS = 24
 
@@ -303,8 +304,13 @@ class Intake:
             ref, title, content = str(n.get("on", "")).lstrip("@"), " ".join(str(n.get("title", "")).split()), str(n.get("content", "")).strip()
             if ref not in refs or not title or not content:
                 raise AppError("note: give `on` (the ref of a record in this plan), a `title` and the `content`.")
-            lines.append(f"- A note on {labels[ref]}, titled \"{title}\":\n    {content[:1200]}")
-            steps.append({"do": "note", "ref": ref, "title": title, "content": content[:8000]})
+            if len(content) > NOTE_MOST:
+                # What is filed is what the owner was shown. The page used to show the first 1,200 characters and the
+                # program filed up to 8,000, so most of a long note went into the database unseen.
+                raise AppError(f"note \"{title}\": the content is {len(content)} characters and the owner is shown every note whole, so the most "
+                               f"is {NOTE_MOST}. Shorten it, or split it into several notes with titles that say which part each is.")
+            lines.append(f"- A note on {labels[ref]}, titled \"{title}\":\n    {content}")
+            steps.append({"do": "note", "ref": ref, "title": title, "content": content})
         plan_id = secrets.token_hex(3)
         summary = "\n".join(lines)
         self._plans = {k: v for k, v in self._plans.items() if self.clock() - v["at"] < PLAN_KEEPS_S}

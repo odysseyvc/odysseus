@@ -245,7 +245,8 @@ def test_a_label_can_excuse_only_the_word_post_and_only_in_a_name_that_reads():
     assert classify(PIPELINE) == "reach", "by name alone, POST asks"
     assert classify(PIPELINE, {"readOnlyHint"}) == "read", "name reads but for POST, and the connector says read-only"
     assert classify("SLACK_POST_MESSAGE", {"readOnlyHint"}) == "reach", "MESSAGE is still a hard word, whatever the label says"
-    assert classify("ATTIO_POST_V2_NOTES", {"readOnlyHint"}) == "change", "nothing in the name reads, so the label alone is not enough"
+    assert classify("ATTIO_POST_V2_NOTES", {"readOnlyHint"}) == "reach", "nothing in the name reads, so the label is not listened to at all"
+    assert classify("GOOGLESHEETS_POST_UPDATE", {"readOnlyHint"}) == "reach", "a vendor's label cannot turn a risky name into a small change"
     assert classify("ATTIO_DELETE_NOTE", {"readOnlyHint"}) == "reach", "a wrong label does not make a deletion a read"
 
 

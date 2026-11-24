@@ -78,7 +78,19 @@ class WatchStore:
         self._now = now
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("create table if not exists watches (id text primary key, text text, about text, repeat text, created text)")
+        # Messages a watch produced that have not reached the owner yet. A once-only watch is cancelled when it fires, so if
+        # its message could not be sent and the program then restarted, nothing was left to say it had ever fired.
+        self._db.execute("create table if not exists unsent (n integer primary key autoincrement, text text)")
         self._pending: list[str] = []
+
+    def hold(self, message: str) -> None:
+        self._db.execute("insert into unsent (text) values (?)", (message,))
+
+    def held(self) -> list[str]:
+        return [r[0] for r in self._db.execute("select text from unsent order by n")]
+
+    def release(self, message: str) -> None:
+        self._db.execute("delete from unsent where n = (select min(n) from unsent where text = ?)", (message,))
 
     def add(self, text: str, about: str, repeat: str = "once") -> Watch:
         text = " ".join(str(text).split())
@@ -225,7 +237,8 @@ class Watcher:
         self._tasks: set[asyncio.Task] = set()
         self._limited_told: datetime | None = None     # when the owner was last told that events are going unchecked
         self._failed_told: datetime | None = None      # when the owner was last told that a check itself failed
-        self._unsent: list[str] = []        # messages that could not be sent, kept to try again
+        held = getattr(store, "held", None)
+        self._unsent: list[str] = list(held()) if callable(held) else []     # messages that could not be sent, kept (on disk) to try again
         self.retry_wait_s = 2.0
         self._failures, self._told_down = 0, False     # how many times running the listener has failed, and whether the owner knows
         self._died_told: datetime | None = None        # when the owner was last told that an open connection had died
@@ -287,6 +300,8 @@ class Watcher:
             for message in list(self._unsent):       # something matched a watch and the message did not leave: try again
                 if await self._say(message):
                     self._unsent.remove(message)
+                    if hasattr(self._store, "release"):
+                        self._store.release(message)
                     self._on_delivered(message)
             if rounds is not None:
                 rounds -= 1
@@ -382,6 +397,8 @@ class Watcher:
                         self._on_delivered(message)
                     else:
                         self._unsent.append(message)      # kept, and tried again every minute (keep_listening)
+                        if hasattr(self._store, "hold"):
+                            self._store.hold(message)
                         unsent += 1
         outcome = ("unsent" if unsent == len(told) else "told") if told else ("quiet" if status == "done" else "failed")
         if outcome == "failed" and (self._failed_told is None or now - self._failed_told >= timedelta(hours=1)):

@@ -303,6 +303,8 @@ class McpApp:
         self._changes: list[str] = []
         self._returned: list[str] = []      # what this service handed back lately; giving it back is not a leak
         self.taint = None       # set by make_gate
+        self.pins: Path | None = None       # set by connected(): where the fingerprint of each service's listing is kept
+        self.listing_changed: list[str] = []    # tools whose name, description or inputs differ from the last listing seen
 
     def _kind(self, row: dict[str, Any]) -> str:
         # A connection that cannot write (the server offers only reading tools and the sign-in asked only for reading) needs no
@@ -334,7 +336,23 @@ class McpApp:
             rows = await self._call(self._b.list_tools())
             hidden = tuple(self.spec.get("hide") or ())
             self._tools = {r["name"]: r for r in rows if r["name"] not in hidden}
+            self.listing_changed = pin_listing(self.pins, self.slug, self._tools, self._journal)
         return self._tools
+
+    def _read_listing(self) -> None:
+        """Record, for the gate, that the model has read what a vendor wrote about its tools, where that is not taken on trust.
+
+        A service the owner added by name from the chat is anyone's server, and its descriptions are other people's
+        writing like a web page. A service built into the program was looked at when it was added, and its listing is in
+        front of the model in most conversations, so counting it would make the program ask about every save to memory;
+        it is trusted as it was when last seen. If its listing has changed since, it is not what was looked at, and it
+        counts until the program has been restarted and the new listing has become the one last seen."""
+        if self.taint is None:
+            return
+        if self.spec.get("custom"):
+            self.taint.saw(f"{self.title}'s own descriptions of its tools")
+        elif self.listing_changed:
+            self.taint.saw(f"{self.title}'s descriptions of its tools, which have changed since I last read them")
 
     # --- the gate ---------------------------------------------------------------------
 
@@ -391,6 +409,7 @@ class McpApp:
 
         async def find(a):
             tools = await self._catalogue()
+            self._read_listing()
             wanted = [str(n).strip() for n in (a.get("tools") or []) if str(n).strip()][:4]
             self._journal.write("tool", name=f"{self.slug}_find", ok=True, tools=len(wanted) or len(tools))
             if not wanted:
@@ -482,4 +501,36 @@ def connected(data_dir: Path, journal: Journal) -> list[McpApp]:
         if tokens.signed_in() or spec.get("open"):      # "open": a public server that asks for no sign-in
             opener = _checked(tokens, spec["url"], spec["scope"]) if spec.get("custom") else None
             out.append(McpApp(slug, McpBackend(tokens, url=spec["url"], scope=spec["scope"], opener=opener), journal, spec))
+            out[-1].pins = Path(data_dir) / "listings.json"
     return out
+
+
+def pin_listing(path: Path | None, slug: str, tools: dict[str, dict[str, Any]], journal: Journal) -> list[str]:
+    """Compare a service's listing with the one last seen, tool by tool, and keep the new one. Returns the tools that differ.
+
+    An approval binds a tool's name and inputs, never its description, and a tool whose label changes from "changes
+    things" to "only reads" would join the tools that run unasked with no question. Nothing compared one listing with the
+    last. Now a fingerprint of each tool's name, description, labels and inputs is kept between runs; a difference is
+    written to the journal, and the caller treats the listing as text the owner has not seen. The first listing ever
+    seen has nothing to differ from."""
+    if path is None:
+        return []
+    import hashlib
+    now = {name: hashlib.sha256(json.dumps([row.get("description"), row.get("labels"), row.get("annotations"), row.get("inputs")],
+                                           sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()[:16] for name, row in tools.items()}
+    try:
+        seen = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        seen = {}
+    before = seen.get(slug)
+    changed = sorted(n for n in set(now) | set(before or {}) if (before or {}).get(n) != now.get(n)) if before is not None else []
+    if before != now:
+        seen[slug] = now
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(seen, ensure_ascii=False), encoding="utf-8")
+        except OSError as e:
+            journal.write("error", where="mcpapp.pin", error=type(e).__name__)
+    if changed:
+        journal.write("listing", app=slug, changed=changed[:40], count=len(changed))
+    return changed

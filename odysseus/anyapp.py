@@ -86,6 +86,9 @@ def classify(slug: str, labels: frozenset[str] | set[str] = frozenset()) -> str:
       - a name that reads, labelled as creating, updating or destroying, is not a read (stricter than the name);
       - a name that reads but for the word POST, labelled read-only, is a read. Many services search by POST, and
         this is the one case where a label makes the program ask less. Name and label must both say "reads".
+    The label is listened to only for such a name. It once removed POST from the words that make a name risky whatever
+    else the name said, so a name with POST and a changing word (POST_UPDATE), labelled read-only by its vendor, stopped
+    being a "reach" and could then run unasked as a small change. A vendor's label must never be able to do that.
     """
     ordered = slug.upper().split("_")[1:]
     words = set(ordered)
@@ -94,7 +97,7 @@ def classify(slug: str, labels: frozenset[str] | set[str] = frozenset()) -> str:
     labels = set(labels)
     if labels & CHANGE_LABELS:
         return "reach" if hard or DESTROY_LABEL in labels else "change"
-    if READ_LABEL in labels:
+    if READ_LABEL in labels and reads and not words & CHANGES:
         hard -= HTTP_VERBS
     if reads and not hard and not words & CHANGES:
         return "read"       # includes BATCH_GET: fetching many things at once is still only fetching
@@ -247,6 +250,11 @@ class AnyApp:
                 lines.append(f"{slug}  (app: {kit}{tag}; {self.kind(slug)})\n  {' '.join(str(info.get('description', '')).split())[:240]}\n"
                              f"  inputs: {json.dumps(info.get('input_schema') or {}, ensure_ascii=False)[:1600]}")
             self._journal.write("tool", name="app_find", ok=True, tools=len(wanted))
+            if self.taint is not None:
+                # The descriptions are written by thousands of other parties and are now in front of the model like any
+                # other text. Until this was recorded, a task that had read only these counted as having read nothing,
+                # and a save to memory after it was not asked about.
+                self.taint.saw("an app catalogue's descriptions of its tools")
             return "Tools from the connector's catalogue for this job. Run one with app_run.\n\n" + "\n\n".join(lines)
 
         async def app_connect(a):

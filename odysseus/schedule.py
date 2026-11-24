@@ -196,11 +196,37 @@ class Scheduler:
         self._unsaid_logged = False
         self._retries: dict[str, tuple[int, datetime]] = {}     # job id -> (tries so far, when it was first due)
         self._history_file = history_file                # what each routine sent the last few times, so it does not repeat itself
+        # Retries in hand and failures not yet announced were held in memory only: a restart in the middle of a retry
+        # forgot how many tries there had been and when the job was really due, and lost any failure the owner had not
+        # yet been told of. They are kept in a small file beside the history, and read back here.
+        self._state_file = history_file.with_name("schedule_state.json") if history_file is not None and hasattr(history_file, "with_name") else None
+        self._restore()
         try:
             import inspect
             self._takes_previous = len(inspect.signature(run_routine).parameters) >= 2
         except (TypeError, ValueError):
             self._takes_previous = False
+
+    def _restore(self) -> None:
+        if self._state_file is None:
+            return
+        try:
+            import json
+            data = json.loads(self._state_file.read_text(encoding="utf-8"))
+            self._unsaid = [str(x) for x in data.get("unsaid", [])][-20:]
+            self._retries = {str(k): (int(v[0]), datetime.fromisoformat(v[1])) for k, v in (data.get("retries") or {}).items()}
+        except (OSError, ValueError, TypeError, IndexError):
+            pass
+
+    def _keep(self) -> None:
+        if self._state_file is None:
+            return
+        try:
+            import json
+            self._state_file.write_text(json.dumps({"unsaid": self._unsaid[-20:], "retries": {k: [n, due.isoformat()] for k, (n, due) in self._retries.items()}},
+                                                   ensure_ascii=False), encoding="utf-8")
+        except OSError as e:
+            self._journal.write("error", where="scheduler.state", error=type(e).__name__)
 
     def _sent_before(self, job_id: str) -> tuple[str, ...]:
         try:
@@ -244,6 +270,7 @@ class Scheduler:
         """Run every job that is due. Returns how many ran."""
         if self._unsaid:
             await self._say_unsaid()
+            self._keep()            # what has now been said is no longer owed after a restart
         due = self._store.due()
         for job in due:
             await self._run(job)
@@ -268,12 +295,14 @@ class Scheduler:
             # It could not reach something. Nobody is watching, and a daily routine would otherwise be lost until
             # tomorrow: run it once more in five minutes. Only once, because each run costs.
             self._retries[job.id] = (tries + 1, due)
+            self._keep()
             self._store.postpone(job, self._now() + RETRY_AFTER[1])
             self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome="retrying", detail=detail[:200], attempt=tries + 1, cost_usd=cost)
             return
         if outcome == "failed" and job.kind == "reminder" and tries < len(RETRY_AFTER):
             # The message did not leave. Keep the reminder and try again shortly; do not delete it.
             self._retries[job.id] = (tries + 1, due)
+            self._keep()
             self._store.postpone(job, self._now() + RETRY_AFTER[tries])
             self._journal.write("scheduled_run", job=job.id, job_kind=job.kind, outcome="retrying", detail=detail[:200], attempt=tries + 1)
             return
@@ -285,7 +314,9 @@ class Scheduler:
                             cost_usd=cost, late=late)
         if outcome == "failed":
             self._unsaid.append(f"A scheduled {job.kind} failed and was not carried out: \"{job.text[:120]}\". Reason: {detail or 'unknown'}.")
+        self._keep()
         await self._say_unsaid()
+        self._keep()
 
     async def _say_unsaid(self) -> None:
         """Tell the owner of failures they have not heard of yet. Silence must never mean failure, so a notice that
