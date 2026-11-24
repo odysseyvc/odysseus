@@ -8,6 +8,15 @@
 <li>List what a minimal first version must have, and what it must not have yet.</li>
 </ul></div>
 
+<div class="box unit"><div class="label">This unit</div>
+<dl>
+<dt>Week</dt><dd>1 of 14</dd>
+<dt>Before it</dt><dd>{{ch:what-a-personal-agent-is}}; Definitions 1 to 3 and 6, Property 1 and the section on cost of <a href="notation.html">the model</a>. Definitions 1 to 3 are first used here.</dd>
+<dt>Read first</dt><dd>{{cite:yao2023react}}; {{cite:anthropic2025contexteng}}.</dd>
+<dt>Laboratory</dt><dd><a href="labs.html#lab1">1: the loop, the journal and a conversation that can be stopped</a></dd>
+<dt>Problem set</dt><dd><a href="problem-sets.html#ps1">1</a></dd>
+</dl></div>
+
 <h2 id="problem">The problem: a model that cannot look things up</h2>
 <p>The owner writes: <em>"Is the museum on Harbour Street open on Monday, and what does a ticket cost?"</em></p>
 <p>A language model on its own can only answer from what it absorbed during training. Opening hours change; the model's knowledge stops at a date. It may answer confidently and wrongly. What it needs is to <em>look</em>: to search the web, read what comes back, perhaps search again with a better query, and only then answer, saying where the answer came from.</p>
@@ -71,15 +80,16 @@ PRICES = {
 </svg>
 <figcaption>The agent loop. Notice that the model appears in one box only. Every arrow out of the model goes through code before anything happens, and the conditions that end a turn early are checked by code without asking the model.</figcaption>
 </figure>
-<p>A turn can end in five ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
+<p>A turn can end in six ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>budget</code>, <code>day_budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
 <ul>
 <li>done: the model replied with text and no further tool request.</li>
 <li>stopped: the owner sent "stop". This is matched by the shell and never shown to the model ({{ch:the-conversation}}).</li>
 <li>budget: the estimated cost of this task's steps reached the per-task limit, by default $0.50.</li>
-<li>turn_limit: the task used more steps than allowed, by default 25.</li>
+<li>day_budget: the task's estimated cost reached what was left of the day's budget ({{ch:the-conversation}}).</li>
+<li>turn_limit: the task used more steps than allowed, by default 25. The count is checked after each step, so the limit is noticed on the step after the last one allowed.</li>
 <li>error: something failed, and the owner is told it could not finish.</li>
 </ul>
-<p>Only the first is chosen by the model. The other four are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
+<p>Only the first is chosen by the model. The other five are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
 
 <h2 id="context">Context, and why it runs out</h2>
 <div class="box definition"><div class="label">Definitions</div>
@@ -294,6 +304,29 @@ else:
 </ol>
 <p>It must also have no tool that sends, pays, deletes or shares. With only a search, the worst outcome of a successful prompt injection is a wrong or strange reply. That stops being true the moment a consequential tool is added, which is why the gate must be built before the tools that need it.</p>
 
+<h2 id="theory">The theory</h2>
+<p>Here the first three definitions of <a href="notation.html">the model</a> are met in code. A model call is Definition 1: a context <span class="math">c = (s, h)</span> in, an action out. Here <span class="math">s</span> is the system prompt with the tool descriptions, and <span class="math">h</span> is the conversation with every tool result in it. Nothing is assumed of <span class="math">M</span> but its type, which is why the model keeps nothing between calls: each call is a fresh draw from <span class="math">M(c)</span>, and all it knows is <span class="math">c</span>. A tool handler is Definition 2: it receives inputs <span class="math">x</span>, may change the world, and returns <span class="math">r</span>, which is appended to <span class="math">h</span>. The agent loop is Definition 3: a run <span class="math">c₀ →ᵃ⁰ c₁ →ᵃ¹ …</span> that ends when an action is text. One turn is one run.</p>
+<p>Two refinements fit the definition to the code. One model call may request several tools, each checked, run and appended before the next call. And code can end a run before the model writes text: every status but <code>done</code> ends a <em>truncated</em> run, a prefix cut where the model did not choose.</p>
+<p>The principle is Definition 6 with the record of reading ignored. The policy of this chapter is</p>
+<p class="eq">G(τ, x, T) = allow if τ ∈ ALLOWED_TOOLS; refuse otherwise</p>
+<p>a gate with two answers that looks at the tool's name alone. If every path from the model's output to execution passes through it (Property 1), then for every model each executed call is on the list. The list holds tools that read public information or write only the program's own files, so no run can send, change or destroy anything in the owner's accounts, whatever the model read. That is a property; the quality of the answers would be a measurement, and none is reported.</p>
+<p>Calls per task. If a task ends <code>done</code> after <span class="math">u</span> tool requests, every model call but the last requested at least one tool, so the number of calls is <span class="math">m ≤ u + 1</span>, with equality when each requests exactly one. The museum task has <span class="math">u = 1</span> and <span class="math">m = 2</span>.</p>
+<p>Context growth. Let <span class="math">c₀</span> be the tokens of the fixed part of the first call (system prompt, tools, memory if shown, the message) and <span class="math">δ</span> the tokens each call adds. By the Cost section of the model, <span class="math">m</span> calls send <span class="math">m·c₀ + δ·m(m+1)/2</span> input tokens. The conversation is one long session, so the same holds across turns with <span class="math">m</span> counting every call since the last compaction: input grows with the square of the number of calls. Two habits of the code act on the terms. The cut at 12,000 characters bounds the <span class="math">δ</span> one search can add, and compaction replaces <span class="math">h</span> with a summary, restarting the sum. The cache changes the price of the square term, not its size: if every call after the first reads the earlier prefix from the cache and writes only its own new tokens, the repeated tokens are paid at <span class="math">p<sub>cr</sub></span>, which for the mid-priced model is a twentieth of <span class="math">p<sub>in</sub></span>.</p>
+<div class="box theory"><div class="label">Property: a limit is detected within one call of being crossed</div>
+<p>Let <span class="math">N</span> be the step limit and <span class="math">B</span> the money limit of a task. A task with status <code>done</code> made at most <span class="math">N</span> model calls; unless the owner stops it first, a limit is recorded no later than call <span class="math">N + 1</span>; and when the money limit is recorded, the estimated spend is below <span class="math">B</span> plus the estimate of the call that crossed it.</p>
+<p><em>Argument.</em> The check runs on every finished model message before the next is read, and counts calls by message id, so a call in pieces counts once. Before the crossing call the sum was below <span class="math">B</span>, or the check would have fired. A recorded limit outranks the model's success, so a task of more than <span class="math">N</span> calls cannot end <code>done</code>.</p>
+<p>The property bounds detection, not spending, and a bound on spending fails in three places. What the library does between the request to interrupt and stopping is outside this code. The estimate uses a price table that can be out of date. And the check sums model calls only, so the search service's own charge, which the daily ledger counts, does not count towards <span class="math">B</span>.</p></div>
+<div class="tbl"><table>
+<thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
+<tbody>
+<tr><td>A tool not on the list does not run</td><td>Property</td><td>Argued from <code>options</code> and the policy; tested in <code>tests/test_slice.py</code></td></tr>
+<tr><td>A task that ends <code>done</code> made at most 25 calls</td><td>Property</td><td>Argued from the check and the order of statuses; both limits tested with a stand-in</td></tr>
+<tr><td><code>tools=[]</code> leaves only the program's tools</td><td>Measurement</td><td>One live run: the library listed one tool</td></tr>
+<tr><td>Input grows with the square of the number of calls</td><td>Derivation</td><td>From the Cost section; not measured here</td></tr>
+<tr><td>A question needing one search cost $0.0145</td><td>Measurement</td><td>One sample</td></tr>
+</tbody>
+</table></div>
+
 <h2 id="wrong">What goes wrong</h2>
 <p><strong>Inheriting tools.</strong> An agent library built for one purpose carries tools for that purpose. Removing them is a matter of configuration, and configuration can silently not take effect. The system therefore removes the built-in tools and, separately, refuses any unlisted tool, so that if one measure fails the other holds. <span class="g v">Verified</span> The library's documentation did not state outright whether <code>tools=[]</code> removes every built-in tool. A live run settled it: the library's own start-up report listed exactly one tool, the search.</p>
 <p><strong>Using the library's limits.</strong> The library has its own step and money limits. They are fixed when a connection is made and count everything on that connection, so on a connection kept open between messages they cannot mean "per task". The system counts for itself, and its tests assert that the library's limits are left unset.</p>
@@ -313,6 +346,12 @@ else:
 <p><span class="g v">Verified</span> The restrictions on the library, the policy, the per-task limits and the search tool are covered by passing tests against a stand-in. Live runs showed that the library offered exactly one tool when only search existed, that stop ended a real task, what one ordinary question cost (one sample), and that keeping one connection open cut a reply from 8 to 17 seconds to about 2.</p>
 <p><span class="g u">Not tested</span> Compaction in a live conversation. The quality of the answers the loop produces. Whether the label on search results changes how often a real model is misled by a page; the design does not rely on it.</p></div>
 
+<h2 id="literature">Where this sits in the literature</h2>
+<p>The loop of this chapter has a short history. {{cite:yao2023react}} interleaved reasoning with actions that query outside sources, and reported gains over reasoning alone and acting alone on question answering, fact checking and two interactive tasks; the cycle of observing, thinking and acting it described is the template most tool-using agents implement, this one included. {{cite:schick2023toolformer}} trained a model to decide when and how to call outside interfaces, which framed tool use as a capability of the model and led towards the function-calling interfaces in use. The flow traced in this chapter, tool definitions sent, a tool call received, the tool run by application code and its output returned, is the one vendor documentation describes {{cite:openai2025functioncalling}}. The format in which this program serves its tools is the Model Context Protocol, whose specification of tools {{cite:mcp2025tools}} covers listing, calling, schemas and errors, and states requirements for a human in the loop and for security. The protocol carries the call; it does not decide whether the call runs. This program makes that decision in its own code, where the call executes, which is the end-to-end argument of {{cite:saltzer1984endtoend}} applied at the tool boundary: a check the model is asked to make is at most an optimisation, and the guarantee has to be supplied at the end that acts.</p>
+<p>The literature adds most to this chapter on context. {{cite:liu2023lostmiddle}} found that a model's accuracy on retrieval-style tasks depends on where the relevant text sits in a long context, and is often lower in the middle. The growth derived in the theory is therefore not only a cost: a conversation kept open for days puts the owner's earlier words in the middle of a long context, and this program does nothing about position except show the memory again after compaction. Whether that matters for its errands has not been measured. {{cite:anthropic2025contexteng}} describe managing what enters the context of a long task by retrieving just in time, by compaction and by sub-agents. This chapter uses the first two: a search result enters only when asked for and is cut at a fixed length, and compaction is the library's. {{cite:packer2023memgpt}} went further, letting the model move information between the context and outside storage through function calls, as an operating system moves pages. The memory tools here are a small case of that, with one difference: showing the memory again after compaction is done by code on the library's signal, not left to the model.</p>
+<p>On price, the maker's documentation of prompt caching {{cite:anthropic2026promptcaching}} gives cache writes at 1.25 times the base input price for the five-minute lifetime and reads at a tenth or less, which agrees with the price table quoted in this chapter. The derivation in the theory shows why that ratio, and not the base price, governs what a long conversation costs.</p>
+<p>The published work is stronger than this program on the design of tools. {{cite:yang2024sweagent}} showed that the interface between model and computer, its commands, the form of its feedback and its guardrails, changes how well an agent performs. The search tool's habits, a cut with a note to search more narrowly, a failure returned as a result, a label on what was read, are interface decisions of exactly that kind, and none has been measured here against an alternative. Two questions bearing on this design are not settled: whether one long conversation with compaction serves an owner better over weeks than a fresh context assembled by code for each task, and how a loop's step and money limits should be chosen from evidence rather than set by hand.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A model call turns text into text and keeps nothing between calls; everything it needs is sent each time, and paid for by the token.</li>
@@ -323,13 +362,35 @@ else:
 <li>A minimal first version has a channel that answers only its owner, the restricted loop, one read-only tool, stop, limits and a log, and nothing that can change the world.</li>
 </ul></div>
 
-<div class="box exercises"><div class="label">Exercises</div>
+<div class="box exercises"><div class="label">Problems</div>
+<h3>Review</h3>
 <ol>
 <li>A conversation has ten messages. On the eleventh, the model makes two calls. How many times has the first message been sent to the model in total? What does your answer imply for the cost of a long conversation, and how does the cache-read price change it?</li>
-<li>List the five statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
+<li>List the six statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
 <li>The search tool is on <code>ALLOWED_TOOLS</code>, yet under the full gate it is not on the list of tools that skip the policy. Explain why, and what would go wrong if it were added to the skip list.</li>
 <li>Write a new read-only tool, <code>current_time</code>, that returns the date and time in the owner's zone. Give its description and schema, the handler, where it is registered in <code>make_tool_server</code>, and which lists it belongs on. Then write the test that proves the policy allows it.</li>
 <li>The loop counts a step when an <code>AssistantMessage</code> arrives. Suppose the library delivered a tool result between two pieces of the same model call. Would the count be wrong? Write a stand-in script that tests your answer.</li>
 <li>Remove the line <code>tools=[]</code> from <code>options</code> in your head. Which remaining line still prevents the model running a shell command, and is there any situation in which it would not?</li>
+</ol>
+<h3>Analysis</h3>
+<ol start="7">
+<li>A conversation starts with <span class="math">c₀ = 6,000</span> tokens of fixed context and adds <span class="math">δ = 1,500</span> tokens per call, and call <span class="math">t</span> sends <span class="math">c₀ + tδ</span> input tokens, as in the Cost section of the model. Use the mid-priced model's prices from this chapter and ignore output tokens. (a) Over <span class="math">m = 40</span> calls with no cache, how many input tokens are sent, and what do they cost? (b) Now suppose call 1 writes to the cache everything it sends, and each later call reads from the cache everything the previous call sent and writes the rest. How many tokens are read from the cache and how many written, and what is the total cost? By what factor did the cache reduce it? (c) In a single task with the same <span class="math">c₀</span> and <span class="math">δ</span> and no cache, on which call does the estimated input cost first reach the per-task limit of $0.50? Is the step limit or the money limit reached first?</li>
+<li>Prove the property "a limit is detected within one call of being crossed" from the code in this chapter. Then give the largest number of model calls a task ending <code>turn_limit</code> can show, assuming the library stops at once when asked to interrupt, and say why the property gives no bound if it does not. Finally, construct with invented figures a task that spends more than <span class="math">B</span> in total although the money limit is never recorded, and name the hypothesis your construction breaks.</li>
+<li>Show from the code that no output of the model can produce the status <code>stopped</code>. For each of the other statuses the chapter lists, say whether it is chosen by the model, imposed by code on a condition the model can influence, or imposed by code on a condition the model cannot influence, and give for the second kind a sequence of model actions that brings it about.</li>
+<li>Definition 3 says the last action of a run is text. Is a task that ends <code>budget</code> a run in that sense? State precisely what the property of the simple policy (no executed call is off the list) says about a truncated run, and prove that it holds for every prefix of a run if it holds for runs. Then give a hypothesis about the library under which an allowed call requested in the crossing message runs after the limit is recorded, and say whether that breaks the property of the policy or only the bound on spending.</li>
+</ol>
+<h3>Design</h3>
+<ol start="11">
+<li>A colleague proposes removing the money limit from code and giving the model a tool, <code>give_up</code>, with an instruction to call it when a task seems too expensive, on the grounds that the model knows better than a counter when work is worth continuing. Say what this design can do that the counter cannot, what is guaranteed in each design whatever the model does, and what is given up. Where, if anywhere, would you use the model's judgement here?</li>
+<li>Design a tool <code>fetch_page</code> that returns the text of one web page at a given address. Give its description and schema, the bound it places on what it adds to the context and how the model is told about a cut, what it does on a slow or failed fetch, how its result is labelled, and which list in <code>tools.py</code> it belongs on. State what is guaranteed about it whatever the model does, and what is not, including what reaching an address chosen by a page the model read could send to another principal.</li>
+</ol>
+<h3>Reading</h3>
+<ol start="13">
+<li>{{cite:yao2023react}}. In about four hundred words: what it claims about interleaving reasoning and acting; why that matters for this chapter's loop, in which only the model's text ends a turn by choice and code imposes the other ends; where you were not convinced; and what you would measure or build next. In particular, find how the paper's agents end a task and whether anything outside the model can end it, and say what that implies for running its loop on an owner's accounts.</li>
+<li>{{cite:anthropic2025contexteng}}. In about four hundred words: what it claims about managing context over long tasks; why it matters for this chapter's decisions to rely on the library's compaction, to show the memory again after it, and to cut a search result at 12,000 characters; where you were not convinced; and what you would measure next to decide whether those three decisions are right for a conversation kept open for weeks.</li>
+</ol>
+<h3>Open</h3>
+<ol start="15">
 <li>(Hard, open) The system keeps one long conversation and relies on compaction. Design an alternative in which each task starts with a fresh context assembled by code from memory and recent history. What would be gained in cost and predictability, what would be lost, and how would you test that nothing the owner said in the last hour is forgotten?</li>
+<li>The step limit of 25 and the money limit of $0.50 are set by hand. Propose a procedure that sets them from the journal of one owner's tasks, so that the share of tasks ended by a limit that would have finished usefully is below a stated rate, while the cost of the tasks that would not have finished is bounded. Nobody knows the distribution of steps or cost for an owner's real errands, or how it shifts as tools are added. Progress would be a procedure whose stated rate holds, with an interval, on tasks held out from the ones used to set the limits.</li>
 </ol></div>

@@ -97,7 +97,8 @@ def write_state(s: dict[str, Any]) -> None:
 
 
 def draw_split(seed: int) -> tuple[list[str], list[str]]:
-    """Half the cases for the analyst to read, half held out, drawn at random within each group. Never by score."""
+    """Half the cases for the analyst to read, half held out, drawn at random within each group. No case is placed by its
+    score; start() does redraw the whole split until the two halves' baseline scores are level, which uses the scores of the halves."""
     rng, train, test = random.Random(seed), [], []
     groups: dict[str, list[str]] = {}
     for cid, group in fund.case_ids():

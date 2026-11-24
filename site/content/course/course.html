@@ -1,0 +1,93 @@
+<!--
+order: 1
+slug: course
+tab: Syllabus
+title: Building personal agents: a graduate course
+summary: A fourteen-week course built on the book: one unit a week on a real, open system, with primary readings, five cumulative laboratories, five problem sets, a staged project and a written examination. It can be taught, or followed alone.
+-->
+<div class="box caution"><div class="label">What kind of course this is</div>
+<p><span class="g u">Not yet taught.</span> This is the design of a course, complete enough to follow alone or to teach from. No class has taken it, no problem set has been marked, and the times given for the work are estimates. It will be corrected by the first people who try it, and their corrections are wanted.</p></div>
+
+<h2 id="what">What the course is about</h2>
+<p>A personal agent is a program that holds a person's accounts and acts for them: it reads their mail, keeps their calendar, files into their records, speaks first when something needs them, and asks before anything that cannot be undone. Building one that works on a good day takes a weekend. Building one that a person can leave running with their accounts takes most of what computer science knows about protection, reliability, measurement and the design of things people must supervise, applied to a component, the model, that none of those fields was written for.</p>
+<p>The course teaches that application. Its subject is not models. It is everything around one: the loop, the state, the gate between what a model asks for and what happens, the treatment of words other people wrote, and the instruments that tell you whether any of it works. It is taught on one real system whose every mechanism is open, and whose every claim is marked with how it is known.</p>
+
+<h2 id="outcomes">What you will be able to do</h2>
+<ol>
+<li>Build an agent loop with tools, a journal and a conversation that can be stopped, and derive every figure it reports from the journal alone.</li>
+<li>State what an agent guarantees against any model, as a property argued from code, and keep that apart from what was measured over runs of one model.</li>
+<li>Design a gate: classify calls by effect, decide what runs, what asks and what is refused, write the questions, and enumerate what a model that has been taken over can still do.</li>
+<li>Reason about text from outside as an information-flow problem, say precisely what a confinement mechanism does and does not stop, and test it without writing an attack.</li>
+<li>Give a model thousands of actions and other people's servers without giving up any earlier guarantee.</li>
+<li>Build an evaluation with a resettable, changing world; report scores with intervals over the right unit; compare two versions; calibrate a judge against a person; and say what a suite cannot show.</li>
+<li>Derive what an agent costs and choose designs by measured cost and quality together.</li>
+<li>Read the primary literature of these fields critically, and place a design against it.</li>
+<li>Carry out and write up a piece of original work whose main result another person can reproduce.</li>
+</ol>
+
+<h2 id="who">Who it is for, and what it assumes</h2>
+<p>Graduate students and working engineers. It assumes you can program comfortably in Python and read code you did not write; that you have used a language model through an interface for programmers; that you know enough probability and statistics to say what a confidence interval is and is not; and that you have met, in any course, the ideas of a process, a file, a network request and an access check. No background in machine learning is needed, and none is taught. A reader who has never written a proof will find the analysis problems hard at first; they ask for careful arguments from stated definitions, not for mathematics beyond sums and probabilities.</p>
+<p>A check before starting: read {{ch:the-agent-loop}} and do its review problems, then read <a href="notation.html">the model and notation</a>. If the first is comfortable and the second is readable with effort, the level is right.</p>
+
+<h2 id="unit">How a unit works</h2>
+<p>Each chapter of the book is a unit, and every unit has the same parts in the same order.</p>
+<ol>
+<li><strong>Objectives</strong> and a box giving the week, what comes before, what to read first, and the laboratory and problem set it belongs to.</li>
+<li><strong>The problem</strong>, as a concrete situation, and the terms defined before they are used.</li>
+<li><strong>The design and the mechanism</strong>, from the idea down to the code that runs, in the repository.</li>
+<li><strong>The theory</strong>: the unit's claims stated in the course's <a href="notation.html">common model</a>, sorted into properties and measurements.</li>
+<li><strong>What goes wrong and how to test it</strong>, with every claim about what was run graded by <a href="evidence.html">how it is known</a>.</li>
+<li><strong>Where this sits in the literature</strong>: what the cited work showed, where this design follows it, and where the published work is stronger.</li>
+<li><strong>Problems</strong>, in five groups: review, analysis, design, reading and open.</li>
+</ol>
+<p>The primary readings are part of the unit and not a supplement to it. One or two are assigned each week; the <a href="readings.html">full list</a> gives what each shows. For every assigned reading you write four hundred words before the class that discusses it: what it claims, why it matters to that week's design, where you were not convinced, and what you would measure or build next. These are written alone and without any tool that writes for you, because their purpose is to find out what you think.</p>
+
+<h2 id="schedule">Schedule</h2>
+<div class="tbl"><table>
+<thead><tr><th>Week</th><th>Units</th><th>Discussed in class</th><th>Due</th></tr></thead>
+<tbody>
+<tr><th>1</th><td>{{ch:what-a-personal-agent-is}}, {{ch:the-agent-loop}}</td><td>{{cite:yao2023react}}; {{cite:sumers2024coala}}</td><td></td></tr>
+<tr><th>2</th><td>{{ch:build-or-buy}}, {{ch:the-conversation}}</td><td>{{cite:parnas1972criteria}}; {{cite:kreps2013log}}</td><td></td></tr>
+<tr><th>3</th><td>{{ch:memory}}, {{ch:acting-unasked}}</td><td>{{cite:packer2023memgpt}}; {{cite:horvitz1999mixed}}</td><td>Problem set 1</td></tr>
+<tr><th>4</th><td>{{ch:staying-up}}</td><td>{{cite:candea2003crash}}; {{cite:helland2012idempotence}}</td><td>Laboratory 1</td></tr>
+<tr><th>5</th><td>{{ch:the-gate}}</td><td>{{cite:saltzer1975protection}}; {{cite:debenedetti2025camel}}</td><td>Problem set 2</td></tr>
+<tr><th>6</th><td>{{ch:untrusted-content}}</td><td>{{cite:greshake2023indirect}}; {{cite:nasr2025attacker}}</td><td>Project proposal</td></tr>
+<tr><th>7</th><td>{{ch:secrets-and-sign-ins}}, {{ch:mail-and-calendar}}</td><td>{{cite:rfc9700}}; {{cite:hardy1988confused}}</td><td>Laboratory 2</td></tr>
+<tr><th>8</th><td>{{ch:any-app}}, {{ch:services-with-their-own-server}}</td><td>{{cite:mcp2025spec}}; {{cite:anthropic2025writingtools}}</td><td>Problem set 3</td></tr>
+<tr><th>9</th><td>{{ch:the-browser}}, {{ch:files-pictures-and-voice}}, {{ch:channels}}</td><td>{{cite:zhou2023webarena}}; {{cite:clark1991grounding}}</td><td>Laboratory 3</td></tr>
+<tr><th>10</th><td>{{ch:testing-and-evaluation}}</td><td>{{cite:miller2024errorbars}}; {{cite:kapoor2024agentsmatter}}</td><td>Problem set 4; progress report</td></tr>
+<tr><th>11</th><td>{{ch:a-changing-world}}, {{ch:a-second-reading}}</td><td>{{cite:yao2024taubench}}; {{cite:shankar2024validators}}</td><td>Laboratory 4</td></tr>
+<tr><th>12</th><td>{{ch:cost}}</td><td>{{cite:anthropic2026promptcaching}}; {{cite:agrawal2025gepa}}</td><td></td></tr>
+<tr><th>13</th><td>{{ch:a-firms-database}}, {{ch:decks-and-data-rooms}}, {{ch:sourcing}}, {{ch:a-funds-weekly-work}}</td><td>{{cite:fellegi1969linkage}}; {{cite:myers2007calo}}</td><td>Problem set 5; laboratory 5</td></tr>
+<tr><th>14</th><td>{{ch:what-is-built}}; project talks</td><td>{{cite:bainbridge1983ironies}}; {{cite:sutton2019bitter}}</td><td>Talk; then paper and examination</td></tr>
+</tbody>
+</table></div>
+<p>Each unit's own box names the reading to do before it, which is sometimes a third work beside the two discussed. A week is about three hours of class and twelve of work outside it.</p>
+
+<h2 id="assessment">Assessment</h2>
+<div class="tbl"><table>
+<thead><tr><th>Part</th><th>Share</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><th><a href="labs.html">Laboratories</a></th><td>30</td><td>Five, cumulative. Public tests, tests you have not seen, a short report, and questions in person about your own code.</td></tr>
+<tr><th><a href="project.html">Project</a></th><td>30</td><td>Proposal 3, progress report 5, talk 7, paper and artifact 15.</td></tr>
+<tr><th><a href="problem-sets.html">Problem sets</a></th><td>20</td><td>Five. Arguments and calculations from the model, design critiques, one measured answer each.</td></tr>
+<tr><th>Reading responses</th><td>10</td><td>One for each assigned reading, marked for whether it engages with the work and is right about what the work says.</td></tr>
+<tr><th><a href="examination.html">Examination</a></th><td>10</td><td>Three hours on paper. A quarter of it is about your own laboratory code.</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="rules">Rules</h2>
+<dl class="terms">
+<dt>Working together</dt><dd>Discuss anything with anyone. Write up alone, in your own words, and name the people you worked with and every source you used. Laboratories are individual; the project may be done by up to three.</dd>
+<dt>Tools that write</dt><dd>For code in laboratories and the project you may use any tool, and you say which and where. You must be able to explain, unaided and in person, every line you hand in; work you cannot explain earns nothing. For reading responses and for the analysis problems, no tool that writes or solves for you: their purpose is your own reasoning, and the examination will find out whether you did it.</dd>
+<dt>Results</dt><dd>Every number you report has a sample size and a statement of what would make it wrong. Keep every run. Leaving out the runs that spoil a result, or adjusting any, is the one failure the course does not forgive.</dd>
+<dt>Attacks</dt><dd>You will defeat defences, and only inside the simulated world or against accounts that are your own. Anything you find in a system other people use is reported to whoever maintains it, privately, before it is discussed anywhere.</dd>
+<dt>Other people's information</dt><dd>Nothing from a real mailbox, calendar or customer record goes into any test, report or repository. Every name in what you hand in is invented.</dd>
+<dt>Late work</dt><dd>Five days of grace across the term, spent as you like, at most two on any one piece, none on the paper.</dd>
+</dl>
+
+<h2 id="alone">Following it alone</h2>
+<p>Everything needed is on this site and in the repository. Without a class, three things replace what a class provides. Find one other person doing the same and exchange work: you cannot write the tests you have not thought of for your own gate, and you cannot be asked the question you are avoiding by yourself. Write the reading responses anyway, and reread them at the end. And treat the examination's fourth section honestly: open your own laboratory code a month after you wrote it and explain each function aloud.</p>
+
+<h2 id="limits">What this course does not cover</h2>
+<p>How models are trained or work inside. Agents that write software, which have their own literature and tools. Systems of many agents negotiating with each other. Voice assistants that must answer within a breath. Law and regulation, beyond the consent and privacy rules above. Each would be a course of its own, and the <a href="readings.html">readings</a> point to where they begin.</p>

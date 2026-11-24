@@ -25,8 +25,10 @@ check would know nothing. When the store is full the oldest are dropped, and tha
 is recorded once.
 
 It also keeps a second, cruder record for the gate: which kinds of outside
-material have been read during the current task (sources). Memory and reminders
-are written without a question only while that record is empty (tools.py).
+material are in front of the model (sources). It is emptied when the model's own
+context is, at the start of a new conversation, and not at each message
+(conversation.py). Memory and reminders are written without a question only while
+that record is empty (tools.py).
 
 Recognising text cannot catch a paraphrase: the same private fact in other words
 has no fingerprint. So there is a second check that recognises nothing and
@@ -113,7 +115,7 @@ class Taint:
         self._owner: set[int] = set()
         self._path, self._on_full, self._limit, self._told_full = path, on_full, limit, False
         self.listeners: list = []      # others who need to know what was read from the accounts (tracing.py)
-        self.sources: set[str] = set()     # kinds of outside material read during the current task
+        self.sources: set[str] = set()     # kinds of outside material read in the conversation the model still holds
         self._said: set[int] = set()       # each word the owner has typed since the program started
         self._spilt: deque[tuple[float, int]] = deque()     # new words that left unasked: when, and how many
         self.clock: Callable[[], float] = time.monotonic

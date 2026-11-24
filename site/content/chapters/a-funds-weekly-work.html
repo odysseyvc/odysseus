@@ -7,6 +7,15 @@
 <li>Ship procedures with a program in the same form the owner teaches their own, so that the owner's always wins.</li>
 </ul></div>
 
+<div class="box unit"><div class="label">This unit</div>
+<dl>
+<dt>Week</dt><dd>13 of 14</dd>
+<dt>Before it</dt><dd>{{ch:memory}}, {{ch:untrusted-content}} and {{ch:a-firms-database}}; Definitions 1, 2, 5 and 8 of <a href="notation.html">the model</a>.</dd>
+<dt>Read first</dt><dd>{{cite:anthropic2024effectiveagents}}; {{cite:sumers2024coala}}.</dd>
+<dt>Laboratory</dt><dd>None; these units feed <a href="project.html">the project</a></dd>
+<dt>Problem set</dt><dd>None; assessed through the project</dd>
+</dl></div>
+
 <h2 id="problem">The problem</h2>
 <p>A partner at an investment firm does a handful of things every week that nobody would call judgement. Before the Monday meeting they go down the pipeline looking for deals nobody has touched, next steps whose date has passed, and founders who wrote and were not answered. When a company they invested in sends its monthly update, they mean to compare it with last month's. When a term sheet arrives they work out what the round does to everybody's share. They write the same kinds of document again and again: a memo on a deal, a note letting a founder down, a pack for the partners, a first reading of a data room.</p>
 <p>An assistant with a model and tools could be asked to do each of these from scratch each time. It would cost a model's time, the answer would vary from week to week, and in two of the cases (the dates and the sums) it would sometimes be wrong while sounding right. This chapter sorts the work by what it is made of, and gives each kind to whatever does it reliably.</p>
@@ -123,6 +132,26 @@ if stage is None:
 <p>The reason to ship them as skills and not as instructions in the standing prompt is cost and ownership. A standing prompt is paid for on every message; a skill costs one line until a task fits it. And a firm's memo format is the firm's: the mechanism by which the owner replaces it should be the ordinary one.</p>
 <p>Like any skill, these permit nothing. A note to a founder is still put to the owner before it is sent ({{ch:the-gate}}).</p>
 
+<h2 id="theory">The theory</h2>
+<p><strong>The sorting rule.</strong> A model <span class="math">M</span> is a random function (Definition 1), so anything it computes has a distribution, and a question with one right answer is answered right with some probability below one. The chapter's rule, for each step of a task: if the step's correct output is a function of structured values that can be written down (dates, sums, a stage's name), it goes to code, which gives the same answer every time at no model cost. If an input is prose, such as a founder's sentence, the step needs <span class="math">M</span>. If the step is a long fixed procedure needed by one kind of task, it is text placed in the context when that task comes up: a skill. A real task is cut where its steps change kind, and the cut is a typed interface: the model's output at the cut is checked by code before anything is kept.</p>
+<p>The pipeline review is then a pure function of what it reads, as derived state is of the journal in Definition 8, except that its inputs are the database's records, the mail service's dates and the day: the same inputs on the same day give the same review. What remains uncertain is the input: whether the synced mail and calendars are complete, which the review cannot see.</p>
+<div class="box theory"><div class="label">Property: an update leaves at most a short name behind</div>
+<p>Whatever an update says and whatever the model makes of it, <code>portfolio_record</code> keeps only numbers under keys from a fixed list, a period, a currency of at most four characters drawn from letters and five currency signs, the sender's mail domain if it has the form of a domain, and a company name of at most sixty characters drawn from letters, digits, spaces and a few marks. So the text with provenance <span class="math">S</span> that can reach a later context through the notebook is bounded by those few strings for each company.</p>
+<p><em>Argument.</em> Every other value is refused by a type check before anything is written: a key outside the list, a figure that is not a number, a period that cannot be read. The checks are code and do not consult the model.</p>
+<p><em>Where it stops.</em> The bound narrows the channel and does not close it. Sixty letters are enough for a short imperative sentence, which is why the name is shown back marked as material. And a number can mislead without carrying words: a misread figure is kept as faithfully as a right one, and only the line shown to the owner on the day can catch it.</p></div>
+<p><strong>Arithmetic taken from the model.</strong> The round calculator solves three equations together: the price is the pre-money divided by all shares before the new money; each note converts at its cap, its discount or the price, whichever gives more shares; and the pool is topped up to its target share of the total after the round. Each depends on the others. The function iterates from the present cap table and returns only when one sweep moves the share counts by less than a ten-millionth of the shares in issue; it refuses if the counts grow without bound or do not settle. So any table it returns satisfies its stated conventions to that tolerance, and there is no case in which it returns figures that do not. What remains to the model is transcription of the inputs, most of which the answer restates.</p>
+<p>The worked example can be checked by hand from the conventions. The new money is 3 of 15 million post-money, 20%; the pool is 10%; the SAFE takes 10% of the company before the pool top-up and the new money, so the holders before and the SAFE share the remaining 70% as 63% and 7%. The firm keeps 8% of 63%, which is 5.04%, and just before the new money it holds 5.04/80 of the company, 6.3%, so its pro rata is 6.3% of 3 million, 189 thousand. The 7% needs the SAFE measured before the pool top-up as well as the new money, as the code states it.</p>
+<div class="tbl"><table>
+<thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
+<tbody>
+<tr><td>The review is the same for the same database, mail and day</td><td>Property</td><td>No model call; unit tests on a stand-in database</td></tr>
+<tr><td>An update can leave only numbers and a short name</td><td>Property</td><td>Argued from the type checks; tests of what is refused</td></tr>
+<tr><td>A calculator answer satisfies its conventions, or there is none</td><td>Property</td><td>Argued from the loop's exit; tests against rounds worked by hand</td></tr>
+<tr><td>The model reads the right figures from an update</td><td>Measurement</td><td>Two made-up months recorded once in the real chat</td></tr>
+<tr><td>The review finds what has gone quiet in a real pipeline</td><td>Measurement</td><td>One run on three open entries with no addresses</td></tr>
+</tbody>
+</table></div>
+
 <h2 id="wrong">What goes wrong</h2>
 <h3>A review that is quietly empty</h3>
 <p>Described above: a read that returns nothing looks the same as a pipeline in good order. The defence is a live check that prints how much was read, and a review that names what it could not read (mail not connected, tasks refused) at its foot.</p>
@@ -140,6 +169,15 @@ if stage is None:
 <p><span class="g v">Verified</span>, live: the review against a real database and mailbox, once, in 14 seconds with no model call; its PDF printed in 12 seconds for a twentieth of a cent; sent by itself on its morning. In the real chat, on made-up numbers: the worked round above; a question about the pipeline answered from the review in 7 seconds for under a cent; two months of a made-up company's figures recorded in 5 seconds for just over a cent, with the fall in revenue and headcount, the rise in burn and the short runway pointed out by code.</p>
 <p><span class="g u">Not tested</span>: the review on a pipeline of real size, or with real people on its deals (the database it ran against held three open entries and no addresses, so "owed a reply" made no mail search and has only its unit test). No real update has been found in the inbox by the morning search. None of the four procedures has been followed in the real chat. Nothing here has been used through a working week.</p>
 
+<h2 id="literature">Where this sits in the literature</h2>
+<p>The practitioner baseline for this chapter is {{cite:anthropic2024effectiveagents}}, which separates fixed workflows, in which code decides the sequence of steps, from agents, in which a model does, and recommends the simplest structure that works. This chapter agrees and goes one step further for its comparisons: the simplest structure for a question with one right answer about dates is no model at all. In the review, the checks on figures and the calculator, the model appears at most at one end, reading.</p>
+<p>{{cite:sumers2024coala}} give a vocabulary for the parts of a language agent: working memory, long-term memories of several kinds, an action space and a decision procedure. In their terms the notebook of figures is a long-term store with a fixed schema, and the skills are procedural memory held as text. The framework is descriptive. It does not say which steps should be taken out of the model's hands, which is the decision this chapter is about.</p>
+<p>Procedural memory can also be code. In {{cite:wang2023voyager}} an agent writes its own skills as programs, checks them by running them, and keeps the ones that work in a library it reuses. That is stronger than this program in one respect: a skill there is tested by execution before it is kept, while the four procedures shipped here are prose that has not yet been followed once in the real chat. It differs in another: the comparisons here were written and tested by people, and the owner, not the agent, decides what a memo contains.</p>
+<p>Giving arithmetic to a tool has a long line in this literature. {{cite:schick2023toolformer}} trained a model to decide for itself when to call external tools, a calculator among them. {{cite:wei2022cot}} showed that writing out intermediate steps improves a large model's arithmetic. Both make the model better at sums; neither makes it certain. The calculator here removes the sum from the model entirely, and keeps for the model only the decision to call it and the transcription of inputs. The chapter's own example shows the residue: the one fault in the live run was a currency the model added, outside the calculation.</p>
+<p>Finding the pipeline by the type of a field, and not by the names of objects and stages, is the advice of {{cite:parnas1972criteria}}: cut modules around the decisions likely to change, so that a change touches one place. Here the decision likely to change is each firm's layout, and it is read, not written into the code. The one decision that cannot be read, which stages are closed, is guessed and printed, so that the hidden assumption becomes a visible default.</p>
+<p>The review that was quietly empty is a small instance of what {{cite:sculley2015debt}} catalogue for systems built around models: the cost lies in the surrounding code, in glue between components and in failures that produce plausible output rather than errors. The defence used here, printing counts of what was read beside what was concluded, is the kind of monitoring their account calls for.</p>
+<p>Set against all of this is {{cite:sutton2019bitter}}: over the long run, general methods that use more computation have beaten hand-built knowledge. Every rule in this chapter is hand-built. The tension is real and not settled. One reading is that these rules encode definitions (what a post-money SAFE converts into) rather than knowledge a model could learn better, so the lesson does not reach them; another is that the line between code and model should move as models improve, and that a program should record where it was drawn and why, so that it can be moved. Which reading is right, and how to tell when a rule should be handed back to a model, is open.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>Sort recurring work by what it is made of: comparisons go to code, reading to the model, procedures to skills. Most tasks are a mix, and the design is where to cut.</li>
@@ -152,7 +190,8 @@ if stage is None:
 <li>A check against hand-written answers passes where the real service's answers differ. Print counts of what was read.</li>
 </ul></div>
 
-<div class="box exercises"><div class="label">Exercises</div>
+<div class="box exercises"><div class="label">Problems</div>
+<h3>Review</h3>
 <ol>
 <li>For each of these, say which of the three kinds of work it is and where you would cut it: preparing a list of co-investors to call; checking that a cap table adds up; writing the quarterly letter to the fund's own backers.</li>
 <li>The rule for a closed stage reads names. Propose a second source of evidence in the database itself (for example, how long entries stay in a stage) and say what it would get wrong.</li>
@@ -160,5 +199,26 @@ if stage is None:
 <li>Add "net revenue retention" to the notebook. Decide its name, its unit, and whether a fall should be pointed out. What did you have to decide that the existing metrics had already settled?</li>
 <li>Extend the calculator to a term sheet whose pool top-up comes after the round. Work the example above by hand under that convention first, and write the test from your figures.</li>
 <li>The owner teaches a memo format of their own and later deletes it. Trace which skill the model reads at each step, and what the owner is told.</li>
+</ol>
+<h3>Analysis</h3>
+<ol start="7">
+<li>Under the calculator's conventions, suppose the only convertibles are post-money SAFEs whose amounts divided by their caps sum to <span class="math">F</span>, the pool target is <span class="math">t</span> and the new money buys a share <span class="math">n</span> of the company after the round, with no pool before. (a) Show that the holders before the round end with <span class="math">(1 − t − n)(1 − F)</span> of the company, and check it against the worked example. (b) State the conditions on <span class="math">F</span>, <span class="math">t</span> and <span class="math">n</span> under which no cap table satisfies the conventions, and say which branch of the calculator's loop then ends it. (c) Name a hypothesis of (a) that a real round can break, and say which line of the formula it changes.</li>
+<li>A made-up company raises 2 million at 6 million pre-money. It has one post-money SAFE of 500 thousand at a cap of 5 million, the term sheet wants a pool of 10% after the round, there is no pool before, and the firm held 12% before. (a) Using the calculator's conventions, give the share after the round of the new money, the pool, the SAFE, the holders before, and the firm if it puts in nothing. (b) Give the cost of the firm's pro rata and the cost of holding exactly 12% after the round. (c) Now measure the SAFE's share after the pool top-up instead of before it, all else equal, and give the firm's share after the round. What does the difference show about stating conventions?</li>
+<li>Prove the property "an update leaves at most a short name behind" from the code's checks as the chapter describes them. Then show that the character filter does not exclude a short imperative sentence, and use Property 2 to state what such a sentence could cause without a question when it is later read in a conversation. Is the property worth having, given that?</li>
+<li>The review decides whether a date written "03/11" puts the day or the month first. (a) If the days of the month in a database's dates were spread evenly over 1 to 30, what is the probability that none of <span class="math">k</span> dates has a day above twelve? Give it for <span class="math">k = 3</span>, and the smallest <span class="math">k</span> that brings it below 1%. (b) Construct a small set of dates on which neither of the two tests decides the order, and say what the review should do then.</li>
+</ol>
+<h3>Design</h3>
+<ol start="11">
+<li>The partners ask the review to flag deals "at risk", judged from the tone of the founder's last email. Cut the task: say which step is a comparison, which is reading, and where the model's output enters a review that until now had no model in it. State what the review still guarantees afterwards and what it gives up, including whether two runs on the same day still agree.</li>
+<li>A rival product answers questions about rounds by having its model write and run a short program each time, in a sandbox. Compare it with the fixed calculator: what each guarantees about the answer, which can state its conventions, which handles a term the other cannot, and what each costs per question. Say which you would ship for this firm and what evidence would change your mind.</li>
+</ol>
+<h3>Reading</h3>
+<ol start="13">
+<li>{{cite:anthropic2024effectiveagents}}. In about four hundred words: what it claims about workflows, agents and choosing the simplest structure; why it matters for the decision to build the pipeline review with no model call; where you were not convinced that its patterns cover a step with one right answer; and what you would measure next to show that the review's design was the right one for this firm.</li>
+<li>{{cite:sumers2024coala}}. In about four hundred words: what the framework claims about the parts of a language agent; why it matters for placing the notebook, the skills and the calculator; where you were not convinced the framework helps decide what to take away from the model; and what you would build next to test one prediction you can derive from it about this program.</li>
+</ol>
+<h3>Open</h3>
+<ol start="15">
 <li>(Hard, open.) The cash check moved an observation from the model into code. Design a way to find such observations systematically: what would you log, and how would you decide that one had recurred often enough to become a rule?</li>
+<li>When should a rule written in code be handed back to a model? Propose a criterion that uses only measurable quantities (the rule's error rate on real inputs, the model's error rate on the same inputs with an interval, and the cost of each) and say how it would be applied to the rule for closed stages. Progress would be a criterion that, applied to rules in this program, makes a prediction a later measurement could refute.</li>
 </ol></div>

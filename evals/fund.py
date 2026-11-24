@@ -710,8 +710,12 @@ def noise_floor(rows: list[dict[str, Any]], key: str = "score") -> float:
         return float("nan")
     first, second = set(reps[:len(reps) // 2]), set(reps[len(reps) // 2:])
     _, low, high, _ = difference([r for r in rows if r["rep"] in first], [r for r in rows if r["rep"] in second], key=key)
-    # Halves hold half the repeats each, so the difference of two whole runs is steadier by the square root of two.
-    return round((high - low) / 2 / math.sqrt(2), 4)
+    # From the difference of two halves to the difference of two whole runs. With a repeats in one half and b in the
+    # other the run-to-run variance of their difference goes as 1/a + 1/b; for two whole runs of k repeats it goes as 2/k.
+    # Equal halves give the square root of two. Unequal ones (one repeat against two, when k is 3) give more, and
+    # dividing by the square root of two there overstated the floor by about 6%.
+    a, b = len(first), len(second)
+    return round((high - low) / 2 / math.sqrt((1 / a + 1 / b) * (a + b) / 2), 4)
 
 
 def card(name: str, rows: list[dict[str, Any]]) -> str:

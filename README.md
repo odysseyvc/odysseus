@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 711 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 815 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It runs on a small server, moved there from
 a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has received
@@ -180,6 +180,7 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
 ## Layout
 
 - `odysseus/` the program
+- `site/` the book and the graduate course built on it (syllabus, readings, laboratories, problem sets): `python site/build.py`; `python site/check_chapter.py <chapter>` checks a chapter against the unit template
 - `tests/` automated tests: `pip install -r requirements-dev.txt`, then `python -m pytest -q`
 - `scripts/live_*.py` scripted runs against the real services (these cost money)
 - `evals/` the evaluation: the real agent against a simulated mailbox, calendar and web in which time passes, other people

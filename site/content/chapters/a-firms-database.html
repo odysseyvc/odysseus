@@ -8,6 +8,15 @@
 <li>Decide which plans may run unasked and which must still be approved.</li>
 </ul></div>
 
+<div class="box unit"><div class="label">This unit</div>
+<dl>
+<dt>Week</dt><dd>13 of 14</dd>
+<dt>Before it</dt><dd>{{ch:the-gate}}, {{ch:services-with-their-own-server}} and {{ch:untrusted-content}}; Definitions 2, 5, 6 and 8 and Property 2 of <a href="notation.html">the model</a>, and Property 5 of {{ch:the-gate}}.</dd>
+<dt>Read first</dt><dd>{{cite:fellegi1969linkage}}; {{cite:elmagarmid2007duplicate}}.</dd>
+<dt>Laboratory</dt><dd>None; these units feed <a href="project.html">the project</a></dd>
+<dt>Problem set</dt><dd>None; assessed through the project</dd>
+</dl></div>
+
 <h2 id="problem">The problem: a forwarded email names five things</h2>
 <p>This part of the book follows one application from start to finish: an assistant for an early-stage venture capital firm, one assistant per partner, with the firm's customer database as its memory. The program is the same one the earlier parts describe. What changes is what "working" means.</p>
 <p>A partner forwards this, from a colleague: "Met Sam Okafor, founder of Orbit Labs (orbitlabs.example). They make scheduling software for satellite ground stations. Raising a $1.5M pre-seed. Introduced by Asha Verma at Northwind. I thought he was sharp. Next step: I will send him our deck by Friday." (All companies and people in this chapter are invented.)</p>
@@ -264,6 +273,28 @@ elif step.get("updates"):
     return ASK if any(s.get("updates") for s in plan["steps"]) else ALLOW</code></pre>
 <p>A plan that only adds runs unasked, which is the default (setting <code>ODYSSEUS_ASK_EVERY_CHANGE</code> restores a question before every change), and is reported line by line, "without asking"; an approved plan is reported as a count, since the owner just read every line. A plan that overwrites a value is always asked about, because what was there disappears from view once changed; so is one that adds a record beside a similarly named one, and one the program does not hold. The cost is that a planted instruction the model obeyed can add a record or note that the owner learns of only from the reply. It still could not overwrite, send, share or delete. An unattended routine gets neither kind of plan: it may only read the database ({{ch:sourcing}}).</p>
 
+<h2 id="theory">The theory</h2>
+<p><strong>A plan as one call.</strong> Write a plan as <span class="math">π = (R, N, E)</span>: records with their links, notes, and list entries. <code>attio_plan</code> only looks things up, so its effect is a read (Definition 2): <span class="math">σ′ = σ</span>, and its result is the page <span class="math">q(π)</span> the owner would see. <code>attio_file</code> takes one input, <span class="math">x = {plan: i}</span>. The program holds a store <span class="math">S</span> mapping each identifier <span class="math">i</span> to a stored plan, and the gate (Definition 6) asks about <span class="math">x</span> with the question <span class="math">q(S[i])</span>. Property 5 of {{ch:the-gate}} binds the owner's yes to the exact call <span class="math">x</span>; the store binds <span class="math">x</span> to one plan.</p>
+<div class="box theory"><div class="label">Property: an approved plan does no more than its page says</div>
+<p>Suppose (i) <span class="math">S[i]</span> cannot be altered after it is stored, (ii) the question is computed from <span class="math">S[i]</span> alone, (iii) filing deletes <span class="math">S[i]</span> before its first step, and (iv) a record found at planning is written only in fields listed with a before-and-after on the page. Then for every model, one yes causes at most one execution of <span class="math">S[i]</span>; no record that existed when filing ran is changed except in a shown field; and a shown field is written only if it still holds the shown "before" value when it is read again just before writing.</p>
+<p><em>Argument.</em> The model's only handle on the plan is <span class="math">i</span>, so by Property 5 the approval runs one call, and by (iii) a second call with the same <span class="math">i</span> finds nothing. Inside the call, each step either creates a record not found (and looks for it once more first, linking if it now exists), links to a found record without writing to it, or writes the subset of shown fields whose present value equals the shown one. Nothing else in the filing loop writes. The argument never inspects the model, so it holds for a model that has read a planted instruction.</p></div>
+<p>The hypotheses fail in three places, all visible in the code. First, (ii) is weaker than it looks: the page shows a note's text only up to 1,200 characters, while up to 8,000 are filed, so for a long note the owner approves a set of plans and not one. Second, the second look and the write are two calls to the service, so a colleague's change between them is not seen; the window is narrowed from minutes to one round trip, not closed. Third, under "ask less" a plan that only adds is in <span class="math">A(T)</span>: no question is asked, and the property shrinks to the statement that the report lists every line.</p>
+<p><strong>Doubles as record linkage.</strong> Each record <span class="math">r</span> in a plan is compared with the database <span class="math">D</span> and put in one of three classes:</p>
+<p class="eq">link if some d ∈ D equals r on an identifying field; ask if not, and some d ∈ B(r) has near(r, d); create otherwise</p>
+<p>Here the identifying fields are tried in order (website, email address or profile link, then name), <span class="math">B(r)</span> is what the service's search returns for the first word of four or more letters in the name, and <span class="math">near(a, b)</span> holds when the names differ and one contains the other or they share a first word. The two errors of linkage have different prices here. A <em>false non-match</em> (a variant name created as new) is a double that cannot be deleted through this server. A <em>false match</em> (a different entity linked as the same) is quieter: a second founder with the name of one on file is linked to the first, and only the page's "found by name" line shows it. The rule trades false non-matches for questions, since a question costs a sentence. Recall is bounded by the search: a variant that <span class="math">B(r)</span> does not return is never compared.</p>
+<p>What was measured is separate: with exact names only, 5 of 5 approved runs of one errand made a second company while every check passed; before deals were covered, a second deal appeared in 2 runs of 2.</p>
+<div class="tbl"><table>
+<thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
+<tbody>
+<tr><td>One approval runs one stored plan once</td><td>Property</td><td>Argued from the store and the second lock; unit tests with a stand-in server</td></tr>
+<tr><td>A record already on file changes only in shown fields that still hold the shown value</td><td>Property</td><td>Argued from the filing loop; tested by moving a stage before approval</td></tr>
+<tr><td>The owner sees everything an approved plan files</td><td>Fails for notes over 1,200 characters</td><td>Read from the code</td></tr>
+<tr><td>Near-duplicate names are refused</td><td>Property of the rule, within what the search returns</td><td>Unit tests; its recall on real variants is unmeasured</td></tr>
+<tr><td>The real model files without doubles</td><td>Measurement</td><td>39 of 42 runs, two or three per errand</td></tr>
+<tr><td>Running adding plans unasked cut questions</td><td>Measurement</td><td>6 asked in 28 runs, against 16</td></tr>
+</tbody>
+</table></div>
+
 <h2 id="wrong">What goes wrong</h2>
 <div class="box example"><div class="label">Case note: two defects behind one green row</div>
 <p>The partner evaluation's first round passed 28 of 28 while every approved run of <code>file_new</code> had created a second "Northwind": the product's lookup and the check both compared exact names, so they shared one blind spot and agreed. {{ch:testing-and-evaluation}} works through it. Both were repaired: <code>_similar</code> here, and a check that counts a name plus a word as a double.</p></div>
@@ -283,6 +314,14 @@ elif step.get("updates"):
 <p><span class="g v">Verified</span>: the layout created and read back; three investments entered live and read back; plans drawn up live against the real workspace and declined (two for a new company, one for a change); one plan filed from the real chat; the house rule followed twice; the partner evaluation as reported above.</p>
 <p><span class="g u">Not tested</span>: a plan with changes approved and carried out against the real server (unit tests with a stand-in only); a colleague changing a record between plan and approval, live; whether the saved views select what their names say, since there were no deals to select; and how often a model obeys a planted instruction to add something, which two runs cannot say. Outside a plan, "search before creating" a single record is still only an instruction.</p></div>
 
+<h2 id="literature">Where this sits in the literature</h2>
+<p>The problem of the second "Northwind" is old. {{cite:fellegi1969linkage}} gave the theory for deciding whether two records describe the same entity: each pair of records is scored by how much its agreements on each field are more likely among true matches than among non-matches, and the pair is linked, left apart, or sent to a person for review according to where the score falls. Two thresholds fix the three regions, and they are chosen to hold the two kinds of error, false matches and false non-matches, at stated levels. The rule in this chapter has the same three regions (link, ask, create) and the same reviewer, the owner. It has none of the rest. It gives every field the same weight, it has no estimate of either error rate, and its thresholds were set by argument about costs and not by any measured distribution. Here the published work is plainly stronger than the program: it could say how many doubles to expect, and this program cannot.</p>
+<p>The comparison itself is crude by the standards {{cite:elmagarmid2007duplicate}} survey. Field matching in that literature measures how alike two strings are, by characters, by tokens or by sound, and combines field scores with learned or hand-set weights. Containment and a shared first word are two of the simplest token tests, and the problems in this chapter's Analysis set show what they miss: a name written as one word, a different first word, a person known by two spellings. The program defends its crude test by the asymmetry of its errors.</p>
+<p>Before any comparison, the program asks the service's own search for one word of the name and compares only what comes back. That is blocking in the sense of {{cite:papadakis2020blocking}}: a cheap step that cuts the pairs compared, at the price that a true match outside the block is never seen. Their survey treats blocking as a deliberate design with measurable recall. Here the blocking step belongs to the vendor, its behaviour is not documented in this book, and its recall is unknown. A firm's database of a few hundred companies could be compared in full; the choice to block was made by the service's interface, not by the size of the data.</p>
+<p>The approval of a plan's identifier is a capability in the sense of {{cite:hardy1988confused}}: the authority travels with a token that names one stored object, and the model, the confusable party, holds only the name. Filing is a long transaction of many steps across a service with no transaction of its own. {{cite:garciamolina1987sagas}} proposed that such a transaction be split into steps each with a compensating step, so that a failure partway can be undone. This program cannot do that, since nothing can be deleted through the server, and does the weaker thing: it stops, says exactly how far it got, and refuses to run the plan again. The "look again" before each change is the check-then-write pattern whose limits {{cite:kleppmann2017ddia}} sets out for concurrent writers: without a conditional write in the service, a change between the read and the write is lost.</p>
+<p>The reason for one approval per source is the evidence that frequent, generic warnings are clicked through {{cite:sunshine2009crying}}. Five questions an email is the regime that evidence warns against. Whether one longer question, read once, is read better than five short ones is not settled by any work cited here, and is the empirical question behind the design.</p>
+<p>The works cited here assume files large enough to estimate how often fields agree among matches and non-matches. A firm's database is small, grows by a few records a day through one reviewer, and has no labelled pairs. How to set the threshold for asking in that setting, and how to tell whether it is set well, is not settled by them.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>Naming a first customer changed what "working" means, not how the program is built: one copy per partner is what it already was.</li>
@@ -293,12 +332,34 @@ elif step.get("updates"):
 <li>Plans that only add can run unasked and be reported line by line; plans that overwrite must be approved.</li>
 </ul></div>
 
-<div class="box exercises"><div class="label">Exercises</div>
+<div class="box exercises"><div class="label">Problems</div>
+<h3>Review</h3>
 <ol>
 <li>Why is the approval for a plan's identifier and not for "filing this email"? What could go wrong with the second?</li>
 <li>A plan names a company "Kestrel" and the database holds "Kestrel Bio". Trace what <code>attio_plan</code> does, and the two ways the model can continue.</li>
 <li>A colleague changes a deal's stage from Met to Passed between plan and approval, and the plan also sets the next step. What does filing do, and what does the reply say?</li>
 <li>Extend <code>_similar</code> so that "Northwind Robotics Inc." and "Northwind Robotics" are treated as close, and write a unit test in the style of <code>tests/test_attio_intake.py</code>. What new false alarms might your rule raise?</li>
 <li>Add an errand to <code>evals/partner.py</code> in which a forwarded email is a year old and says the round size is "to be decided". Write a check that fails if the round size field is filled.</li>
+</ol>
+<h3>Analysis</h3>
+<ol start="6">
+<li>Prove the property "an approved plan does no more than its page says" from its four hypotheses. Then drop hypothesis (ii) as the code does for notes: construct two plans, each with one note of 3,000 characters, that produce the same page and file different text. Say which sentence of your proof fails, and the smallest change to the code that restores it.</li>
+<li>Over a quarter a firm files 120 sources that each name one company. Of these, 30 name a company already on file under a variant of its name and 90 name a new company. Rule A asks about 24 of the 30 and about 9 of the 90; rule B asks about 28 of the 30 and 30 of the 90. A missed variant becomes a double that costs 15 minutes to merge by hand; a question costs the owner half a minute. (a) For each rule give the rate of false non-matches, the fraction of its questions that were needed, and the expected minutes per quarter. (b) At what cost per question, in minutes, do the two rules cost the same? (c) Name the kind of linkage error this calculation leaves out, and say for which object in this program it is most likely.</li>
+<li>Give a pair of company names that <code>_similar</code> fails to call close although they are the same company, and a pair it calls close although they are different. For the first, say whether the miss happens in the search (the block) or in the comparison. State an assumption about the service's search under which every variant that only adds words to a name on file is caught, and show that the assumption is needed.</li>
+<li>The second look before a change narrows the window in which a colleague's edit is lost; it does not close it. State precisely the interval of time in which a concurrent edit is still overwritten, and say what the service would have to offer for the property's last clause to hold without that interval.</li>
+</ol>
+<h3>Design</h3>
+<ol start="10">
+<li>Suppose the service could merge two records, and the firm asks the assistant to merge doubles it finds. Design the plan step for a merge: what the page shows, which effect class of Definition 2 it falls in, whether a plan holding one may ever run unasked, and what an unattended run may do about a double it notices. Say what is guaranteed and what is given up.</li>
+<li>A weekly thread names a dozen founders, each with a company and a colleague's verdict, and the plan for all of it is too large for one plan. Design how it is split: one approval for each plan or one for the set, what the owner sees, and what the reply says if the third plan of five fails. State which part of the chapter's property survives across several plans and which does not.</li>
+</ol>
+<h3>Reading</h3>
+<ol start="12">
+<li>{{cite:fellegi1969linkage}}. In about four hundred words: what the theory claims about the best rule for linking records; why it matters for the choice between "ask" and "create" in this chapter; where you were not convinced it applies to a database of a few hundred records kept by one person; and what you would measure or build next to give this program an estimate of its own error rates.</li>
+<li>{{cite:elmagarmid2007duplicate}}. In about four hundred words: what the survey claims about field matching and duplicate detection; why it matters for <code>_similar</code>; where you were not convinced that a better string measure would help when the comparison only sees what the service's search returns; and which one technique from the survey you would add first, with the test that would show it helped.</li>
+</ol>
+<h3>Open</h3>
+<ol start="14">
 <li>Hard, open: plans that only add run unasked by default. Design a measurement of how often a planted instruction in a forwarded email leads to an unwanted addition, with enough runs to state a rate and a ceiling, and say what you would change if the rate were one in fifty.</li>
+<li>Find a way to estimate the false match and false non-match rates of a small database kept by one reviewer, with no labelled pairs to start from and no more than a few extra questions to the owner a week. Progress would be an estimator whose interval, after a stated number of weeks, covers the rates found by labelling a held-out sample by hand.</li>
 </ol></div>

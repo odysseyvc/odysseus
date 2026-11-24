@@ -452,3 +452,28 @@ footer a { color: var(--ink-2); text-decoration: none; } footer a:hover { color:
   .flow > div:last-child { border-bottom: 0; }
   .hero { padding: 56px 20px 60px; }
 }
+
+/* The course: citations, the bibliography, problem sets and the pages built on the book */
+a.cite { white-space: nowrap; }
+.coursetabs { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 0 0 30px; font-family: var(--sans); font-size: 14px; }
+.coursetabs a { padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--ink-2); }
+.coursetabs a:hover { color: var(--ink); border-color: var(--ink-3); }
+.coursetabs a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+ul.readings { list-style: none; padding: 0; }
+ul.readings li { padding: 14px 0; border-top: 1px solid var(--rule); scroll-margin-top: 90px; }
+ul.readings li:target { background: var(--accent-soft); padding-left: 12px; padding-right: 12px; border-radius: 8px; }
+ul.readings li p { margin: 0.35em 0 0; color: var(--ink-2); font-size: 0.94em; }
+ul.readings .venue { color: var(--ink-2); }
+ul.readings .core { font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+ul.readings p.cited { font-size: 0.86em; color: var(--ink-3); }
+.box.theory { border-left-color: var(--ink); background: none; }
+.box.theory > .label { color: var(--ink); }
+.box.unit { border-left-color: var(--ink-3); background: none; padding-bottom: 10px; }
+.box.unit dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.box.unit dt { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.box.unit dd { margin: 0; }
+@media (max-width: 560px) { .box.unit dl { grid-template-columns: 1fr; } .box.unit dd { margin-bottom: 6px; } }
+.box.exercises h3, .problems h3 { font-family: var(--sans); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin: 1.2em 0 0.4em; }
+.pts { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+.math { font-family: var(--mono); font-size: 0.93em; white-space: nowrap; }
+p.eq { font-family: var(--mono); font-size: 0.95em; margin: 1em 0 1em 1.4em; overflow-x: auto; }

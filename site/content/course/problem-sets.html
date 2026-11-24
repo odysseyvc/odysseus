@@ -1,0 +1,71 @@
+<!--
+order: 3
+slug: problem-sets
+tab: Problem sets
+title: Problem sets
+summary: Five sets. Each takes the analysis and design problems of its units and adds problems that cross them, one of which needs a measurement of your own. They are about arguing from definitions; none can be done by quoting a chapter.
+-->
+<p>Every chapter ends with problems in five groups. A problem set is made from them: <strong>all the Analysis problems</strong> of its units, <strong>one Design problem of your choice from each unit</strong>, and the cross-unit problems below, which are only here. Review problems are for checking yourself and are not handed in. Reading problems are the weekly responses. Open problems are for the project.</p>
+
+<h2 id="how">How they are marked</h2>
+<ul>
+<li>An answer is an argument. State what you assume, name the definition or property you use (from <a href="notation.html">the model</a>), and reach the conclusion in steps a classmate could check. A right answer without an argument earns a third.</li>
+<li>Where a claim is false, say so and give the smallest counterexample. Several problems state something false on purpose.</li>
+<li>Calculations show their working and end in a number with units. Carry two significant figures.</li>
+<li>The measured problem in each set reports the number of runs, an interval, what it cost, and one thing that could make the number wrong.</li>
+<li>Roughly: a fifth of each set is straightforward, a half takes thought, and the rest is hard. About ten hours a set.</li>
+</ul>
+
+<h2 id="ps1">Problem set 1: loops, journals and decisions</h2>
+<p><em>Units:</em> {{ch:what-a-personal-agent-is}}, {{ch:the-agent-loop}}, {{ch:build-or-buy}}, {{ch:the-conversation}}. <em>Due:</em> week 3.</p>
+<ol>
+<li><strong>The shape of a run.</strong> A task needs facts from three tools. In design A the model calls them one at a time; in design B it requests all three in one step and they run together. With fixed context <span class="math">c₀ = 9,000</span> tokens, each result adding 800 tokens, each model call taking 2.5 s plus 0.4 s per thousand input tokens, and each tool taking 1.2 s: derive the number of model calls, the total input tokens and the seconds to the first word of the reply for A and for B. Which term of the cost formula did B reduce?</li>
+<li><strong>What the journal cannot tell you.</strong> A journal records, for each tool call, its name and whether it succeeded, but not its inputs. List three questions about past runs that are now unanswerable, and for each say whether adding the inputs would create a privacy cost. State a rule for what a journal should record that you could defend to the owner.</li>
+<li><strong>A false claim.</strong> "If the journal is append-only and every report is a pure function of it, then a crash can never cause an effect to happen twice." Refute it with a sequence of events, and say what must be added to make it true.</li>
+<li><strong>Buying on evidence.</strong> A vendor's benchmark says its search tool answers 91% of questions correctly. On 40 of your own questions it gets 30 and the alternative gets 33. Compute an interval for the paired difference under the worst and best cases for how the disagreements could fall, say whether you can tell the two apart, and say how many questions you would need to detect a true difference of five points with reasonable power. What does the vendor's 91% contribute to your decision?</li>
+<li><strong>Measured.</strong> Run laboratory 1's agent on twenty messages of your own invention, each three times. Report seconds to first word and total seconds with intervals over messages, and the share of total time that was model, tool and your own code. What would you change first?</li>
+</ol>
+
+<h2 id="ps2">Problem set 2: state that outlives a run</h2>
+<p><em>Units:</em> {{ch:memory}}, {{ch:acting-unasked}}, {{ch:staying-up}}. <em>Due:</em> week 5.</p>
+<ol>
+<li><strong>The lifetime of an influence.</strong> For each of these, give the longest time for which a single piece of outside text read today can affect what the agent does, and what ends it: the context of a conversation; a saved memory; a skill; a routine that reads the newest mail each morning; a dated note. Order them, and say for which the owner can see the influence without looking for it.</li>
+<li><strong>At most once, at least once.</strong> A reminder is due at 09:00. The process may crash at any instant and restarts within a minute. Design A marks the reminder sent, then sends it. Design B sends it, then marks it. For each give the failure it permits. The owner says a duplicate is a nuisance and a miss is a disaster; a different owner says the opposite. Which design suits each, and what would a third design need from the chat platform to give exactly once?</li>
+<li><strong>Unattended asking.</strong> In an unattended run the gate's <em>ask</em> has nobody to answer. Three policies: treat it as refuse; hold the call and ask when the owner next writes; ask by notification and wait an hour. For each say what Property 2 becomes, what a taken-over model can do with it, and one ordinary errand it breaks.</li>
+<li><strong>A false claim.</strong> "Because memory is plain text the owner can read, a planted memory will be noticed." Give two reasons this does not follow, each tied to a measured or measurable quantity, and design the smallest mechanism that would make it closer to true.</li>
+<li><strong>Measured.</strong> Kill your laboratory 1 agent at a random instant in each of thirty tasks that include a tool call with an effect. Report how many effects happened zero, one and two times, and compare with what your design promised.</li>
+</ol>
+
+<h2 id="ps3">Problem set 3: protection</h2>
+<p><em>Units:</em> {{ch:the-gate}}, {{ch:untrusted-content}}, {{ch:secrets-and-sign-ins}}. <em>Due:</em> week 8.</p>
+<ol>
+<li><strong>Two of three.</strong> An agent can (i) read text from outsiders, (ii) read the owner's private data, (iii) cause a send. Take the eight combinations. For each say what the worst outcome is if the model is taken over, and which of the course's mechanisms removes a capability for the length of one run. Then show a run in which an agent never holds all three at once and private data still reaches an outsider. What did the rule assume?</li>
+<li><strong>Confinement is not noninterference.</strong> State noninterference from outside text to the send sink in your own words. Then exhibit three runs, all permitted by a gate that confines in the sense of Definition 7, in which what an outsider wrote changes what a third party receives: one through a paraphrase, one through the choice among allowed calls, one through timing or count. For each say whether any mechanism short of asking about every call would stop it.</li>
+<li><strong>Counting the allow table.</strong> A gate has 40 tools. For 28 the effect class is fixed by the tool; for 12 it depends on inputs, each with two relevant input conditions. How many rows does the allow table need to be complete? An auditor samples 30 rows at random and finds none unsound. What can they conclude about the proportion of unsound rows, at 95%? Why is enumeration the right method here and sampling the wrong one?</li>
+<li><strong>Least privilege, priced.</strong> A sign-in can request read-only access to mail or full access. With read-only, 15% of the owner's errands cannot be done. With full access, a stolen token can send as the owner. Write down the quantities you would need to choose, say which are properties and which measurements, and say what design makes the choice unnecessary.</li>
+<li><strong>A false claim.</strong> "Opening an address is a read, so it needs no question." Refute it twice: once using Definition 2, once using what an address inside a private network can reach.</li>
+<li><strong>Measured.</strong> Run the obedient-model audit on your own laboratory gate with an empty and a non-empty record of reading. Report the table, every row whose answer the record changes, and one row you changed your mind about while doing it.</li>
+</ol>
+
+<h2 id="ps4">Problem set 4: reaching the world</h2>
+<p><em>Units:</em> {{ch:mail-and-calendar}}, {{ch:any-app}}, {{ch:services-with-their-own-server}}, {{ch:the-browser}}, {{ch:files-pictures-and-voice}}, {{ch:channels}}. <em>Due:</em> week 10.</p>
+<ol>
+<li><strong>Describing tools, or finding them.</strong> A service has <span class="math">N</span> actions, each described in 350 tokens. Design A puts all descriptions in the fixed context. Design B offers a find tool and a run tool (700 tokens together), and each task then spends one extra model call and reads 5 descriptions. A conversation has 12 calls in A. Using the cost formula with cache reads at a tenth of the input price, derive the <span class="math">N</span> at which B becomes cheaper, first with a warm cache throughout and then with no cache. What does B cost that the formula does not show?</li>
+<li><strong>Two kinds of mistake.</strong> A classifier sorts unseen actions into "runs unasked" and "asks". On 400 labelled actions, 300 truly change something. It sends 12 of those to "runs unasked" and 25 of the 100 harmless ones to "asks". State the two error rates. The owner uses 30 actions a day, a tenth of them changes. Give the expected number of unasked changes and of needless questions per week. Which rate would you trade for the other, and how does a safe default change the answer?</li>
+<li><strong>Time of check, time of use.</strong> The owner approves a reply to a message. Between the question and the send, a new message arrives in the thread that changes its meaning. Describe the failure, state the invariant the program should enforce, and say what the owner should be shown. Is re-reading before acting a property or a courtesy?</li>
+<li><strong>A tool with no effect class.</strong> A browser run is one tool call whose effects depend on a hundred later steps the gate never sees. State what Properties 1 and 2 give for it. Then design the least machinery that restores a per-step gate, and say what it costs in speed and in what the agent can no longer do.</li>
+<li><strong>Delivery.</strong> A platform delivers each message at least once, possibly late and out of order, and your handler may crash halfway. Give the conditions under which the owner's "yes" to a question could approve the wrong call, and the design that rules it out. Why is a typed "yes" weaker than a button, and what makes a typed word acceptable when a platform has no buttons?</li>
+<li><strong>Measured.</strong> Take twenty invented pages with a table or chart on each. Extract the figures by recognised text alone and by showing the page to a model. Report accuracy per figure with an interval over pages, and cost per page, for each. For which pages would you pay for the second?</li>
+</ol>
+
+<h2 id="ps5">Problem set 5: knowing</h2>
+<p><em>Units:</em> {{ch:testing-and-evaluation}}, {{ch:a-changing-world}}, {{ch:a-second-reading}}, {{ch:cost}}. <em>Due:</em> week 13.</p>
+<ol>
+<li><strong>The unit of analysis.</strong> A suite has 50 cases, 4 repeats each. Within a case, repeats agree with each other far more than runs of different cases do. A report gives a 95% interval of ±2.1 points computed over 200 runs. Explain why this is too narrow, derive the factor by which it is too narrow when the within-case correlation is 0.6, and give the corrected half-width.</li>
+<li><strong>Headroom and noise.</strong> A suite scores 97.1% with a noise floor of 1.9 points. A change is believed to fix a tenth of the remaining failures. Can this suite show it? How many cases of what difficulty would a suite need for the same change to be visible at the same noise? What is lost by making cases harder, and how would you check that the harder cases still measure the thing you care about?</li>
+<li><strong>A judge and a person.</strong> On 120 statements a judge says yes to 96 and a person to 84; they agree on 100. Compute observed agreement, chance agreement and κ. They disagree on 20: in 16 the judge said yes. What does that asymmetry mean for a score built on this judge, and in which direction is the score biased? What would you do to the statements before touching the judge?</li>
+<li><strong>Spending a held-out set.</strong> You have 60 cases and a budget of 2,000 runs. You want to try ten changes and keep one. Design the split, the number of repeats and the rule for keeping a change so that the chance of keeping a change with no true effect is at most 5%. Then say what you do when an eleventh idea arrives.</li>
+<li><strong>A false claim.</strong> "All 700 tests pass, so the gate is sound." List the four different things that would each have to be true for this to follow, and for each name the kind of evidence, other than a test, that bears on it.</li>
+<li><strong>The cost of a pause.</strong> A conversation holds 60,000 tokens. A cache read costs a tenth of fresh input and a cache write a quarter more than fresh input; the cache lasts five minutes. The owner's gaps between messages are under five minutes 70% of the time. Compute the expected input cost of the next message. A summary of 3,000 tokens could replace the conversation after a long gap at the price of one extra call over the 60,000. For what probability of a long gap is summarising cheaper, and what is the cost that is not money?</li>
+<li><strong>Measured.</strong> Read thirty runs from your own laboratory 5 suite: ten it passed, ten it failed, ten at random. For each decide whether the mark was right. Report the suite's two error rates with intervals, and the single fault in a check that explains the most errors.</li>
+</ol>

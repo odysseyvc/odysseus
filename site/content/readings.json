@@ -1,0 +1,3694 @@
+[
+ {
+  "key": "yao2023react",
+  "authors": "Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, Yuan Cao",
+  "surnames": [
+   "Yao",
+   "Zhao",
+   "Yu",
+   "Du",
+   "Shafran",
+   "Narasimhan",
+   "Cao"
+  ],
+  "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+  "venue": "arXiv:2210.03629 (ICLR camera-ready per arXiv comments)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2210.03629",
+  "shows": "Interleaves reasoning traces with actions that query external sources, and reports gains over reasoning-only and acting-only baselines on HotpotQA, FEVER, ALFWorld and WebShop. It is the template for the observe-think-act loop that most tool-using agents implement.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Yao et al. 2023a"
+ },
+ {
+  "key": "schick2023toolformer",
+  "authors": "Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Luke Zettlemoyer, Nicola Cancedda, Thomas Scialom",
+  "surnames": [
+   "Schick",
+   "Dwivedi-Yu",
+   "Dessì",
+   "Raileanu",
+   "Lomeli",
+   "Zettlemoyer",
+   "Cancedda",
+   "Scialom"
+  ],
+  "title": "Toolformer: Language Models Can Teach Themselves to Use Tools",
+  "venue": "arXiv:2302.04761",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2302.04761",
+  "shows": "Trains a language model to decide when and how to call external APIs using self-generated training data. It frames tool use as a learned capability and motivates the function-calling interfaces used today.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "sumers2024coala",
+  "authors": "Theodore R. Sumers, Shunyu Yao, Karthik Narasimhan, Thomas L. Griffiths",
+  "surnames": [
+   "Sumers",
+   "Yao",
+   "Narasimhan",
+   "Griffiths"
+  ],
+  "title": "Cognitive Architectures for Language Agents",
+  "venue": "Transactions on Machine Learning Research (arXiv:2309.02427)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2309.02427",
+  "shows": "Proposes the CoALA framework, organizing language agents by memory modules, action space and decision procedure, and links them to classic cognitive architectures. It gives a vocabulary for describing and comparing the design of a personal agent.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "shinn2023reflexion",
+  "authors": "Noah Shinn, Federico Cassano, Edward Berman, Ashwin Gopinath, Karthik Narasimhan, Shunyu Yao",
+  "surnames": [
+   "Shinn",
+   "Cassano",
+   "Berman",
+   "Gopinath",
+   "Narasimhan",
+   "Yao"
+  ],
+  "title": "Reflexion: Language Agents with Verbal Reinforcement Learning",
+  "venue": "arXiv:2303.11366",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2303.11366",
+  "shows": "Agents store verbal self-critiques of failed attempts in an episodic memory buffer and use them on later trials, improving task success without weight updates. It is the standard reference for reflection-based learning from feedback.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "packer2023memgpt",
+  "authors": "Charles Packer, Sarah Wooders, Kevin Lin, Vivian Fang, Shishir G. Patil, Ion Stoica, Joseph E. Gonzalez",
+  "surnames": [
+   "Packer",
+   "Wooders",
+   "Lin",
+   "Fang",
+   "Patil",
+   "Stoica",
+   "Gonzalez"
+  ],
+  "title": "MemGPT: Towards LLMs as Operating Systems",
+  "venue": "arXiv:2310.08560",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2310.08560",
+  "shows": "Manages a hierarchy of memory tiers by letting the model move information between in-context and external storage through function calls. It is a concrete design for long-term memory in assistants that run over long periods.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "park2023generative",
+  "authors": "Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, Michael S. Bernstein",
+  "surnames": [
+   "Park",
+   "O'Brien",
+   "Cai",
+   "Morris",
+   "Liang",
+   "Bernstein"
+  ],
+  "title": "Generative Agents: Interactive Simulacra of Human Behavior",
+  "venue": "arXiv:2304.03442",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2304.03442",
+  "shows": "Describes an architecture with a memory stream, retrieval scored by recency, importance and relevance, reflection, and planning, evaluated in a simulated town. Its retrieval-and-reflection design is widely reused for agent memory.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "lewis2020rag",
+  "authors": "Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel, Douwe Kiela",
+  "surnames": [
+   "Lewis",
+   "Perez",
+   "Piktus",
+   "Petroni",
+   "Karpukhin",
+   "Goyal",
+   "Küttler",
+   "Lewis",
+   "Yih",
+   "Rocktäschel",
+   "Riedel",
+   "Kiela"
+  ],
+  "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+  "venue": "NeurIPS 2020 (arXiv:2005.11401)",
+  "year": 2020,
+  "url": "https://arxiv.org/abs/2005.11401",
+  "shows": "Introduces retrieval-augmented generation, combining a parametric generator with a non-parametric retrieved document index. It underlies approaches to grounding an agent in a user's mail, files and notes.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "gao2023ragsurvey",
+  "authors": "Yunfan Gao, Yun Xiong, Xinyu Gao, Kangxiang Jia, Jinliu Pan, Yuxi Bi, Yi Dai, Jiawei Sun, Meng Wang, Haofen Wang",
+  "surnames": [
+   "Gao",
+   "Xiong",
+   "Gao",
+   "Jia",
+   "Pan",
+   "Bi",
+   "Dai",
+   "Sun",
+   "Wang",
+   "Wang"
+  ],
+  "title": "Retrieval-Augmented Generation for Large Language Models: A Survey",
+  "venue": "arXiv:2312.10997",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2312.10997",
+  "shows": "Surveys naive, advanced and modular RAG pipelines, covering retrieval, generation and augmentation techniques and evaluation. Useful as a map of design choices for a personal-data retrieval layer.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "asai2023selfrag",
+  "authors": "Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, Hannaneh Hajishirzi",
+  "surnames": [
+   "Asai",
+   "Wu",
+   "Wang",
+   "Sil",
+   "Hajishirzi"
+  ],
+  "title": "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
+  "venue": "arXiv:2310.11511",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2310.11511",
+  "shows": "Trains a model to decide when to retrieve and to critique its own retrieved passages and outputs using reflection tokens. It shows adaptive retrieval as an alternative to always retrieving a fixed number of passages.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "wei2022cot",
+  "authors": "Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc Le, Denny Zhou",
+  "surnames": [
+   "Wei",
+   "Wang",
+   "Schuurmans",
+   "Bosma",
+   "Ichter",
+   "Xia",
+   "Chi",
+   "Le",
+   "Zhou"
+  ],
+  "title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+  "venue": "arXiv:2201.11903",
+  "year": 2022,
+  "url": "https://arxiv.org/abs/2201.11903",
+  "shows": "Shows that giving worked intermediate reasoning steps in the prompt improves performance on arithmetic, commonsense and symbolic tasks in large models. It is the basis for the reasoning component of later agent loops.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "yao2023tot",
+  "authors": "Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, Karthik Narasimhan",
+  "surnames": [
+   "Yao",
+   "Yu",
+   "Zhao",
+   "Shafran",
+   "Griffiths",
+   "Cao",
+   "Narasimhan"
+  ],
+  "title": "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+  "venue": "NeurIPS 2023 (arXiv:2305.10601)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2305.10601",
+  "shows": "Generalizes chain-of-thought to a search over branching reasoning steps with self-evaluation and backtracking. It illustrates deliberate planning with lookahead as opposed to a single left-to-right pass.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Yao et al. 2023b"
+ },
+ {
+  "key": "wang2023voyager",
+  "authors": "Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, Anima Anandkumar",
+  "surnames": [
+   "Wang",
+   "Xie",
+   "Jiang",
+   "Mandlekar",
+   "Xiao",
+   "Zhu",
+   "Fan",
+   "Anandkumar"
+  ],
+  "title": "Voyager: An Open-Ended Embodied Agent with Large Language Models",
+  "venue": "arXiv:2305.16291",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2305.16291",
+  "shows": "An agent in Minecraft that accumulates a library of executable skills it writes and reuses, with iterative prompting from execution feedback. It is an example of procedural memory stored as code.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Wang et al. 2023c"
+ },
+ {
+  "key": "liu2023lostmiddle",
+  "authors": "Nelson F. Liu, Kevin Lin, John Hewitt, Ashwin Paranjape, Michele Bevilacqua, Fabio Petroni, Percy Liang",
+  "surnames": [
+   "Liu",
+   "Lin",
+   "Hewitt",
+   "Paranjape",
+   "Bevilacqua",
+   "Petroni",
+   "Liang"
+  ],
+  "title": "Lost in the Middle: How Language Models Use Long Contexts",
+  "venue": "Transactions of the Association for Computational Linguistics (arXiv:2307.03172)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2307.03172",
+  "shows": "Finds that model accuracy on retrieval-style tasks depends on where relevant information sits in a long context, and is often lower for information in the middle. It is evidence for ordering and trimming what an agent places in context.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Liu et al. 2023c"
+ },
+ {
+  "key": "anthropic2025contexteng",
+  "authors": "Prithvi Rajasekaran, Ethan Dixon, Carly Ryan, Jeremy Hadfield, et al. (Anthropic Applied AI team)",
+  "surnames": [
+   "Rajasekaran",
+   "Dixon",
+   "Ryan",
+   "Hadfield"
+  ],
+  "title": "Effective context engineering for AI agents",
+  "venue": "Anthropic Engineering blog",
+  "year": 2025,
+  "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+  "shows": "Practitioner account of managing what goes into the context window across long-running agent tasks, including just-in-time retrieval, compaction and sub-agents. Assigned as a current statement of context management practice from a model maker.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2025a"
+ },
+ {
+  "key": "anthropic2024contextualretrieval",
+  "authors": "Anthropic",
+  "surnames": [
+   "Anthropic"
+  ],
+  "title": "Introducing Contextual Retrieval",
+  "venue": "Anthropic news",
+  "year": 2024,
+  "url": "https://www.anthropic.com/news/contextual-retrieval",
+  "shows": "Describes a retrieval preprocessing method that prepends chunk-specific context before embedding and indexing. Relevant to indexing personal documents where isolated chunks lose meaning.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2024b"
+ },
+ {
+  "key": "anthropic2024effectiveagents",
+  "authors": "Erik S., Barry Zhang (Anthropic)",
+  "surnames": [
+   "S.",
+   "Zhang"
+  ],
+  "title": "Building effective agents",
+  "venue": "Anthropic Engineering blog (published December 19, 2024)",
+  "year": 2024,
+  "url": "https://www.anthropic.com/engineering/building-effective-agents",
+  "shows": "Distinguishes fixed workflows from agents and describes patterns such as prompt chaining, routing, parallelization, orchestrator-workers and evaluator-optimizer. It recommends using the simplest structure that works and is the baseline practitioner reference for the course.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2024a"
+ },
+ {
+  "key": "anthropic2025multiagent",
+  "authors": "Jeremy Hadfield, Barry Zhang, Kenneth Lien, Florian Scholz, Jeremy Fox, Daniel Ford",
+  "surnames": [
+   "Hadfield",
+   "Zhang",
+   "Lien",
+   "Scholz",
+   "Fox",
+   "Ford"
+  ],
+  "title": "How we built our multi-agent research system",
+  "venue": "Anthropic Engineering blog (published June 13, 2025)",
+  "year": 2025,
+  "url": "https://www.anthropic.com/engineering/multi-agent-research-system",
+  "shows": "Engineering account of an orchestrator with parallel sub-agents for research tasks, including prompting, evaluation and reliability lessons. It gives concrete evidence on when sub-agent designs help and what they cost.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2025b"
+ },
+ {
+  "key": "yan2025dontmulti",
+  "authors": "Walden Yan (Cognition)",
+  "surnames": [
+   "Yan"
+  ],
+  "title": "Don't Build Multi-Agents",
+  "venue": "Cognition blog (2025-06-12)",
+  "year": 2025,
+  "url": "https://cognition.com/blog/dont-build-multi-agents",
+  "shows": "Argues from the practitioner side that sub-agents can act on inconsistent context, and discusses sharing full traces. Assigned as a counterpoint to multi-agent designs.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Yan 2025"
+ },
+ {
+  "key": "anthropic2025writingtools",
+  "authors": "Ken Aizawa et al. (Anthropic)",
+  "surnames": [
+   "Aizawa",
+   "",
+   ""
+  ],
+  "title": "Writing effective tools for agents — with agents",
+  "venue": "Anthropic Engineering blog (published September 11, 2025)",
+  "year": 2025,
+  "url": "https://www.anthropic.com/engineering/writing-tools-for-agents",
+  "shows": "Guidance on designing, describing and evaluating tools so that agents use them correctly, including how tool outputs consume context. Directly applicable to designing mail, calendar and CRM tools.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2025c"
+ },
+ {
+  "key": "anthropic2025advancedtool",
+  "authors": "Bin Wu et al. (Anthropic)",
+  "surnames": [
+   "Wu",
+   "",
+   ""
+  ],
+  "title": "Introducing advanced tool use on the Claude Developer Platform",
+  "venue": "Anthropic Engineering blog (published November 24, 2025)",
+  "year": 2025,
+  "url": "https://www.anthropic.com/engineering/advanced-tool-use",
+  "shows": "Describes a tool search tool that discovers tools on demand instead of loading all definitions, plus programmatic tool calling and tool-use examples. It addresses context cost when an agent has many tools.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2025d"
+ },
+ {
+  "key": "mcp2025spec",
+  "authors": "Model Context Protocol project",
+  "surnames": [
+   "Model Context Protocol project"
+  ],
+  "title": "Model Context Protocol Specification (version 2025-06-18)",
+  "venue": "modelcontextprotocol.io",
+  "year": 2025,
+  "url": "https://modelcontextprotocol.io/specification/2025-06-18",
+  "shows": "The protocol specification for connecting LLM applications to tools, resources and prompts over JSON-RPC, with client features such as sampling and elicitation and stated consent and security principles. It is the primary source on the tool-interface standard.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "MCP specification"
+ },
+ {
+  "key": "mcp2025tools",
+  "authors": "Model Context Protocol project",
+  "surnames": [
+   "Model Context Protocol project"
+  ],
+  "title": "Model Context Protocol Specification: Tools (2025-06-18)",
+  "venue": "modelcontextprotocol.io",
+  "year": 2025,
+  "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+  "shows": "Specifies tool listing, calling, input and output schemas, annotations, error handling and the human-in-the-loop and security requirements. Read alongside tool-design guidance when defining agent tools.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "MCP specification, tools"
+ },
+ {
+  "key": "openai2025functioncalling",
+  "authors": "OpenAI",
+  "surnames": [
+   "OpenAI"
+  ],
+  "title": "Function calling (also known as tool calling)",
+  "venue": "OpenAI API documentation",
+  "year": 2025,
+  "url": "https://developers.openai.com/api/docs/guides/function-calling",
+  "shows": "Documents the tool-calling flow: send tool definitions, receive a tool call, run it in application code, return the output and receive a final answer or further calls. A vendor reference for the loop in practice.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "OpenAI 2025a"
+ },
+ {
+  "key": "openai2025practicalguide",
+  "authors": "OpenAI",
+  "surnames": [
+   "OpenAI"
+  ],
+  "title": "A Practical Guide to Building AI Agents",
+  "venue": "OpenAI (business guide)",
+  "year": 2025,
+  "url": "https://openai.com/business/guides-and-resources/a-practical-guide-to-building-agents/",
+  "shows": "Covers when to build an agent, design of models, tools and instructions, orchestration from single-agent loops to multi-agent setups, and layered guardrails including human intervention for high-risk actions. Page opened is the web version, dated January 15, 2026 on the page; the original PDF appeared in April 2025 per a secondary source.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "OpenAI 2025b"
+ },
+ {
+  "key": "gorilla2023",
+  "authors": "Shishir G. Patil, Tianjun Zhang, Xin Wang, Joseph E. Gonzalez",
+  "surnames": [
+   "Patil",
+   "Zhang",
+   "Wang",
+   "Gonzalez"
+  ],
+  "title": "Gorilla: Large Language Model Connected with Massive APIs",
+  "venue": "arXiv:2305.15334",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2305.15334",
+  "shows": "Fine-tunes a model to write API calls from a large set of documented APIs using retrieval over documentation. Relevant to selecting among many tools and avoiding invalid calls.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "qin2023toolllm",
+  "authors": "Yujia Qin, Shihao Liang, Yining Ye, Kunlun Zhu, Lan Yan, Yaxi Lu, Yankai Lin, Xin Cong, et al.",
+  "surnames": [
+   "Qin",
+   "Liang",
+   "Ye",
+   "Zhu",
+   "Yan",
+   "Lu",
+   "Lin",
+   "Cong"
+  ],
+  "title": "ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs",
+  "venue": "arXiv:2307.16789",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2307.16789",
+  "shows": "Builds a dataset and evaluation over more than 16,000 real REST APIs, with an API retriever to choose tools for an instruction. It is early work on tool retrieval from large tool sets.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "yao2024taubench",
+  "authors": "Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan",
+  "surnames": [
+   "Yao",
+   "Shinn",
+   "Razavi",
+   "Narasimhan"
+  ],
+  "title": "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains",
+  "venue": "arXiv:2406.12045",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2406.12045",
+  "shows": "Benchmarks agents that converse with a simulated user while calling domain tools under policy rules, and measures consistency over repeated trials. It tests the setting closest to an assistant acting for a person.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "mialon2023augmented",
+  "authors": "Grégoire Mialon, Roberto Dessì, Maria Lomeli, Christoforos Nalmpantis, Ram Pasunuru, Roberta Raileanu, et al.",
+  "surnames": [
+   "Mialon",
+   "Dessì",
+   "Lomeli",
+   "Nalmpantis",
+   "Pasunuru",
+   "Raileanu"
+  ],
+  "title": "Augmented Language Models: a Survey",
+  "venue": "arXiv:2302.07842",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2302.07842",
+  "shows": "Surveys language models augmented with reasoning skills and the ability to use tools. A broad entry point to the literature before ReAct-style agents.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Mialon et al. 2023a"
+ },
+ {
+  "key": "wang2023agentsurvey",
+  "authors": "Lei Wang, Chen Ma, Xueyang Feng, Zeyu Zhang, Hao Yang, Jingsen Zhang, et al.",
+  "surnames": [
+   "Wang",
+   "Ma",
+   "Feng",
+   "Zhang",
+   "Yang",
+   "Zhang"
+  ],
+  "title": "A Survey on Large Language Model based Autonomous Agents",
+  "venue": "arXiv:2308.11432",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2308.11432",
+  "shows": "Surveys LLM agents by profile, memory, planning and action modules, plus applications and evaluation. Gives a structured overview of the field.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Wang et al. 2023a"
+ },
+ {
+  "key": "weng2023agents",
+  "authors": "Lilian Weng",
+  "surnames": [
+   "Weng"
+  ],
+  "title": "LLM Powered Autonomous Agents",
+  "venue": "Lil'Log blog (June 23, 2023)",
+  "year": 2023,
+  "url": "https://lilianweng.github.io/posts/2023-06-23-agent/",
+  "shows": "An overview essay by a practitioner covering planning, memory and tool use components of LLM agents with references to the primary papers. Useful as an orientation reading.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "chhikara2025mem0",
+  "authors": "Prateek Chhikara, Dev Khant, Saket Aryan, Taranjeet Singh, Deshraj Yadav",
+  "surnames": [
+   "Chhikara",
+   "Khant",
+   "Aryan",
+   "Singh",
+   "Yadav"
+  ],
+  "title": "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory",
+  "venue": "arXiv:2504.19413",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2504.19413",
+  "shows": "Presents a memory layer that extracts, consolidates and retrieves facts from conversations, with evaluation on a long-conversation benchmark. The authors are the system's developers, so results should be read as vendor-reported.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "atkinson1968memory",
+  "authors": "Richard C. Atkinson, Richard M. Shiffrin",
+  "surnames": [
+   "Atkinson",
+   "Shiffrin"
+  ],
+  "title": "Human Memory: A Proposed System and Its Control Processes",
+  "venue": "In K. W. Spence and J. T. Spence (eds.), The Psychology of Learning and Motivation, vol. 2, Academic Press, pp. 89-195 (confirmed via the 2016 Cambridge University Press reprint listing)",
+  "year": 1968,
+  "url": "https://www.cambridge.org/core/books/scientists-making-a-difference/human-memory-a-proposed-system-and-its-control-processes/2EB1533D913B6720549005C11CA73CFE",
+  "shows": "The multi-store model of sensory registers, short-term store and long-term store with control processes. It is the source of the working-memory versus long-term-memory split that agent memory designs borrow.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "horvitz1999mixed",
+  "authors": "Eric Horvitz",
+  "surnames": [
+   "Horvitz"
+  ],
+  "title": "Principles of Mixed-Initiative User Interfaces",
+  "venue": "Proceedings of CHI '99, ACM, pp. 159-166",
+  "year": 1999,
+  "url": "https://www.microsoft.com/en-us/research/publication/principles-mixed-initiative-user-interfaces/",
+  "shows": "Sets out principles for combining automated services with direct user control, using the Lookout meeting-scheduling system as an example, including reasoning about the costs and benefits of acting. It is the foundational reference for proactive assistants that decide when to act or ask.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "wu2023autogen",
+  "authors": "Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, et al.",
+  "surnames": [
+   "Wu",
+   "Bansal",
+   "Zhang",
+   "Wu",
+   "Li",
+   "Zhu",
+   "Jiang"
+  ],
+  "title": "AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation",
+  "venue": "arXiv:2308.08155",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2308.08155",
+  "shows": "A framework in which multiple conversable agents, tools and humans exchange messages to complete tasks. Representative of conversation-based multi-agent orchestration.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "hong2023metagpt",
+  "authors": "Sirui Hong, Mingchen Zhuge, Jiaqi Chen, Xiawu Zheng, Yuheng Cheng, Ceyao Zhang, et al.",
+  "surnames": [
+   "Hong",
+   "Zhuge",
+   "Chen",
+   "Zheng",
+   "Cheng",
+   "Zhang"
+  ],
+  "title": "MetaGPT: Meta Programming for A Multi-Agent Collaborative Framework",
+  "venue": "arXiv:2308.00352",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2308.00352",
+  "shows": "Assigns role-specific agents standardized operating procedures and structured intermediate outputs for software tasks. Illustrates role-based decomposition in multi-agent systems.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "zhou2023webarena",
+  "authors": "Shuyan Zhou, Frank F. Xu, Hao Zhu, Xuhui Zhou, Robert Lo, Abishek Sridhar, Xianyi Cheng, Tianyue Ou, Yonatan Bisk, Daniel Fried, Uri Alon, Graham Neubig",
+  "surnames": [
+   "Zhou",
+   "Xu",
+   "Zhu",
+   "Zhou",
+   "Lo",
+   "Sridhar",
+   "Cheng",
+   "Ou",
+   "Bisk",
+   "Fried",
+   "Alon",
+   "Neubig"
+  ],
+  "title": "WebArena: A Realistic Web Environment for Building Autonomous Agents",
+  "venue": "arXiv:2307.13854",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2307.13854",
+  "shows": "A self-hostable environment of functional websites and long-horizon web tasks judged on outcome. It showed a large gap between agents and humans and remains the standard benchmark for browser agents.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Zhou et al. 2023b"
+ },
+ {
+  "key": "deng2023mind2web",
+  "authors": "Xiang Deng, Yu Gu, Boyuan Zheng, Shijie Chen, Samuel Stevens, Boshi Wang, Huan Sun, Yu Su",
+  "surnames": [
+   "Deng",
+   "Gu",
+   "Zheng",
+   "Chen",
+   "Stevens",
+   "Wang",
+   "Sun",
+   "Su"
+  ],
+  "title": "Mind2Web: Towards a Generalist Agent for the Web",
+  "venue": "arXiv:2306.06070 (NeurIPS 2023 Spotlight per arXiv comments)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2306.06070",
+  "shows": "A dataset of tasks over many real websites with recorded action sequences, used to study generalization to unseen sites and domains. It frames how HTML is pruned and ranked for an LLM.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "zheng2024seeact",
+  "authors": "Boyuan Zheng, Boyu Gou, Jihyung Kil, Huan Sun, Yu Su",
+  "surnames": [
+   "Zheng",
+   "Gou",
+   "Kil",
+   "Sun",
+   "Su"
+  ],
+  "title": "GPT-4V(ision) is a Generalist Web Agent, if Grounded",
+  "venue": "arXiv:2401.01614",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2401.01614",
+  "shows": "Evaluates a multimodal model as a web agent and finds that converting its planned action to a concrete page element (grounding) is the main bottleneck. It motivates attention to grounding strategy in screen-driven agents.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "xie2024osworld",
+  "authors": "Tianbao Xie, Danyang Zhang, Jixuan Chen, Xiaochuan Li, Siheng Zhao, Ruisheng Cao, et al.",
+  "surnames": [
+   "Xie",
+   "Zhang",
+   "Chen",
+   "Li",
+   "Zhao",
+   "Cao"
+  ],
+  "title": "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments",
+  "venue": "arXiv:2404.07972",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2404.07972",
+  "shows": "A benchmark of open-ended tasks executed in real operating systems and applications with execution-based scoring. It measures how far screenshot-based agents are from human performance on desktop work.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "yang2023som",
+  "authors": "Jianwei Yang, Hao Zhang, Feng Li, Xueyan Zou, Chunyuan Li, Jianfeng Gao",
+  "surnames": [
+   "Yang",
+   "Zhang",
+   "Li",
+   "Zou",
+   "Li",
+   "Gao"
+  ],
+  "title": "Set-of-Mark Prompting Unleashes Extraordinary Visual Grounding in GPT-4V",
+  "venue": "arXiv:2310.11441",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2310.11441",
+  "shows": "Overlays numbered marks on image regions so a multimodal model can refer to them, improving visual grounding. The technique is used to let screenshot agents name which element to click.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Yang et al. 2023b"
+ },
+ {
+  "key": "qin2025uitars",
+  "authors": "Yujia Qin, Yining Ye, Junjie Fang, Haoming Wang, Shihao Liang, Shizuo Tian, et al.",
+  "surnames": [
+   "Qin",
+   "Ye",
+   "Fang",
+   "Wang",
+   "Liang",
+   "Tian"
+  ],
+  "title": "UI-TARS: Pioneering Automated GUI Interaction with Native Agents",
+  "venue": "arXiv:2501.12326",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2501.12326",
+  "shows": "Presents a model trained end-to-end to perceive screenshots and act on GUIs, as opposed to an agent assembled from prompted general models. Representative of the native GUI-agent approach.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "anthropic2024computeruse",
+  "authors": "Anthropic",
+  "surnames": [
+   "Anthropic"
+  ],
+  "title": "Introducing computer use, a new Claude 3.5 Sonnet, and Claude 3.5 Haiku",
+  "venue": "Anthropic news (October 22, 2024)",
+  "year": 2024,
+  "url": "https://www.anthropic.com/news/3-5-models-and-computer-use",
+  "shows": "Announces a public-beta API in which a model views screenshots and issues cursor and keyboard actions, with an OSWorld result and a statement that the capability is error-prone. A primary source for the vendor computer-use interface.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic 2024c"
+ },
+ {
+  "key": "anthropic2025computeruse_docs",
+  "authors": "Anthropic",
+  "surnames": [
+   "Anthropic"
+  ],
+  "title": "Computer use tool (Claude API documentation)",
+  "venue": "Anthropic platform documentation (page as fetched in November 2026)",
+  "year": 2026,
+  "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool",
+  "shows": "Documents the screenshot-mouse-keyboard agent loop, batching, screenshot scaling, and security guidance such as using a sandboxed VM, allowlisting domains, human confirmation of consequential actions, and prompt-injection risk from web content. Documentation changes over time; cite the access date.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Anthropic, computer use"
+ },
+ {
+  "key": "mialon2023gaia",
+  "authors": "Grégoire Mialon, Clémentine Fourrier, Craig Swift, Thomas Wolf, Yann LeCun, Thomas Scialom",
+  "surnames": [
+   "Mialon",
+   "Fourrier",
+   "Swift",
+   "Wolf",
+   "LeCun",
+   "Scialom"
+  ],
+  "title": "GAIA: a benchmark for General AI Assistants",
+  "venue": "arXiv:2311.12983",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2311.12983",
+  "shows": "A set of real-world questions that need tool use, browsing and multimodal reasoning, easy for humans but hard for tool-augmented models. A reference for evaluating general assistants.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "Mialon et al. 2023b"
+ },
+ {
+  "key": "yang2024sweagent",
+  "authors": "John Yang, Carlos E. Jimenez, Alexander Wettig, Kilian Lieret, Shunyu Yao, Karthik Narasimhan, Ofir Press",
+  "surnames": [
+   "Yang",
+   "Jimenez",
+   "Wettig",
+   "Lieret",
+   "Yao",
+   "Narasimhan",
+   "Press"
+  ],
+  "title": "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering",
+  "venue": "arXiv:2405.15793",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2405.15793",
+  "shows": "Shows that the design of the interface between model and computer (commands, feedback format, guardrails) changes agent performance on software tasks. It is the main evidence for treating tool-interface design as a first-class problem.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "kim2022donut",
+  "authors": "Geewook Kim, Teakgyu Hong, Moonbin Yim, Jeongyeon Nam, Jinyoung Park, Jinyeong Yim, et al.",
+  "surnames": [
+   "Kim",
+   "Hong",
+   "Yim",
+   "Nam",
+   "Park",
+   "Yim"
+  ],
+  "title": "OCR-free Document Understanding Transformer",
+  "venue": "ECCV 2022 (arXiv:2111.15664)",
+  "year": 2021,
+  "url": "https://arxiv.org/abs/2111.15664",
+  "shows": "An end-to-end model that reads document images and outputs structured text without a separate OCR stage. It frames the OCR-pipeline versus vision-language-model choice for invoices, receipts and attachments.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "huang2022layoutlmv3",
+  "authors": "Yupan Huang, Tengchao Lv, Lei Cui, Yutong Lu, Furu Wei",
+  "surnames": [
+   "Huang",
+   "Lv",
+   "Cui",
+   "Lu",
+   "Wei"
+  ],
+  "title": "LayoutLMv3: Pre-training for Document AI with Unified Text and Image Masking",
+  "venue": "ACM Multimedia 2022 (arXiv:2204.08387)",
+  "year": 2022,
+  "url": "https://arxiv.org/abs/2204.08387",
+  "shows": "Pre-trains a model jointly on text, layout and image patches for document tasks, using OCR-derived words as input. Representative of the OCR-plus-layout approach that contrasts with OCR-free models.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "blecher2023nougat",
+  "authors": "Lukas Blecher, Guillem Cucurull, Thomas Scialom, Robert Stojnic",
+  "surnames": [
+   "Blecher",
+   "Cucurull",
+   "Scialom",
+   "Stojnic"
+  ],
+  "title": "Nougat: Neural Optical Understanding for Academic Documents",
+  "venue": "arXiv:2308.13418",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2308.13418",
+  "shows": "A visual transformer that converts page images of documents, including math and tables, to markup text. An example of model-based PDF-to-text conversion in place of classical OCR.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "faysse2024colpali",
+  "authors": "Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Céline Hudelot, Pierre Colombo",
+  "surnames": [
+   "Faysse",
+   "Sibille",
+   "Wu",
+   "Omrani",
+   "Viaud",
+   "Hudelot",
+   "Colombo"
+  ],
+  "title": "ColPali: Efficient Document Retrieval with Vision Language Models",
+  "venue": "ICLR 2025 (arXiv:2407.01449)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2407.01449",
+  "shows": "Retrieves documents by embedding page images with a vision-language model instead of extracting text first, and introduces a benchmark for visually rich document retrieval. Relevant to indexing scanned and layout-heavy personal files.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "radford2022whisper",
+  "authors": "Alec Radford, Jong Wook Kim, Tao Xu, Greg Brockman, Christine McLeavey, Ilya Sutskever",
+  "surnames": [
+   "Radford",
+   "Kim",
+   "Xu",
+   "Brockman",
+   "McLeavey",
+   "Sutskever"
+  ],
+  "title": "Robust Speech Recognition via Large-Scale Weak Supervision",
+  "venue": "arXiv:2212.04356",
+  "year": 2022,
+  "url": "https://arxiv.org/abs/2212.04356",
+  "shows": "Trains a speech recognition model on 680,000 hours of weakly supervised multilingual audio and reports robust zero-shot transcription across datasets. It is the reference for voice input to personal assistants.",
+  "level": "core",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page"
+ },
+ {
+  "key": "openai2022whisperpost",
+  "authors": "OpenAI",
+  "surnames": [
+   "OpenAI"
+  ],
+  "title": "Introducing Whisper",
+  "venue": "OpenAI blog (September 21, 2022)",
+  "year": 2022,
+  "url": "https://openai.com/index/whisper/",
+  "shows": "Announcement of the open-source Whisper speech recognition system with its training data scale and supported tasks. The page itself notes it is an older post and points to current OpenAI audio models.",
+  "level": "further",
+  "group": "Agents, tools, memory and interfaces",
+  "checked": "page",
+  "short": "OpenAI 2022"
+ },
+ {
+  "key": "saltzer1975protection",
+  "authors": "Jerome H. Saltzer, Michael D. Schroeder",
+  "surnames": [
+   "Saltzer",
+   "Schroeder"
+  ],
+  "title": "The Protection of Information in Computer Systems",
+  "venue": "Proceedings of the IEEE 63(9)",
+  "year": 1975,
+  "url": "https://web.mit.edu/Saltzer/www/publications/protection/",
+  "shows": "Sets out the design principles for protection mechanisms, including least privilege, complete mediation, fail-safe defaults, separation of privilege and psychological acceptability. A personal-agent permission gate is a direct application of these principles.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "hardy1988confused",
+  "authors": "Norm Hardy",
+  "surnames": [
+   "Hardy"
+  ],
+  "title": "The Confused Deputy (or why capabilities might have been invented)",
+  "venue": "ACM SIGOPS Operating Systems Review 22(4)",
+  "year": 1988,
+  "url": "https://css.csail.mit.edu/6.5660/2011/readings/confused-deputy.html",
+  "shows": "Describes a privileged program that is tricked into misusing its own authority on behalf of a caller, and argues that authority should travel with the request as a capability. An LLM agent holding the user's mail and file credentials is a confused deputy by construction.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "dennis1966semantics",
+  "authors": "Jack B. Dennis, Earl C. Van Horn",
+  "surnames": [
+   "Dennis",
+   "Van Horn"
+  ],
+  "title": "Programming Semantics for Multiprogrammed Computations",
+  "venue": "Communications of the ACM 9(3)",
+  "year": 1966,
+  "url": "https://dspace.mit.edu/handle/1721.1/149345",
+  "shows": "Introduces capability-style protection: unforgeable references that name an object and carry the right to use it. It is the origin of the capability model that later agent-security designs revive.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "lampson1971protection",
+  "authors": "Butler W. Lampson",
+  "surnames": [
+   "Lampson"
+  ],
+  "title": "Protection",
+  "venue": "5th Princeton Conf. on Information Sciences and Systems (1971); reprinted ACM Operating Systems Review 8(1), 1974",
+  "year": 1971,
+  "url": "https://www.bwlampson.site/08-Protection/Abstract.html",
+  "shows": "Formalises protection as an access matrix of subjects, objects and rights, from which access-control lists and capability lists are derived as column and row views. Gives students the vocabulary for stating what an agent may do to which resource.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Lampson 1971"
+ },
+ {
+  "key": "lampson1973confinement",
+  "authors": "Butler W. Lampson",
+  "surnames": [
+   "Lampson"
+  ],
+  "title": "A Note on the Confinement Problem",
+  "venue": "Communications of the ACM 16(10)",
+  "year": 1973,
+  "url": "https://www.bwlampson.site/11-Confinement/Abstract.html",
+  "shows": "States the problem of keeping a program from leaking information to anyone but its caller and shows leakage through covert and side channels. It frames why an untrusted model reading private data cannot simply be told not to leak it.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Lampson 1973"
+ },
+ {
+  "key": "anderson1972planning",
+  "authors": "James P. Anderson",
+  "surnames": [
+   "Anderson"
+  ],
+  "title": "Computer Security Technology Planning Study (ESD-TR-73-51)",
+  "venue": "USAF Electronic Systems Division technical report",
+  "year": 1972,
+  "url": "https://apps.dtic.mil/sti/pdfs/AD0758206.pdf",
+  "shows": "The Anderson report, which introduced the reference monitor concept: a small, always-invoked, tamper-proof, verifiable mediator of every access. It is the classical statement of what a code-level permission gate between model and tools should be.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "denning1976lattice",
+  "authors": "Dorothy E. Denning",
+  "surnames": [
+   "Denning"
+  ],
+  "title": "A Lattice Model of Secure Information Flow",
+  "venue": "Communications of the ACM 19(5)",
+  "year": 1976,
+  "url": "https://doi.org/10.1145/360051.360056",
+  "shows": "Models information-flow policy as a lattice of security classes and derives rules for certifying that a program obeys it. It is the basis for label-based flow control such as that used in recent agent defences.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "bell1973secure",
+  "authors": "D. Elliott Bell, Leonard J. LaPadula",
+  "surnames": [
+   "Bell",
+   "LaPadula"
+  ],
+  "title": "Secure Computer Systems: Mathematical Foundations (MITRE MTR-2547, Vol. I)",
+  "venue": "MITRE Corporation technical report (ESD-TR-73-278)",
+  "year": 1973,
+  "url": "https://apps.dtic.mil/sti/pdfs/AD0770768.pdf",
+  "shows": "Gives the Bell-LaPadula confidentiality model (no read up, no write down). It explains why tainting an agent's context with private data should restrict where that context may later be written or sent.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "biba1977integrity",
+  "authors": "Kenneth J. Biba",
+  "surnames": [
+   "Biba"
+  ],
+  "title": "Integrity Considerations for Secure Computer Systems (MTR-3153)",
+  "venue": "MITRE Corporation technical report (ESD-TR-76-372)",
+  "year": 1977,
+  "url": "https://apps.dtic.mil/sti/html/tr/ADA039324/index.html",
+  "shows": "Defines integrity policies in which low-integrity data must not influence high-integrity objects, the dual of Bell-LaPadula. Prompt injection is an integrity-flow problem: untrusted text steering privileged actions.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "goguen1982security",
+  "authors": "Joseph A. Goguen, Jose Meseguer",
+  "surnames": [
+   "Goguen",
+   "Meseguer"
+  ],
+  "title": "Security Policies and Security Models",
+  "venue": "IEEE Symposium on Security and Privacy",
+  "year": 1982,
+  "url": "https://experts.illinois.edu/en/publications/security-policies-and-security-models/",
+  "shows": "Introduces noninterference: one group's actions must have no effect on what another group can observe. It is the formal property that dual-LLM and information-flow-control agent designs try to approximate.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "myers2000dlm",
+  "authors": "Andrew C. Myers, Barbara Liskov",
+  "surnames": [
+   "Myers",
+   "Liskov"
+  ],
+  "title": "Protecting Privacy Using the Decentralized Label Model",
+  "venue": "ACM Transactions on Software Engineering and Methodology 9(4)",
+  "year": 2000,
+  "url": "https://dblp.uni-trier.de/rec/journals/tosem/MyersL00.html",
+  "shows": "Presents labels that record data owners and permitted readers, with controlled declassification and static checking (Jif). It is a worked model for per-item provenance and reader labels on mail, calendar and CRM data.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "sabelfeld2003language",
+  "authors": "Andrei Sabelfeld, Andrew C. Myers",
+  "surnames": [
+   "Sabelfeld",
+   "Myers"
+  ],
+  "title": "Language-Based Information-Flow Security",
+  "venue": "IEEE Journal on Selected Areas in Communications 21(1)",
+  "year": 2003,
+  "url": "https://www.cse.chalmers.se/~andrei/jsac.pdf",
+  "shows": "Surveys three decades of work on enforcing noninterference with type systems and program analysis, including implicit flows and covert channels. It is the standard entry point to the information-flow literature that agent-security work builds on.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "enck2010taintdroid",
+  "authors": "William Enck, Peter Gilbert, Byung-Gon Chun, Landon P. Cox, Jaeyeon Jung, Patrick McDaniel, Anmol N. Sheth",
+  "surnames": [
+   "Enck",
+   "Gilbert",
+   "Chun",
+   "Cox",
+   "Jung",
+   "McDaniel",
+   "Sheth"
+  ],
+  "title": "TaintDroid: An Information-Flow Tracking System for Realtime Privacy Monitoring on Smartphones",
+  "venue": "USENIX OSDI",
+  "year": 2010,
+  "url": "https://www.usenix.org/conference/osdi10/taintdroid-information-flow-tracking-system-realtime-privacy-monitoring",
+  "shows": "Shows dynamic taint tracking of sensitive data through third-party apps at the sink where data leaves the device, with modest overhead and a documented weakness to implicit flows. It is a practical precedent for tracking taint from private sources to outbound agent tools.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "saltzer1984endtoend",
+  "authors": "Jerome H. Saltzer, David P. Reed, David D. Clark",
+  "surnames": [
+   "Saltzer",
+   "Reed",
+   "Clark"
+  ],
+  "title": "End-to-End Arguments in System Design",
+  "venue": "ACM Transactions on Computer Systems 2(4)",
+  "year": 1984,
+  "url": "https://web.mit.edu/Saltzer/www/publications/endtoend/endtoend.txt",
+  "shows": "Argues that a function can be correctly provided only with knowledge at the endpoints, so lower layers supply it only as an optimisation. For agents it supports enforcing policy at the tool boundary rather than trusting the model to police itself.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "miller2003capability",
+  "authors": "Mark S. Miller, Ka-Ping Yee, Jonathan Shapiro",
+  "surnames": [
+   "Miller",
+   "Yee",
+   "Shapiro"
+  ],
+  "title": "Capability Myths Demolished",
+  "venue": "Johns Hopkins Systems Research Laboratory report SRL-2003-02",
+  "year": 2003,
+  "url": "https://papers.agoric.com/papers/capability-myths-demolished/abstract/",
+  "shows": "Rebuts claims that capabilities are equivalent to ACLs, cannot enforce confinement, or cannot be revoked. It supports the capability-style, per-task authority designs used for delegating to agents.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "perez2022ignore",
+  "authors": "Fabio Perez, Ian Ribeiro",
+  "surnames": [
+   "Perez",
+   "Ribeiro"
+  ],
+  "title": "Ignore Previous Prompt: Attack Techniques For Language Models",
+  "venue": "NeurIPS 2022 ML Safety Workshop (arXiv:2211.09527)",
+  "year": 2022,
+  "url": "https://arxiv.org/abs/2211.09527",
+  "shows": "An early systematic study of goal hijacking and prompt leaking against a deployed language model. It records the first public framing of the problem.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "greshake2023indirect",
+  "authors": "Kai Greshake, Sahar Abdelnabi, Shailesh Mishra, Christoph Endres, Thorsten Holz, Mario Fritz",
+  "surnames": [
+   "Greshake",
+   "Abdelnabi",
+   "Mishra",
+   "Endres",
+   "Holz",
+   "Fritz"
+  ],
+  "title": "Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection",
+  "venue": "arXiv:2302.12173 (ACM AISec 2023)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2302.12173",
+  "shows": "Introduces indirect prompt injection, where instructions arrive in retrieved or tool-returned data rather than from the user, and shows it against real LLM-integrated applications. It defines the threat that mail- and file-reading agents face.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "liu2024formalizing",
+  "authors": "Yupei Liu, Yuqi Jia, Runpeng Geng, Jinyuan Jia, Neil Zhenqiang Gong",
+  "surnames": [
+   "Liu",
+   "Jia",
+   "Geng",
+   "Jia",
+   "Gong"
+  ],
+  "title": "Formalizing and Benchmarking Prompt Injection Attacks and Defenses",
+  "venue": "USENIX Security Symposium",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2310.12815",
+  "shows": "Gives a formal framework for prompt injection and benchmarks several attacks and defences across models and tasks. It is a reference for how results are measured.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "debenedetti2024agentdojo",
+  "authors": "Edoardo Debenedetti, Jie Zhang, Mislav Balunovic, Luca Beurer-Kellner, Marc Fischer, Florian Tramer",
+  "surnames": [
+   "Debenedetti",
+   "Zhang",
+   "Balunovic",
+   "Beurer-Kellner",
+   "Fischer",
+   "Tramer"
+  ],
+  "title": "AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents",
+  "venue": "arXiv:2406.13352 (NeurIPS 2024 Datasets and Benchmarks)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2406.13352",
+  "shows": "A dynamic benchmark of agent tasks over mail, banking, travel and workspace tools with injection attacks and defences. Its task suites resemble personal-agent workloads and are the common yardstick for system-level defences.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Debenedetti et al. 2024"
+ },
+ {
+  "key": "zhan2024injecagent",
+  "authors": "Qiusi Zhan, Zhixiang Liang, Zifan Ying, Daniel Kang",
+  "surnames": [
+   "Zhan",
+   "Liang",
+   "Ying",
+   "Kang"
+  ],
+  "title": "InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents",
+  "venue": "Findings of ACL 2024 (arXiv:2403.02691)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2403.02691",
+  "shows": "A benchmark of indirect injections in tool-integrated agents, separating attacks that harm the user directly from those that exfiltrate data. It shows base-rate vulnerability of tool-using models.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "zhang2025asb",
+  "authors": "Hanrong Zhang, Jingyuan Huang, Kai Mei, Yifei Yao, Zhenting Wang, Chenlu Zhan, Hongwei Wang, Yongfeng Zhang",
+  "surnames": [
+   "Zhang",
+   "Huang",
+   "Mei",
+   "Yao",
+   "Wang",
+   "Zhan",
+   "Wang",
+   "Zhang"
+  ],
+  "title": "Agent Security Bench (ASB): Formalizing and Benchmarking Attacks and Defenses in LLM-based Agents",
+  "venue": "ICLR 2025 (arXiv:2410.02644)",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2410.02644",
+  "shows": "A benchmark covering several attack types, including prompt injection, memory poisoning and tool attacks, across agent scenarios. It extends evaluation beyond injection into persistence attacks.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "wallace2024hierarchy",
+  "authors": "Eric Wallace, Kai Xiao, Reimar Leike, Lilian Weng, Johannes Heidecke, Alex Beutel",
+  "surnames": [
+   "Wallace",
+   "Xiao",
+   "Leike",
+   "Weng",
+   "Heidecke",
+   "Beutel"
+  ],
+  "title": "The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions",
+  "venue": "arXiv:2404.13208",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2404.13208",
+  "shows": "Trains models to rank system, user and tool-output instructions by privilege. A representative model-level defence, useful as a contrast with enforcement outside the model.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "hines2024spotlighting",
+  "authors": "Keegan Hines, Gary Lopez, Matthew Hall, Federico Zarfati, Yonatan Zunger, Emre Kiciman",
+  "surnames": [
+   "Hines",
+   "Lopez",
+   "Hall",
+   "Zarfati",
+   "Zunger",
+   "Kiciman"
+  ],
+  "title": "Defending Against Indirect Prompt Injection Attacks With Spotlighting",
+  "venue": "arXiv:2403.14720",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2403.14720",
+  "shows": "Marks untrusted input with delimiters, datamarking or encoding so the model can tell it from instructions. A representative prompt-level mitigation that reduces but does not eliminate attack success.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "nasr2025attacker",
+  "authors": "Milad Nasr, Nicholas Carlini, Chawin Sitawarin, Sander V. Schulhoff, Jamie Hayes, Michael Ilie, Juliette Pluto, Shuang Song, Harsh Chaudhari, Ilia Shumailov, Abhradeep Thakurta, Kai Yuanqing Xiao, Andreas Terzis, Florian Tramer",
+  "surnames": [
+   "Nasr",
+   "Carlini",
+   "Sitawarin",
+   "Schulhoff",
+   "Hayes",
+   "Ilie",
+   "Pluto",
+   "Song",
+   "Chaudhari",
+   "Shumailov",
+   "Thakurta",
+   "Xiao",
+   "Terzis",
+   "Tramer"
+  ],
+  "title": "The Attacker Moves Second: Stronger Adaptive Attacks Bypass Defenses Against LLM Jailbreaks and Prompt Injections",
+  "venue": "arXiv:2510.09023",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2510.09023",
+  "shows": "Applies adaptive optimisation and human red-teaming to twelve published defences and bypasses most with success rates above 90 percent, although they reported near-zero attack success in their own evaluations. It is the main evidence for not relying on model-level defences as the only control.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "maloyan2026sok",
+  "authors": "Narek Maloyan, Dmitry Namiot",
+  "surnames": [
+   "Maloyan",
+   "Namiot"
+  ],
+  "title": "Prompt Injection Attacks on Agentic Coding Assistants: A Systematic Analysis of Vulnerabilities in Skills, Tools, and Protocol Ecosystems",
+  "venue": "arXiv:2601.17548",
+  "year": 2026,
+  "url": "https://arxiv.org/abs/2601.17548",
+  "shows": "A systematisation of injection attacks on agentic assistants organised by delivery vector, modality and propagation. Useful as a recent taxonomy of attack surfaces for tool-using agents.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "wang2026landscape",
+  "authors": "Peiran Wang, Xinfeng Li, Chong Xiang, Jinghuai Zhang, Ying Li, Lixia Zhang, Xiaofeng Wang, Yuan Tian",
+  "surnames": [
+   "Wang",
+   "Li",
+   "Xiang",
+   "Zhang",
+   "Li",
+   "Zhang",
+   "Wang",
+   "Tian"
+  ],
+  "title": "The Landscape of Prompt Injection Threats in LLM Agents: From Taxonomy to Analysis",
+  "venue": "arXiv:2602.10453",
+  "year": 2026,
+  "url": "https://arxiv.org/abs/2602.10453",
+  "shows": "A survey and taxonomy of prompt-injection threats in the agent execution loop with open problems. A reading-list entry for the state of the field.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "willison2023dualllm",
+  "authors": "Simon Willison",
+  "surnames": [
+   "Willison"
+  ],
+  "title": "The Dual LLM pattern for building AI assistants that can resist prompt injection",
+  "venue": "Blog post (simonwillison.net)",
+  "year": 2023,
+  "url": "https://simonwillison.net/2023/Apr/25/dual-llm-pattern/",
+  "shows": "Proposes a privileged model with tools that never sees untrusted text and a quarantined model that reads untrusted text with no tools, joined by ordinary code. It is the origin of the pattern CaMeL later formalised.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Willison 2023"
+ },
+ {
+  "key": "debenedetti2025camel",
+  "authors": "Edoardo Debenedetti, Ilia Shumailov, Tianqi Fan, Jamie Hayes, Nicholas Carlini, Daniel Fabian, Christoph Kern, Chongyang Shi, Andreas Terzis, Florian Tramer",
+  "surnames": [
+   "Debenedetti",
+   "Shumailov",
+   "Fan",
+   "Hayes",
+   "Carlini",
+   "Fabian",
+   "Kern",
+   "Shi",
+   "Terzis",
+   "Tramer"
+  ],
+  "title": "Defeating Prompt Injections by Design",
+  "venue": "arXiv:2503.18813",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2503.18813",
+  "shows": "CaMeL extracts control and data flow from the trusted user request and enforces capability-style policies over values in a custom interpreter. It completes 77 percent of AgentDojo tasks with provable security, against 84 percent undefended, which makes it the central design reference for a permission gate.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Debenedetti et al. 2025"
+ },
+ {
+  "key": "beurer2025patterns",
+  "authors": "Luca Beurer-Kellner, Beat Buesser, Ana-Maria Cretu, Edoardo Debenedetti, Daniel Dobos, Daniel Fabian, Marc Fischer, David Froelicher, Kathrin Grosse, Daniel Naeff, Ezinwanne Ozoani, Andrew Paverd, Florian Tramer, Vaclav Volhejn",
+  "surnames": [
+   "Beurer-Kellner",
+   "Buesser",
+   "Cretu",
+   "Debenedetti",
+   "Dobos",
+   "Fabian",
+   "Fischer",
+   "Froelicher",
+   "Grosse",
+   "Naeff",
+   "Ozoani",
+   "Paverd",
+   "Tramer",
+   "Volhejn"
+  ],
+  "title": "Design Patterns for Securing LLM Agents against Prompt Injections",
+  "venue": "arXiv:2506.08837",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2506.08837",
+  "shows": "Proposes principled design patterns for agents with provable resistance to prompt injection and analyses their utility and security trade-offs through case studies. A practical menu for structuring a personal agent.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Beurer-Kellner et al. 2025"
+ },
+ {
+  "key": "costa2025fides",
+  "authors": "Manuel Costa, Boris Kopf, Aashish Kolluri, Andrew Paverd, Mark Russinovich, Ahmed Salem, Shruti Tople, Lukas Wutschitz, Santiago Zanella-Beguelin",
+  "surnames": [
+   "Costa",
+   "Kopf",
+   "Kolluri",
+   "Paverd",
+   "Russinovich",
+   "Salem",
+   "Tople",
+   "Wutschitz",
+   "Zanella-Beguelin"
+  ],
+  "title": "Securing AI Agents with Information-Flow Control",
+  "venue": "arXiv:2505.23643",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2505.23643",
+  "shows": "Presents Fides, a planner that attaches confidentiality and integrity labels to data and deterministically enforces policy, evaluated on AgentDojo. It connects classical information-flow control to LLM agents.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "wu2025isolategpt",
+  "authors": "Yuhao Wu, Franziska Roesner, Tadayoshi Kohno, Ning Zhang, Umar Iqbal",
+  "surnames": [
+   "Wu",
+   "Roesner",
+   "Kohno",
+   "Zhang",
+   "Iqbal"
+  ],
+  "title": "IsolateGPT: An Execution Isolation Architecture for LLM-Based Agentic Systems",
+  "venue": "NDSS Symposium 2025 (arXiv:2403.04960)",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2403.04960",
+  "shows": "Applies OS-style execution isolation to separate apps in an LLM-based agent system, with mediated cross-app communication. A model for isolating third-party tools from each other.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "willison2025trifecta",
+  "authors": "Simon Willison",
+  "surnames": [
+   "Willison"
+  ],
+  "title": "The lethal trifecta for AI agents: private data, untrusted content, and external communication",
+  "venue": "Blog post (simonwillison.net)",
+  "year": 2025,
+  "url": "https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/",
+  "shows": "Observes that an agent with private data, exposure to untrusted content and an outbound channel can be steered into leaking that data. It gives a compact test for whether a personal-agent configuration is exploitable.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Willison 2025"
+ },
+ {
+  "key": "meta2025ruleoftwo",
+  "authors": "Meta AI",
+  "surnames": [
+   "Meta AI"
+  ],
+  "title": "Agents Rule of Two: A Practical Approach to AI Agent Security",
+  "venue": "Meta AI blog",
+  "year": 2025,
+  "url": "https://ai.meta.com/blog/practical-ai-agent-security/",
+  "shows": "States that until injection can be reliably detected, an agent session should combine no more than two of: untrusted input, sensitive data or systems, and state change or external communication. It turns the trifecta into a design rule, with human approval as the usual way to drop a property.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Meta 2025"
+ },
+ {
+  "key": "bainbridge1983ironies",
+  "authors": "Lisanne Bainbridge",
+  "surnames": [
+   "Bainbridge"
+  ],
+  "title": "Ironies of Automation",
+  "venue": "Automatica 19(6)",
+  "year": 1983,
+  "url": "https://doi.org/10.1016/0005-1098(83)90046-8",
+  "shows": "Argues that automating most of a task leaves the human the hard residue while removing the practice needed to handle it, and that monitoring is a task people do poorly. It predicts why a human approving agent actions degrades over time.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "parasuraman1997humans",
+  "authors": "Raja Parasuraman, Victor Riley",
+  "surnames": [
+   "Parasuraman",
+   "Riley"
+  ],
+  "title": "Humans and Automation: Use, Misuse, Disuse, Abuse",
+  "venue": "Human Factors 39(2)",
+  "year": 1997,
+  "url": "https://doi.org/10.1518/001872097778543886",
+  "shows": "Defines misuse (overreliance), disuse (neglect, often from false alarms) and abuse of automation. It is the standard reference for the two failure modes of agent approval prompts.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "parasuraman2010complacency",
+  "authors": "Raja Parasuraman, Dietrich H. Manzey",
+  "surnames": [
+   "Parasuraman",
+   "Manzey"
+  ],
+  "title": "Complacency and Bias in Human Use of Automation: An Attentional Integration",
+  "venue": "Human Factors 52(3)",
+  "year": 2010,
+  "url": "https://doi.org/10.1177/0018720810376055",
+  "shows": "Reviews evidence that complacency and automation bias occur in experts and novices and are not removed by practice or simple instruction. It supports designing approvals that do not depend on sustained vigilance.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "records"
+ },
+ {
+  "key": "sunshine2009crying",
+  "authors": "Joshua Sunshine, Serge Egelman, Hazim Almuhimedi, Neha Atri, Lorrie Faith Cranor",
+  "surnames": [
+   "Sunshine",
+   "Egelman",
+   "Almuhimedi",
+   "Atri",
+   "Cranor"
+  ],
+  "title": "Crying Wolf: An Empirical Study of SSL Warning Effectiveness",
+  "venue": "USENIX Security Symposium",
+  "year": 2009,
+  "url": "https://www.usenix.org/conference/usenixsecurity09/technical-sessions/presentation/crying-wolf-empirical-study-ssl-warning",
+  "shows": "A survey and lab study finding that many users ignore or misunderstand SSL warnings and that redesigned warnings only partly help. It is evidence that frequent, generic confirmation dialogs are routinely clicked through.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "akhawe2013alice",
+  "authors": "Devdatta Akhawe, Adrienne Porter Felt",
+  "surnames": [
+   "Akhawe",
+   "Felt"
+  ],
+  "title": "Alice in Warningland: A Large-Scale Field Study of Browser Security Warning Effectiveness",
+  "venue": "USENIX Security Symposium",
+  "year": 2013,
+  "url": "https://www.usenix.org/conference/usenixsecurity13/technical-sessions/presentation/akhawe",
+  "shows": "Uses telemetry on over 25 million warning impressions to show click-through rates vary strongly with warning design, from about a tenth to over two thirds. It shows that approval prompt design, not only presence, determines whether humans act as a control.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "rfc6749",
+  "authors": "Dick Hardt (ed.)",
+  "surnames": [
+   "Hardt"
+  ],
+  "title": "The OAuth 2.0 Authorization Framework (RFC 6749)",
+  "venue": "IETF RFC",
+  "year": 2012,
+  "url": "https://www.rfc-editor.org/rfc/rfc6749",
+  "shows": "Specifies the authorization-code, client-credentials and other grants, access and refresh tokens, and scopes. It is the base protocol for delegating access to a user's mail, calendar and files.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "RFC 6749"
+ },
+ {
+  "key": "rfc7636",
+  "authors": "Nat Sakimura (ed.), John Bradley, Naveen Agarwal",
+  "surnames": [
+   "Sakimura",
+   "Bradley",
+   "Agarwal"
+  ],
+  "title": "Proof Key for Code Exchange by OAuth Public Clients (RFC 7636)",
+  "venue": "IETF RFC",
+  "year": 2015,
+  "url": "https://www.rfc-editor.org/rfc/rfc7636",
+  "shows": "Defines PKCE, which binds an authorization code to the client that requested it and so defeats code interception. Relevant to desktop and local agents that cannot keep a client secret.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "RFC 7636"
+ },
+ {
+  "key": "rfc9700",
+  "authors": "Torsten Lodderstedt, John Bradley, Andrey Labunets, Daniel Fett",
+  "surnames": [
+   "Lodderstedt",
+   "Bradley",
+   "Labunets",
+   "Fett"
+  ],
+  "title": "Best Current Practice for OAuth 2.0 Security (RFC 9700, BCP 240)",
+  "venue": "IETF RFC",
+  "year": 2025,
+  "url": "https://www.rfc-editor.org/rfc/rfc9700",
+  "shows": "The current security best practice for OAuth 2.0, updating RFC 6749; it is the checklist to apply to an agent's token handling, including redirect matching, PKCE and token lifetime.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "RFC 9700"
+ },
+ {
+  "key": "rfc6819",
+  "authors": "Torsten Lodderstedt (ed.), Mark McGloin, Phil Hunt",
+  "surnames": [
+   "Lodderstedt",
+   "McGloin",
+   "Hunt"
+  ],
+  "title": "OAuth 2.0 Threat Model and Security Considerations (RFC 6819)",
+  "venue": "IETF RFC",
+  "year": 2013,
+  "url": "https://www.rfc-editor.org/rfc/rfc6819",
+  "shows": "A catalogue of threats against OAuth deployments and their countermeasures. It is a reference for threat-modelling an agent that stores long-lived refresh tokens.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "RFC 6819"
+ },
+ {
+  "key": "owasp2021ssrf",
+  "authors": "OWASP",
+  "surnames": [
+   "OWASP"
+  ],
+  "title": "A10:2021 Server-Side Request Forgery (SSRF), OWASP Top 10:2021",
+  "venue": "OWASP",
+  "year": 2021,
+  "url": "https://top10.owasp.org/2021/A10_2021-Server-Side_Request_Forgery_%28SSRF%29",
+  "shows": "Describes SSRF, where an application fetches an attacker-chosen URL, and the usual defences: allow-lists, blocking internal ranges and disabling redirects. An agent with a fetch or browse tool needs the same controls.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "OWASP 2021"
+ },
+ {
+  "key": "stripe_webhooks",
+  "authors": "Stripe",
+  "surnames": [
+   "Stripe"
+  ],
+  "title": "Receive Stripe events in your webhook endpoint (signature verification)",
+  "venue": "Vendor documentation (docs.stripe.com)",
+  "year": 2026,
+  "url": "https://docs.stripe.com/webhooks#verify-events",
+  "shows": "Documents signed webhooks: an HMAC over timestamp and raw body, constant-time comparison, a replay tolerance window, and duplicate-event handling. It is a worked example of authenticating inbound events that trigger agent actions.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Stripe, webhooks"
+ },
+ {
+  "key": "github_webhooks",
+  "authors": "GitHub",
+  "surnames": [
+   "GitHub"
+  ],
+  "title": "Validating webhook deliveries",
+  "venue": "Vendor documentation (docs.github.com)",
+  "year": 2026,
+  "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries",
+  "shows": "Describes verifying an HMAC-SHA256 signature header against a shared secret with a constant-time comparison. A second independent reference for the same inbound-authentication pattern.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "GitHub, webhooks"
+ },
+ {
+  "key": "owasp2025llmtop10",
+  "authors": "OWASP GenAI Security Project",
+  "surnames": [
+   "OWASP GenAI Security Project"
+  ],
+  "title": "OWASP Top 10 for LLM Applications 2025",
+  "venue": "OWASP",
+  "year": 2025,
+  "url": "https://genai.owasp.org/llm-top-10/",
+  "shows": "Lists ten risks for LLM applications, including prompt injection, sensitive information disclosure, improper output handling, excessive agency and data and model poisoning. A common industry vocabulary for reviewing an agent.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "OWASP 2025"
+ },
+ {
+  "key": "mcp_security_best_practices",
+  "authors": "Model Context Protocol project",
+  "surnames": [
+   "Model Context Protocol project"
+  ],
+  "title": "Security Best Practices (MCP specification)",
+  "venue": "modelcontextprotocol.io specification",
+  "year": 2026,
+  "url": "https://modelcontextprotocol.io/specification/draft/basic/security_best_practices",
+  "shows": "Lists MCP-specific attacks and mitigations: confused-deputy proxies, token passthrough, SSRF during OAuth discovery, local server compromise and scope minimisation. A primary source for securing a tool-protocol client.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "MCP security practices"
+ },
+ {
+  "key": "beurer2025toolpoisoning",
+  "authors": "Luca Beurer-Kellner, Marc Fischer",
+  "surnames": [
+   "Beurer-Kellner",
+   "Fischer"
+  ],
+  "title": "MCP Security Notification: Tool Poisoning Attacks",
+  "venue": "Invariant Labs blog",
+  "year": 2025,
+  "url": "https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks",
+  "shows": "Reports that instructions hidden in an MCP tool's description, which the model reads but the user typically does not, can steer an agent into actions the user did not approve. It shows that tool metadata is an untrusted input channel.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Beurer-Kellner and Fischer 2025"
+ },
+ {
+  "key": "radosevich2025mcpaudit",
+  "authors": "Brandon Radosevich, John Halloran",
+  "surnames": [
+   "Radosevich",
+   "Halloran"
+  ],
+  "title": "MCP Safety Audit: LLMs with the Model Context Protocol Allow Major Security Exploits",
+  "venue": "arXiv:2504.03767",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2504.03767",
+  "shows": "Demonstrates that MCP-connected models can be induced to carry out several classes of exploit and introduces an auditing tool. An early academic assessment of MCP risk.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "wang2025mcptox",
+  "authors": "Zhiqiang Wang, Yichao Gao, Yanting Wang, Suyuan Liu, Haifeng Sun, Haoran Cheng, Guanquan Shi, Haohua Du, Xiangyang Li",
+  "surnames": [
+   "Wang",
+   "Gao",
+   "Wang",
+   "Liu",
+   "Sun",
+   "Cheng",
+   "Shi",
+   "Du",
+   "Li"
+  ],
+  "title": "MCPTox: A Benchmark for Tool Poisoning Attack on Real-World MCP Servers",
+  "venue": "arXiv:2508.14925",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2508.14925",
+  "shows": "A benchmark measuring tool-poisoning success against real MCP servers across many models. It quantifies the risk described in the vendor advisories.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page",
+  "short": "Wang et al. 2025a"
+ },
+ {
+  "key": "chen2024agentpoison",
+  "authors": "Zhaorun Chen, Zhen Xiang, Chaowei Xiao, Dawn Song, Bo Li",
+  "surnames": [
+   "Chen",
+   "Xiang",
+   "Xiao",
+   "Song",
+   "Li"
+  ],
+  "title": "AgentPoison: Red-teaming LLM Agents via Poisoning Memory or Knowledge Bases",
+  "venue": "arXiv:2407.12784",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2407.12784",
+  "shows": "Shows that a small number of poisoned entries in an agent's memory or knowledge base can be retrieved on trigger queries and redirect behaviour. It establishes memory stores as an attack surface.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "dong2025minja",
+  "authors": "Shen Dong, Shaochen Xu, Pengfei He, Yige Li, Jiliang Tang, Tianming Liu, Hui Liu, Zhen Xiang",
+  "surnames": [
+   "Dong",
+   "Xu",
+   "He",
+   "Li",
+   "Tang",
+   "Liu",
+   "Liu",
+   "Xiang"
+  ],
+  "title": "Memory Injection Attacks on LLM Agents via Query-Only Interaction",
+  "venue": "arXiv:2503.03704",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2503.03704",
+  "shows": "Shows that memory can be corrupted through query-only interaction, without direct access to the memory store. It argues for provenance and validation on memory writes.",
+  "level": "further",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "rehberger2023bing",
+  "authors": "Johann Rehberger (wunderwuzzi)",
+  "surnames": [
+   "Rehberger"
+  ],
+  "title": "Bing Chat: Data Exfiltration Exploit Explained",
+  "venue": "Blog post (embracethered.com)",
+  "year": 2023,
+  "url": "https://embracethered.com/blog/posts/2023/bing-chat-data-exfiltration-poc-and-fix/",
+  "shows": "Documents data leaving a chat client because model-generated markdown images make the client request an external URL with data in the query string. It is the reference case for rendering and link-unfurl channels, and for blocking untrusted URLs in agent output.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "reddy2025echoleak",
+  "authors": "Pavan Reddy, Aditya Sanjay Gujral",
+  "surnames": [
+   "Reddy",
+   "Gujral"
+  ],
+  "title": "EchoLeak: The First Real-World Zero-Click Prompt Injection Exploit in a Production LLM System",
+  "venue": "AAAI Fall Symposium Series 2025 (arXiv:2509.10540)",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2509.10540",
+  "shows": "Case study of a zero-click prompt injection against a production LLM system. A realistic incident that exercises the lethal-trifecta conditions.",
+  "level": "core",
+  "group": "Protection, information flow and prompt injection",
+  "checked": "page"
+ },
+ {
+  "key": "efron1979bootstrap",
+  "authors": "Bradley Efron",
+  "surnames": [
+   "Efron"
+  ],
+  "title": "Bootstrap Methods: Another Look at the Jackknife",
+  "venue": "The Annals of Statistics 7(1), 1-26",
+  "year": 1979,
+  "url": "https://sites.stat.washington.edu/courses/stat527/s13/readings/ann_stat1979.pdf",
+  "shows": "Introduces the bootstrap, a resampling method for estimating the sampling variability of a statistic without distributional assumptions. It is the basis for putting confidence intervals on eval scores computed from small task sets. (Verified via PDF whose JSTOR identifier matches this article plus a search record; the PDF text itself was not machine-readable.)",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "cameron2015clustered",
+  "authors": "A. Colin Cameron, Douglas L. Miller",
+  "surnames": [
+   "Cameron",
+   "Miller"
+  ],
+  "title": "A Practitioner's Guide to Cluster-Robust Inference",
+  "venue": "Journal of Human Resources 50(2), 317-372",
+  "year": 2015,
+  "url": "https://jhr.uwpress.org/content/50/2/317",
+  "shows": "Explains that default standard errors can badly overstate precision when observations are correlated within clusters, and gives cluster-robust remedies. Relevant when an agent eval has many trials per task or per user.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "mchugh2012kappa",
+  "authors": "Mary L. McHugh",
+  "surnames": [
+   "McHugh"
+  ],
+  "title": "Interrater reliability: the kappa statistic",
+  "venue": "Biochemia Medica 22(3), 276-282",
+  "year": 2012,
+  "url": "https://www.biochemia-medica.com/en/journal/22/3/10.11613/BM.2012.031",
+  "shows": "A tutorial on Cohen's kappa as a chance-corrected agreement measure, with interpretation thresholds and criticism of lenient benchmarks. Useful for measuring agreement between human labelers and between an LLM judge and humans.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "benjamini1995fdr",
+  "authors": "Yoav Benjamini, Yosef Hochberg",
+  "surnames": [
+   "Benjamini",
+   "Hochberg"
+  ],
+  "title": "Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing",
+  "venue": "Journal of the Royal Statistical Society: Series B 57(1), 289-300",
+  "year": 1995,
+  "url": "https://academic.oup.com/jrsssb/article/57/1/289/7035855",
+  "shows": "Defines the false discovery rate and a procedure to control it when many hypotheses are tested. Applies when comparing many prompt or model variants on many metrics.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "miller2024errorbars",
+  "authors": "Evan Miller",
+  "surnames": [
+   "Miller"
+  ],
+  "title": "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations",
+  "venue": "arXiv:2411.00640",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2411.00640",
+  "shows": "Argues that eval results should be reported with standard errors and confidence intervals, and covers clustered errors, paired differences and power analysis for LLM evals. It is the most direct statistics primer for the course's eval work.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "dror2018hitchhiker",
+  "authors": "Rotem Dror, Gili Baumer, Segev Shlomov, Roi Reichart",
+  "surnames": [
+   "Dror",
+   "Baumer",
+   "Shlomov",
+   "Reichart"
+  ],
+  "title": "The Hitchhiker's Guide to Testing Statistical Significance in Natural Language Processing",
+  "venue": "Proceedings of ACL 2018 (Long Papers)",
+  "year": 2018,
+  "url": "https://aclanthology.org/P18-1128/",
+  "shows": "Surveys which significance tests suit which NLP evaluation settings and how to choose among them. Gives students a decision guide for comparing two systems.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "dietterich1998tests",
+  "authors": "Thomas G. Dietterich",
+  "surnames": [
+   "Dietterich"
+  ],
+  "title": "Approximate Statistical Tests for Comparing Supervised Classification Learning Algorithms",
+  "venue": "Neural Computation 10(7), 1895-1923",
+  "year": 1998,
+  "url": "https://mlanthology.org/neco/1998/dietterich1998neco-approximate/",
+  "shows": "Compares several tests for whether one learning algorithm beats another and measures their type I error. A classic on why naive comparisons of two systems can mislead.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "kohavi2009controlled",
+  "authors": "Ron Kohavi, Roger Longbotham, Dan Sommerfield, Randal M. Henne",
+  "surnames": [
+   "Kohavi",
+   "Longbotham",
+   "Sommerfield",
+   "Henne"
+  ],
+  "title": "Controlled Experiments on the Web: Survey and Practical Guide",
+  "venue": "Data Mining and Knowledge Discovery 18(1), 140-181",
+  "year": 2009,
+  "url": "https://exp-platform.com/journal-survey",
+  "shows": "Surveys the design, statistics and pitfalls of randomized online controlled experiments from Amazon, Microsoft and others. It is the standard reference for testing a change to an agent on live traffic.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "jimenez2024swebench",
+  "authors": "Carlos E. Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir Press, Karthik Narasimhan",
+  "surnames": [
+   "Jimenez",
+   "Yang",
+   "Wettig",
+   "Yao",
+   "Pei",
+   "Press",
+   "Narasimhan"
+  ],
+  "title": "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?",
+  "venue": "ICLR 2024 (arXiv:2310.06770)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2310.06770",
+  "shows": "Introduces a benchmark of real GitHub issues in which a model must produce a patch that passes the repository's tests. It is the reference example of execution-based agent evaluation.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "barres2025tau2",
+  "authors": "Victor Barres, Honghua Dong, Soham Ray, Xujie Si, Karthik Narasimhan",
+  "surnames": [
+   "Barres",
+   "Dong",
+   "Ray",
+   "Si",
+   "Narasimhan"
+  ],
+  "title": "tau2-Bench: Evaluating Conversational Agents in a Dual-Control Environment",
+  "venue": "arXiv:2506.07982",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2506.07982",
+  "shows": "Extends tau-bench to settings where both agent and user can act on a shared environment. Relevant for evaluating agents whose user also changes the world state.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "yoran2024assistantbench",
+  "authors": "Ori Yoran, Samuel Joseph Amouyal, Chaitanya Malaviya, Ben Bogin, Ofir Press, Jonathan Berant",
+  "surnames": [
+   "Yoran",
+   "Amouyal",
+   "Malaviya",
+   "Bogin",
+   "Press",
+   "Berant"
+  ],
+  "title": "AssistantBench: Can Web Agents Solve Realistic and Time-Consuming Tasks?",
+  "venue": "arXiv:2407.15711",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2407.15711",
+  "shows": "A benchmark of time-consuming information-seeking web tasks on the live web. It illustrates evaluation on a changing environment and low absolute scores for current agents.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "liu2023agentbench",
+  "authors": "Xiao Liu, Hao Yu, Hanchen Zhang, Yifan Xu, Xuanyu Lei, Hanyu Lai, Yu Gu, Hangliang Ding, Kaiwen Men, Kejuan Yang, Shudan Zhang, Xiang Deng, Aohan Zeng, Zhengxiao Du, Chenhui Zhang, Sheng Shen, Tianjun Zhang, Yu Su, Huan Sun, Minlie Huang, Yuxiao Dong, Jie Tang",
+  "surnames": [
+   "Liu",
+   "Yu",
+   "Zhang",
+   "Xu",
+   "Lei",
+   "Lai",
+   "Gu",
+   "Ding",
+   "Men",
+   "Yang",
+   "Zhang",
+   "Deng",
+   "Zeng",
+   "Du",
+   "Zhang",
+   "Shen",
+   "Zhang",
+   "Su",
+   "Sun",
+   "Huang",
+   "Dong",
+   "Tang"
+  ],
+  "title": "AgentBench: Evaluating LLMs as Agents",
+  "venue": "ICLR 2024 (arXiv:2308.03688)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2308.03688",
+  "shows": "A multi-environment benchmark that tests LLMs as agents across several interactive settings. Shows how to span environment types in one suite.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Liu et al. 2023a"
+ },
+ {
+  "key": "xu2024theagentcompany",
+  "authors": "Frank F. Xu, Yufan Song, Boxuan Li, Yuxuan Tang, Kritanjali Jain, Mengxue Bao, Zora Z. Wang, Xuhui Zhou, Zhitong Guo, Murong Cao, Mingyang Yang, Hao Yang Lu, Amaad Martin, Zhe Su, Leander Maben, Raj Mehta, Wayne Chi, Lawrence Jang, Yiqing Xie, Shuyan Zhou, Graham Neubig",
+  "surnames": [
+   "Xu",
+   "Song",
+   "Li",
+   "Tang",
+   "Jain",
+   "Bao",
+   "Wang",
+   "Zhou",
+   "Guo",
+   "Cao",
+   "Yang",
+   "Lu",
+   "Martin",
+   "Su",
+   "Maben",
+   "Mehta",
+   "Chi",
+   "Jang",
+   "Xie",
+   "Zhou",
+   "Neubig"
+  ],
+  "title": "TheAgentCompany: Benchmarking LLM Agents on Consequential Real World Tasks",
+  "venue": "arXiv:2412.14161",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2412.14161",
+  "shows": "Simulates a software company with web, code and chat tools and simulated coworkers, and scores multi-step workplace tasks. It is an example of a benchmark with simulated people in a stateful environment.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "kapoor2024agentsmatter",
+  "authors": "Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan",
+  "surnames": [
+   "Kapoor",
+   "Stroebl",
+   "Siegel",
+   "Nadgir",
+   "Narayanan"
+  ],
+  "title": "AI Agents That Matter",
+  "venue": "arXiv:2407.01502",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2407.01502",
+  "shows": "Argues that agent evaluations should report cost alongside accuracy, separate model from downstream evaluation needs, guard against overfitting through holdouts, and fix reproducibility problems. It is the core critique for how to evaluate agents.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "kapoor2025hal",
+  "authors": "Sayash Kapoor, Benedikt Stroebl, Peter Kirgis, Nitya Nadgir, Zachary S Siegel, Boyi Wei, et al.",
+  "surnames": [
+   "Kapoor",
+   "Stroebl",
+   "Kirgis",
+   "Nadgir",
+   "Siegel",
+   "Wei"
+  ],
+  "title": "Holistic Agent Leaderboard: The Missing Infrastructure for AI Agent Evaluation",
+  "venue": "arXiv:2510.11977",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2510.11977",
+  "shows": "Describes shared infrastructure for running agent evaluations in a standardized way across benchmarks. Relevant to reproducible, cost-aware agent comparison.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "zhu2025abc",
+  "authors": "Yuxuan Zhu, Tengjun Jin, Yada Pruksachatkun, Andy Zhang, Shu Liu, Sasha Cui, Sayash Kapoor, Shayne Longpre, Kevin Meng, Rebecca Weiss, et al.",
+  "surnames": [
+   "Zhu",
+   "Jin",
+   "Pruksachatkun",
+   "Zhang",
+   "Liu",
+   "Cui",
+   "Kapoor",
+   "Longpre",
+   "Meng",
+   "Weiss"
+  ],
+  "title": "Establishing Best Practices for Building Rigorous Agentic Benchmarks",
+  "venue": "arXiv:2507.02825",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2507.02825",
+  "shows": "Analyzes validity problems in existing agent benchmarks, including flaws in task setup and graders, and proposes a checklist for building them. A practical guide to what makes a benchmark trustworthy.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "wang2025solvedissues",
+  "authors": "You Wang, Michael Pradel, Zhongxin Liu",
+  "surnames": [
+   "Wang",
+   "Pradel",
+   "Liu"
+  ],
+  "title": "Are \"Solved Issues\" in SWE-bench Really Solved Correctly? An Empirical Study",
+  "venue": "arXiv:2503.15223",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2503.15223",
+  "shows": "Empirically examines patches that pass SWE-bench's tests to see whether they are actually correct. An example of weak test-based graders inflating scores.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Wang et al. 2025b"
+ },
+ {
+  "key": "zhou2023cheater",
+  "authors": "Kun Zhou, Yutao Zhu, Zhipeng Chen, Wentong Chen, Wayne Xin Zhao, Xu Chen, Yankai Lin, Ji-Rong Wen, Jiawei Han",
+  "surnames": [
+   "Zhou",
+   "Zhu",
+   "Chen",
+   "Chen",
+   "Zhao",
+   "Chen",
+   "Lin",
+   "Wen",
+   "Han"
+  ],
+  "title": "Don't Make Your LLM an Evaluation Benchmark Cheater",
+  "venue": "arXiv:2311.01964",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2311.01964",
+  "shows": "Examines how benchmark data leaking into training inflates scores and distorts model comparison, and offers suggestions for fair evaluation. Introduces the contamination problem for the course.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Zhou et al. 2023a"
+ },
+ {
+  "key": "recht2019imagenet",
+  "authors": "Benjamin Recht, Rebecca Roelofs, Ludwig Schmidt, Vaishaal Shankar",
+  "surnames": [
+   "Recht",
+   "Roelofs",
+   "Schmidt",
+   "Shankar"
+  ],
+  "title": "Do ImageNet Classifiers Generalize to ImageNet?",
+  "venue": "ICML 2019 (arXiv:1902.10811)",
+  "year": 2019,
+  "url": "https://arxiv.org/abs/1902.10811",
+  "shows": "Builds new test sets following the original ImageNet process and finds accuracy drops for existing classifiers, testing for adaptive overfitting to a reused test set. The standard citation for dev-set and test-set reuse risk.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "manheim2018goodhart",
+  "authors": "David Manheim, Scott Garrabrant",
+  "surnames": [
+   "Manheim",
+   "Garrabrant"
+  ],
+  "title": "Categorizing Variants of Goodhart's Law",
+  "venue": "arXiv:1803.04585",
+  "year": 2018,
+  "url": "https://arxiv.org/abs/1803.04585",
+  "shows": "Distinguishes several distinct ways optimizing a proxy measure can fail to improve the target. Gives vocabulary for how an optimized prompt or agent can overfit its metric.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "gao2022overoptimization",
+  "authors": "Leo Gao, John Schulman, Jacob Hilton",
+  "surnames": [
+   "Gao",
+   "Schulman",
+   "Hilton"
+  ],
+  "title": "Scaling Laws for Reward Model Overoptimization",
+  "venue": "ICML 2023 (arXiv:2210.10760)",
+  "year": 2022,
+  "url": "https://arxiv.org/abs/2210.10760",
+  "shows": "Measures how optimizing against a learned proxy reward eventually lowers the true reward, in how the gap scales with optimization. A quantitative case of Goodhart's law relevant to optimizing against LLM judges.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "bean2025construct",
+  "authors": "Andrew M. Bean, Ryan Othniel Kearns, Angelika Romanou, et al.",
+  "surnames": [
+   "Bean",
+   "Kearns",
+   "Romanou"
+  ],
+  "title": "Measuring what Matters: Construct Validity in Large Language Model Benchmarks",
+  "venue": "NeurIPS 2025 Datasets and Benchmarks (arXiv:2511.04703)",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2511.04703",
+  "shows": "A review of 445 LLM benchmarks against validity criteria that reports recurring weaknesses in what benchmarks measure and how they score it. Provides a checklist for judging whether a benchmark measures what it claims.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "zheng2023judge",
+  "authors": "Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang, Joseph E. Gonzalez, Ion Stoica",
+  "surnames": [
+   "Zheng",
+   "Chiang",
+   "Sheng",
+   "Zhuang",
+   "Wu",
+   "Zhuang",
+   "Lin",
+   "Li",
+   "Li",
+   "Xing",
+   "Zhang",
+   "Gonzalez",
+   "Stoica"
+  ],
+  "title": "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena",
+  "venue": "NeurIPS 2023 Datasets and Benchmarks (arXiv:2306.05685)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2306.05685",
+  "shows": "Studies strong LLMs as judges, measures agreement with human preferences and documents position, verbosity and self-enhancement biases. The foundational paper for LLM-as-judge.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "liu2023geval",
+  "authors": "Yang Liu, Dan Iter, Yichong Xu, Shuohang Wang, Ruochen Xu, Chenguang Zhu",
+  "surnames": [
+   "Liu",
+   "Iter",
+   "Xu",
+   "Wang",
+   "Xu",
+   "Zhu"
+  ],
+  "title": "G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment",
+  "venue": "arXiv:2303.16634 (EMNLP 2023)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2303.16634",
+  "shows": "Proposes prompting an LLM with criteria and generated evaluation steps to score text, and compares its correlation with human ratings. A reference design for rubric-based LLM grading.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Liu et al. 2023b"
+ },
+ {
+  "key": "shankar2024validators",
+  "authors": "Shreya Shankar, J.D. Zamfirescu-Pereira, Bjorn Hartmann, Aditya G. Parameswaran, Ian Arawjo",
+  "surnames": [
+   "Shankar",
+   "Zamfirescu-Pereira",
+   "Hartmann",
+   "Parameswaran",
+   "Arawjo"
+  ],
+  "title": "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences",
+  "venue": "arXiv:2404.12272 (UIST 2024)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2404.12272",
+  "shows": "A study of how people build and revise LLM-based evaluators, finding that evaluation criteria shift as people see outputs. It argues LLM judges need validation against human labels.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "wang2023fair",
+  "authors": "Peiyi Wang, Lei Li, Liang Chen, Zefan Cai, Dawei Zhu, Binghuai Lin, Yunbo Cao, Qi Liu, Tianyu Liu, Zhifang Sui",
+  "surnames": [
+   "Wang",
+   "Li",
+   "Chen",
+   "Cai",
+   "Zhu",
+   "Lin",
+   "Cao",
+   "Liu",
+   "Liu",
+   "Sui"
+  ],
+  "title": "Large Language Models are not Fair Evaluators",
+  "venue": "arXiv:2305.17926",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2305.17926",
+  "shows": "Shows that the order in which candidate answers are presented can change an LLM judge's verdict, and proposes calibration strategies. Evidence for randomizing or swapping order when judging.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Wang et al. 2023b"
+ },
+ {
+  "key": "panickssery2024selfpref",
+  "authors": "Arjun Panickssery, Samuel R. Bowman, Shi Feng",
+  "surnames": [
+   "Panickssery",
+   "Bowman",
+   "Feng"
+  ],
+  "title": "LLM Evaluators Recognize and Favor Their Own Generations",
+  "venue": "arXiv:2404.13076",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2404.13076",
+  "shows": "Finds that LLM evaluators can recognize their own outputs and that this recognition correlates with scoring them higher. Argues against using the same model as agent and judge.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "biderman2024lmeval",
+  "authors": "Stella Biderman, Hailey Schoelkopf, Lintang Sutawika, Leo Gao, Jonathan Tow, et al.",
+  "surnames": [
+   "Biderman",
+   "Schoelkopf",
+   "Sutawika",
+   "Gao",
+   "Tow"
+  ],
+  "title": "Lessons from the Trenches on Reproducible Evaluation of Language Models",
+  "venue": "arXiv:2405.14782",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2405.14782",
+  "shows": "Reports practical sources of irreproducibility in LM evaluation (prompt formatting, implementation differences) from building the LM Evaluation Harness. Useful guidance on documenting and sharing eval setups.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "sclar2023promptformat",
+  "authors": "Melanie Sclar, Yejin Choi, Yulia Tsvetkov, Alane Suhr",
+  "surnames": [
+   "Sclar",
+   "Choi",
+   "Tsvetkov",
+   "Suhr"
+  ],
+  "title": "Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design or: How I learned to start worrying about prompt formatting",
+  "venue": "ICLR 2024 (arXiv:2310.11324)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2310.11324",
+  "shows": "Measures how meaning-preserving changes to prompt format change measured model performance. Shows that single-prompt eval scores can have large hidden variance.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "claessen2000quickcheck",
+  "authors": "Koen Claessen, John Hughes",
+  "surnames": [
+   "Claessen",
+   "Hughes"
+  ],
+  "title": "QuickCheck: A lightweight tool for random testing of Haskell programs",
+  "venue": "ICFP 2000, 268-279",
+  "year": 2000,
+  "url": "https://research.chalmers.se/en/publication/?id=237427",
+  "shows": "Introduces stating program properties as functions and testing them on randomly generated inputs. The origin of property-based testing, applicable to agent invariants such as idempotence or no-forbidden-action.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "segura2016metamorphic",
+  "authors": "Sergio Segura, Gordon Fraser, Ana B. Sanchez, Antonio Ruiz-Cortes",
+  "surnames": [
+   "Segura",
+   "Fraser",
+   "Sanchez",
+   "Ruiz-Cortes"
+  ],
+  "title": "A Survey on Metamorphic Testing",
+  "venue": "IEEE Transactions on Software Engineering 42(9), 805-824",
+  "year": 2016,
+  "url": "https://eprints.whiterose.ac.uk/110335/",
+  "shows": "Surveys metamorphic testing, which checks relations between outputs under input transformations when no exact oracle exists. Relevant to testing agents whose correct output cannot be specified exactly.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "chen2018metamorphic",
+  "authors": "Tsong Yueh Chen, Fei-Ching Kuo, Huai Liu, Pak-Lok Poon, Dave Towey, T.H. Tse, Zhi Quan Zhou",
+  "surnames": [
+   "Chen",
+   "Kuo",
+   "Liu",
+   "Poon",
+   "Towey",
+   "Tse",
+   "Zhou"
+  ],
+  "title": "Metamorphic Testing: A Review of Challenges and Opportunities",
+  "venue": "ACM Computing Surveys 51(1), Article 4",
+  "year": 2018,
+  "url": "https://i.cs.hku.hk/~tse/Papers/2010s/hlmtCSUR.html",
+  "shows": "A second review of metamorphic testing covering relation identification, test generation and open problems. Complements the 2016 survey.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "ribeiro2020checklist",
+  "authors": "Marco Tulio Ribeiro, Tongshuang Wu, Carlos Guestrin, Sameer Singh",
+  "surnames": [
+   "Ribeiro",
+   "Wu",
+   "Guestrin",
+   "Singh"
+  ],
+  "title": "Beyond Accuracy: Behavioral Testing of NLP models with CheckList",
+  "venue": "ACL 2020 (arXiv:2005.04118)",
+  "year": 2020,
+  "url": "https://arxiv.org/abs/2005.04118",
+  "shows": "Proposes a task-agnostic methodology organizing tests by capability, with minimum-functionality, invariance and directional tests. A template for behavioral test suites for language-model systems.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "basiri2016chaos",
+  "authors": "Ali Basiri, Niosha Behnam, Ruud de Rooij, Lorin Hochstein, Luke Kosewski, Justin Reynolds, Casey Rosenthal",
+  "surnames": [
+   "Basiri",
+   "Behnam",
+   "de Rooij",
+   "Hochstein",
+   "Kosewski",
+   "Reynolds",
+   "Rosenthal"
+  ],
+  "title": "Chaos Engineering",
+  "venue": "IEEE Software 33(3), 35-41 (arXiv:1702.05843)",
+  "year": 2016,
+  "url": "https://arxiv.org/abs/1702.05843",
+  "shows": "Describes chaos engineering as experimenting on a production system to build confidence in its resilience to turbulent conditions. Motivates injecting tool failures and bad inputs into agents.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "jepsen",
+  "authors": "Jepsen (Kyle Kingsbury)",
+  "surnames": [
+   "Jepsen"
+  ],
+  "title": "Distributed Systems Safety Research (jepsen.io)",
+  "venue": "Web site and published analyses",
+  "year": 2026,
+  "url": "https://jepsen.io/",
+  "shows": "The Jepsen project publishes analyses of distributed databases and maintains an open-source safety testing library. A model of adversarial, fault-injecting testing of systems against stated guarantees.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Jepsen"
+ },
+ {
+  "key": "kingsbury2020elle",
+  "authors": "Kyle Kingsbury, Peter Alvaro",
+  "surnames": [
+   "Kingsbury",
+   "Alvaro"
+  ],
+  "title": "Elle: Inferring Isolation Anomalies from Experimental Observations",
+  "venue": "arXiv:2003.10554 (PVLDB 2020)",
+  "year": 2020,
+  "url": "https://arxiv.org/abs/2003.10554",
+  "shows": "Describes a checker that infers isolation anomalies from recorded histories of a system under test. Illustrates separating generation of workloads from checking of recorded traces, a pattern usable on agent logs.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "khattab2023dspy",
+  "authors": "Omar Khattab, Arnav Singhvi, Paridhi Maheshwari, Zhiyuan Zhang, Keshav Santhanam, Sri Vardhamanan, Saiful Haq, Ashutosh Sharma, Thomas T. Joshi, Hanna Moazam, Heather Miller, Matei Zaharia, Christopher Potts",
+  "surnames": [
+   "Khattab",
+   "Singhvi",
+   "Maheshwari",
+   "Zhang",
+   "Santhanam",
+   "Vardhamanan",
+   "Haq",
+   "Sharma",
+   "Joshi",
+   "Moazam",
+   "Miller",
+   "Zaharia",
+   "Potts"
+  ],
+  "title": "DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines",
+  "venue": "arXiv:2310.03714 (ICLR 2024)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2310.03714",
+  "shows": "Presents a programming model that expresses LM pipelines as modules and a compiler that optimizes their prompts and demonstrations against a metric. The basis for metric-driven prompt optimization.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "agrawal2025gepa",
+  "authors": "Lakshya A Agrawal, Shangyin Tan, Dilara Soylu, Noah Ziems, Rishi Khare, Krista Opsahl-Ong, Arnav Singhvi, Herumb Shandilya, Michael J Ryan, Meng Jiang, Christopher Potts, Koushik Sen, Alexandros G. Dimakis, Ion Stoica, Dan Klein, Matei Zaharia, Omar Khattab",
+  "surnames": [
+   "Agrawal",
+   "Tan",
+   "Soylu",
+   "Ziems",
+   "Khare",
+   "Opsahl-Ong",
+   "Singhvi",
+   "Shandilya",
+   "Ryan",
+   "Jiang",
+   "Potts",
+   "Sen",
+   "Dimakis",
+   "Stoica",
+   "Klein",
+   "Zaharia",
+   "Khattab"
+  ],
+  "title": "GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning",
+  "venue": "ICLR 2026 (arXiv:2507.19457)",
+  "year": 2025,
+  "url": "https://arxiv.org/abs/2507.19457",
+  "shows": "Optimizes prompts by having an LLM reflect on execution traces in natural language and evolving candidates, and reports it can match or beat reinforcement learning with far fewer rollouts. Relevant to improving an agent from its own traces.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "yang2023opro",
+  "authors": "Chengrun Yang, Xuezhi Wang, Yifeng Lu, Hanxiao Liu, Quoc V. Le, Denny Zhou, Xinyun Chen",
+  "surnames": [
+   "Yang",
+   "Wang",
+   "Lu",
+   "Liu",
+   "Le",
+   "Zhou",
+   "Chen"
+  ],
+  "title": "Large Language Models as Optimizers",
+  "venue": "ICLR 2024 (arXiv:2309.03409)",
+  "year": 2023,
+  "url": "https://arxiv.org/abs/2309.03409",
+  "shows": "Introduces OPRO, which uses an LLM to propose new solutions given a history of earlier solutions and their scores, applied to prompt optimization. An early example of metric-driven prompt search.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Yang et al. 2023a"
+ },
+ {
+  "key": "yuksekgonul2024textgrad",
+  "authors": "Mert Yuksekgonul, Federico Bianchi, Joseph Boen, Sheng Liu, Zhi Huang, Carlos Guestrin, James Zou",
+  "surnames": [
+   "Yuksekgonul",
+   "Bianchi",
+   "Boen",
+   "Liu",
+   "Huang",
+   "Guestrin",
+   "Zou"
+  ],
+  "title": "TextGrad: Automatic \"Differentiation\" via Text",
+  "venue": "arXiv:2406.07496",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2406.07496",
+  "shows": "Backpropagates natural-language feedback from an LLM through a computation graph of LLM calls to improve variables such as prompts. Another approach to optimizing compound systems.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "opsahlong2024mipro",
+  "authors": "Krista Opsahl-Ong, Michael J Ryan, Josh Purtell, David Broman, Christopher Potts, Matei Zaharia, Omar Khattab",
+  "surnames": [
+   "Opsahl-Ong",
+   "Ryan",
+   "Purtell",
+   "Broman",
+   "Potts",
+   "Zaharia",
+   "Khattab"
+  ],
+  "title": "Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs",
+  "venue": "EMNLP 2024 (arXiv:2406.11695)",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2406.11695",
+  "shows": "Presents MIPRO, which jointly optimizes instructions and few-shot demonstrations across the modules of a multi-stage LM program. Used to discuss search budget and dev-set overfitting.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "tamkin2024clio",
+  "authors": "Alex Tamkin, Miles McCain, Kunal Handa, Esin Durmus, Liane Lovitt, Ankur Rathi, Saffron Huang, Alfred Mountfield, Jerry Hong, Stuart Ritchie, Michael Stern, Brian Clarke, Landon Goldberg, Theodore R. Sumers, Jared Mueller, William McEachen, Wes Mitchell, Shan Carter, Jack Clark, Jared Kaplan, Deep Ganguli",
+  "surnames": [
+   "Tamkin",
+   "McCain",
+   "Handa",
+   "Durmus",
+   "Lovitt",
+   "Rathi",
+   "Huang",
+   "Mountfield",
+   "Hong",
+   "Ritchie",
+   "Stern",
+   "Clarke",
+   "Goldberg",
+   "Sumers",
+   "Mueller",
+   "McEachen",
+   "Mitchell",
+   "Carter",
+   "Clark",
+   "Kaplan",
+   "Ganguli"
+  ],
+  "title": "Clio: Privacy-Preserving Insights into Real-World AI Use",
+  "venue": "arXiv:2412.13678",
+  "year": 2024,
+  "url": "https://arxiv.org/abs/2412.13678",
+  "shows": "Describes an automated pipeline that clusters and summarizes real conversations with privacy protections so usage patterns can be studied without reading individual chats. A model for analyzing an agent's own production traces while limiting exposure of personal data.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page"
+ },
+ {
+  "key": "anthropic2026demystifying",
+  "authors": "Mikaela Grace, Jeremy Hadfield, Rodrigo Olivares, Jiri De Jonghe",
+  "surnames": [
+   "Grace",
+   "Hadfield",
+   "Olivares",
+   "De Jonghe"
+  ],
+  "title": "Demystifying evals for AI agents",
+  "venue": "Anthropic Engineering blog",
+  "year": 2026,
+  "url": "https://www.anthropic.com/research/demystifying-evals-for-ai-agents",
+  "shows": "A model maker's guide that defines evals, discusses code-based, model-based and human graders for multi-turn agents, and covers pass@k and pass^k for non-deterministic results. Official practical guidance for building agent evals.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Anthropic 2026a"
+ },
+ {
+  "key": "anthropic2026successcriteria",
+  "authors": "Anthropic",
+  "surnames": [
+   "Anthropic"
+  ],
+  "title": "Define success criteria and build evaluations",
+  "venue": "Claude Platform documentation",
+  "year": 2026,
+  "url": "https://platform.claude.com/docs/en/test-and-evaluate/develop-tests",
+  "shows": "Official documentation on defining measurable success criteria and building automated evaluations, including exact-match, similarity and LLM-based grading methods. A baseline for designing an eval set for an application.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Anthropic 2026b"
+ },
+ {
+  "key": "openai2026evalbestpractices",
+  "authors": "OpenAI",
+  "surnames": [
+   "OpenAI"
+  ],
+  "title": "Evaluation best practices",
+  "venue": "OpenAI developer documentation",
+  "year": 2026,
+  "url": "https://developers.openai.com/api/docs/guides/evaluation-best-practices",
+  "shows": "A model maker's guide that explains why variable generative output needs evals and describes a five-step workflow comparing metric-based, human and LLM-judge evaluators. Notes from a search result (not verified on the opened page) say the OpenAI Evals platform is being deprecated, so check the page before assigning.",
+  "level": "further",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "OpenAI 2026"
+ },
+ {
+  "key": "anthropic2026promptcaching",
+  "authors": "Anthropic",
+  "surnames": [
+   "Anthropic"
+  ],
+  "title": "Prompt caching",
+  "venue": "Claude Platform documentation",
+  "year": 2026,
+  "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+  "shows": "Documents caching of prompt prefixes via cache_control with 5-minute and 1-hour lifetimes. States cache writes cost 1.25x (5-minute) or 2x (1-hour) of base input price and reads cost 0.1x or less, which drives agent cost and latency design.",
+  "level": "core",
+  "group": "Evaluation, measurement and improvement",
+  "checked": "page",
+  "short": "Anthropic 2026c"
+ },
+ {
+  "key": "candea2003crash",
+  "authors": "George Candea, Armando Fox",
+  "surnames": [
+   "Candea",
+   "Fox"
+  ],
+  "title": "Crash-Only Software",
+  "venue": "HotOS IX, USENIX",
+  "year": 2003,
+  "url": "https://www.usenix.org/conference/hotos-ix/crash-only-software",
+  "shows": "Proposes building components so that the only way to stop them is to crash them and the only way to start them is to recover. A personal agent that must survive restarts can adopt this so that every shutdown path is the recovery path.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "armstrong2003thesis",
+  "authors": "Joe Armstrong",
+  "surnames": [
+   "Armstrong"
+  ],
+  "title": "Making reliable distributed systems in the presence of software errors",
+  "venue": "PhD dissertation, Royal Institute of Technology (KTH), Stockholm",
+  "year": 2003,
+  "url": "https://erlang.org/pipermail/erlang-questions/2003-November/010649.html",
+  "shows": "Describes structuring a system as isolated communicating processes with supervisors that restart failed workers, on the premise that software contains errors. Gives the vocabulary behind supervision trees and let-it-crash for long-running agents.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "gray1985why",
+  "authors": "Jim Gray",
+  "surnames": [
+   "Gray"
+  ],
+  "title": "Why Do Computers Stop and What Can Be Done About It?",
+  "venue": "Tandem Computers Technical Report 85.7",
+  "year": 1985,
+  "url": "https://lasr.cs.ucla.edu/classes/239_1.fall00/papers/gray85.txt",
+  "shows": "Analyses failure reports from a commercial fault-tolerant system and finds administration and software dominate outages, with many software faults transient. Motivates restart-and-retry, process pairs and transactions as design tools.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "kreps2013log",
+  "authors": "Jay Kreps",
+  "surnames": [
+   "Kreps"
+  ],
+  "title": "The Log: What every software engineer should know about real-time data's unifying abstraction",
+  "venue": "LinkedIn Engineering blog",
+  "year": 2013,
+  "url": "https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying",
+  "shows": "Presents the append-only, ordered log as the basis for data integration and replicated state. Supports designing an agent's journal as the source of truth from which other state is derived.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "fowler2005eventsourcing",
+  "authors": "Martin Fowler",
+  "surnames": [
+   "Fowler"
+  ],
+  "title": "Event Sourcing",
+  "venue": "martinfowler.com (Enterprise Application Architecture development patterns)",
+  "year": 2005,
+  "url": "https://martinfowler.com/eaaDev/EventSourcing.html",
+  "shows": "Explains recording every state change as an ordered event and rebuilding or correcting state by replaying events. Gives a pattern for an append-only journal that can be replayed after a restart.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "kleppmann2017ddia",
+  "authors": "Martin Kleppmann",
+  "surnames": [
+   "Kleppmann"
+  ],
+  "title": "Designing Data-Intensive Applications",
+  "venue": "O'Reilly Media (book)",
+  "year": 2017,
+  "url": "https://dataintensive.net/",
+  "shows": "Textbook treatment of reliability, replication, transactions, logs, stream processing and exactly-once effects. Serves as the general reference for the storage and delivery questions an agent's runtime raises.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "lamport1978time",
+  "authors": "Leslie Lamport",
+  "surnames": [
+   "Lamport"
+  ],
+  "title": "Time, clocks, and the ordering of events in a distributed system",
+  "venue": "Communications of the ACM",
+  "year": 1978,
+  "url": "https://doi.org/10.1145/359545.359563",
+  "shows": "Defines the happened-before relation and logical clocks as a way to order events without a shared physical clock. Relevant when an agent's journal merges events from several chat, email and scheduler sources.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "waldo1997note",
+  "authors": "Jim Waldo, Geoff Wyant, Ann Wollrath, Sam Kendall",
+  "surnames": [
+   "Waldo",
+   "Wyant",
+   "Wollrath",
+   "Kendall"
+  ],
+  "title": "A note on distributed computing",
+  "venue": "Mobile Object Systems: Towards the Programmable Internet, Lecture Notes in Computer Science 1222 (first issued as Sun Microsystems Laboratories TR-94-29, 1994)",
+  "year": 1997,
+  "url": "https://doi.org/10.1007/3-540-62852-5_6",
+  "shows": "Argues that remote calls differ fundamentally from local ones in latency, partial failure and concurrency, so interfaces must not hide the network. Basis for treating every call an agent makes to an external account as fallible.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "brooker2015jitter",
+  "authors": "Marc Brooker",
+  "surnames": [
+   "Brooker"
+  ],
+  "title": "Exponential Backoff And Jitter",
+  "venue": "AWS Architecture Blog",
+  "year": 2015,
+  "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/",
+  "shows": "Compares retry strategies with and without randomised delay under contention and recommends adding jitter to exponential backoff. Directly applicable to how an agent retries failing account APIs without hammering them.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "helland2012idempotence",
+  "authors": "Pat Helland",
+  "surnames": [
+   "Helland"
+  ],
+  "title": "Idempotence Is Not a Medical Condition",
+  "venue": "ACM Queue / Communications of the ACM",
+  "year": 2012,
+  "url": "https://doi.org/10.1145/2181796.2187821",
+  "shows": "Explains why messages are delivered at least once in practice and how applications must tolerate duplicates through idempotent processing. Core reasoning for safe retries of side-effecting agent actions.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "helland2016life",
+  "authors": "Pat Helland",
+  "surnames": [
+   "Helland"
+  ],
+  "title": "Life Beyond Distributed Transactions",
+  "venue": "ACM Queue",
+  "year": 2016,
+  "url": "https://doi.org/10.1145/3012426.3025012",
+  "shows": "Argues that scalable applications confine transactions to single entities and coordinate across them with messages and tolerance for duplicates. Offers a model for agents that act across independent services with no shared transaction.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "helland2015immutability",
+  "authors": "Pat Helland",
+  "surnames": [
+   "Helland"
+  ],
+  "title": "Immutability changes everything",
+  "venue": "Communications of the ACM",
+  "year": 2015,
+  "url": "https://doi.org/10.1145/2844112",
+  "shows": "Argues that append-only, immutable data simplifies replication and reasoning about history, with derived views built on top. Supports an append-only journal design.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "dean2013tail",
+  "authors": "Jeffrey Dean, Luiz Andre Barroso",
+  "surnames": [
+   "Dean",
+   "Barroso"
+  ],
+  "title": "The tail at scale",
+  "venue": "Communications of the ACM",
+  "year": 2013,
+  "url": "https://doi.org/10.1145/2408776.2408794",
+  "shows": "Shows how rare slow responses dominate end-to-end latency in large systems and describes hedged and tied requests. Useful for reasoning about timeouts and duplicate requests when an agent depends on slow external services.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "stripe-idempotency",
+  "authors": "Stripe",
+  "surnames": [
+   "Stripe"
+  ],
+  "title": "Idempotent requests",
+  "venue": "Stripe API Reference",
+  "year": "undated",
+  "url": "https://docs.stripe.com/api/idempotent_requests",
+  "shows": "Documents the idempotency-key pattern: a client-chosen key lets a request be retried after a connection error without repeating its effect. A concrete, widely used design for making an agent's outgoing actions safe to retry.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "sre-embracing-risk",
+  "authors": "Google SRE book authors (chapter-level authorship not verified)",
+  "surnames": [
+   "Google SRE book authors"
+  ],
+  "title": "Embracing Risk",
+  "venue": "Site Reliability Engineering: How Google Runs Production Systems, ch. 3, O'Reilly",
+  "year": 2016,
+  "url": "https://sre.google/sre-book/embracing-risk/",
+  "shows": "Introduces error budgets: accepting a stated amount of unreliability so that change can proceed. Gives a method for deciding how much failure an unattended agent may be allowed before it is stopped.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page",
+  "short": "SRE book, embracing risk"
+ },
+ {
+  "key": "sre-slo",
+  "authors": "Google SRE book authors (chapter-level authorship not verified)",
+  "surnames": [
+   "Google SRE book authors"
+  ],
+  "title": "Service Level Objectives",
+  "venue": "Site Reliability Engineering, ch. 4, O'Reilly",
+  "year": 2016,
+  "url": "https://sre.google/sre-book/service-level-objectives/",
+  "shows": "Defines indicators, objectives and agreements and how to choose them. Lets an agent project state measurable targets for things like missed scheduled runs.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "sre-monitoring",
+  "authors": "Google SRE book authors (chapter-level authorship not verified)",
+  "surnames": [
+   "Google SRE book authors"
+  ],
+  "title": "Monitoring Distributed Systems",
+  "venue": "Site Reliability Engineering, ch. 6, O'Reilly",
+  "year": 2016,
+  "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
+  "shows": "Describes the four golden signals and argues that alerts should be actionable and symptom-based. Applies to deciding what an unattended agent should report and what it should only log.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page",
+  "short": "SRE book, monitoring"
+ },
+ {
+  "key": "sre-postmortem",
+  "authors": "Google SRE book authors (chapter-level authorship not verified)",
+  "surnames": [
+   "Google SRE book authors"
+  ],
+  "title": "Postmortem Culture: Learning from Failure",
+  "venue": "Site Reliability Engineering, ch. 15, O'Reilly",
+  "year": 2016,
+  "url": "https://sre.google/sre-book/postmortem-culture/",
+  "shows": "Describes blameless written postmortems with causes and follow-up actions. Suggests a template for reviewing agent incidents recorded in its own journal.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page",
+  "short": "SRE book, postmortems"
+ },
+ {
+  "key": "parnas1972criteria",
+  "authors": "D. L. Parnas",
+  "surnames": [
+   "Parnas"
+  ],
+  "title": "On the criteria to be used in decomposing systems into modules",
+  "venue": "Communications of the ACM",
+  "year": 1972,
+  "url": "https://doi.org/10.1145/361598.361623",
+  "shows": "Shows that modules should be cut around design decisions likely to change rather than around processing steps. Guides separating an agent's channel, account and journal components so each can be replaced.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "brooks1987silver",
+  "authors": "Frederick P. Brooks Jr.",
+  "surnames": [
+   "Jr."
+  ],
+  "title": "No Silver Bullet: Essence and Accidents of Software Engineering",
+  "venue": "Computer (IEEE)",
+  "year": 1987,
+  "url": "https://doi.org/10.1109/MC.1987.1663532",
+  "shows": "Distinguishes essential from accidental complexity and argues no single technique will give an order-of-magnitude gain. A counterweight to expecting a model alone to remove the engineering work around an agent.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "lampson1983hints",
+  "authors": "Butler W. Lampson",
+  "surnames": [
+   "Lampson"
+  ],
+  "title": "Hints for computer system design",
+  "venue": "ACM SIGOPS Operating Systems Review (SOSP 1983)",
+  "year": 1983,
+  "url": "https://doi.org/10.1145/773379.806614",
+  "shows": "Collects practical design advice on simplicity, interfaces, logs, atomic actions and making operations idempotent. A compact general reference for the agent runtime.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "garciamolina1987sagas",
+  "authors": "Hector Garcia-Molina, Kenneth Salem",
+  "surnames": [
+   "Garcia-Molina",
+   "Salem"
+  ],
+  "title": "Sagas",
+  "venue": "ACM SIGMOD 1987",
+  "year": 1987,
+  "url": "https://doi.org/10.1145/38713.38742",
+  "shows": "Proposes splitting a long-lived transaction into steps, each with a compensating action. Relevant to multi-step agent tasks across accounts that cannot be rolled back atomically.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "hunt1999pragmatic",
+  "authors": "David Thomas, Andrew Hunt",
+  "surnames": [
+   "Thomas",
+   "Hunt"
+  ],
+  "title": "The Pragmatic Programmer, 20th Anniversary Edition",
+  "venue": "Pragmatic Bookshelf (book; tracer bullets first appeared in the 1999 edition)",
+  "year": 2019,
+  "url": "https://pragprog.com/titles/tpp20/the-pragmatic-programmer-20th-anniversary-edition/",
+  "shows": "Source of the 'tracer bullets' technique: build a thin end-to-end path first and refine it. Applies to building the chat-to-account-to-journal loop before any breadth.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "sculley2015debt",
+  "authors": "D. Sculley, Gary Holt, Daniel Golovin, Eugene Davydov, Todd Phillips, Dietmar Ebner, Vinay Chaudhary, Michael Young, Jean-Francois Crespo, Dan Dennison",
+  "surnames": [
+   "Sculley",
+   "Holt",
+   "Golovin",
+   "Davydov",
+   "Phillips",
+   "Ebner",
+   "Chaudhary",
+   "Young",
+   "Crespo",
+   "Dennison"
+  ],
+  "title": "Hidden Technical Debt in Machine Learning Systems",
+  "venue": "Advances in Neural Information Processing Systems 28 (NeurIPS 2015)",
+  "year": 2015,
+  "url": "https://papers.nips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html",
+  "shows": "Catalogues system-level maintenance costs in ML systems such as entanglement, hidden feedback loops and glue code. Warns about the surrounding code a model-driven agent accumulates.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "sutton2019bitter",
+  "authors": "Richard S. Sutton",
+  "surnames": [
+   "Sutton"
+  ],
+  "title": "The Bitter Lesson",
+  "venue": "Personal web page (incompleteideas.net)",
+  "year": 2019,
+  "url": "http://www.incompleteideas.net/IncIdeas/BitterLesson.html",
+  "shows": "Argues that general methods that use more computation have beaten hand-built domain knowledge over the long run. Used to discuss which parts of an agent to hand-code and which to leave to the model.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "coase1937firm",
+  "authors": "R. H. Coase",
+  "surnames": [
+   "Coase"
+  ],
+  "title": "The Nature of the Firm",
+  "venue": "Economica",
+  "year": 1937,
+  "url": "https://doi.org/10.1111/j.1468-0335.1937.tb00002.x",
+  "shows": "Explains the boundary of the firm by the cost of using the market versus organising internally. The root of the make-or-buy question when choosing whether to build or rent an agent component.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "williamson1979tce",
+  "authors": "Oliver E. Williamson",
+  "surnames": [
+   "Williamson"
+  ],
+  "title": "Transaction-Cost Economics: The Governance of Contractual Relations",
+  "venue": "The Journal of Law and Economics",
+  "year": 1979,
+  "url": "https://doi.org/10.1086/466942",
+  "shows": "Develops transaction-cost economics, showing how asset specificity and uncertainty determine whether to buy or integrate. Gives vocabulary for vendor lock-in and dependency decisions.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "amershi2019guidelines",
+  "authors": "Saleema Amershi, Dan Weld, Mihaela Vorvoreanu, Adam Fourney, Besmira Nushi, Penny Collisson, Jina Suh, Shamsi Iqbal, Paul N. Bennett, Kori Inkpen, Jaime Teevan, and others",
+  "surnames": [
+   "Amershi",
+   "Weld",
+   "Vorvoreanu",
+   "Fourney",
+   "Nushi",
+   "Collisson",
+   "Suh",
+   "Iqbal",
+   "Bennett",
+   "Inkpen",
+   "Teevan",
+   "others"
+  ],
+  "title": "Guidelines for Human-AI Interaction",
+  "venue": "CHI 2019, ACM",
+  "year": 2019,
+  "url": "https://doi.org/10.1145/3290605.3300233",
+  "shows": "Presents 18 guidelines for AI-infused systems, derived from prior work and tested with practitioners. A checklist for reviewing the agent's conversational behaviour.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "parasuraman2000levels",
+  "authors": "Raja Parasuraman, Thomas B. Sheridan, Christopher D. Wickens",
+  "surnames": [
+   "Parasuraman",
+   "Sheridan",
+   "Wickens"
+  ],
+  "title": "A model for types and levels of human interaction with automation",
+  "venue": "IEEE Transactions on Systems, Man, and Cybernetics - Part A",
+  "year": 2000,
+  "url": "https://doi.org/10.1109/3468.844354",
+  "shows": "Proposes that automation varies by level across four stages: information acquisition, analysis, decision and action. Gives a vocabulary for setting how autonomous the agent is for each kind of task.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "lee2004trust",
+  "authors": "John D. Lee, Katrina A. See",
+  "surnames": [
+   "Lee",
+   "See"
+  ],
+  "title": "Trust in Automation: Designing for Appropriate Reliance",
+  "venue": "Human Factors",
+  "year": 2004,
+  "url": "https://doi.org/10.1518/hfes.46.1.50_30392",
+  "shows": "Reviews trust in automation and argues that design should aim at calibrated reliance rather than maximum trust. Informs what an agent should show about its own reliability.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "klein2004teamplayer",
+  "authors": "Gary Klein, David D. Woods, Jeffrey M. Bradshaw, Robert R. Hoffman, Paul J. Feltovich",
+  "surnames": [
+   "Klein",
+   "Woods",
+   "Bradshaw",
+   "Hoffman",
+   "Feltovich"
+  ],
+  "title": "Ten Challenges for Making Automation a \"Team Player\" in Joint Human-Agent Activity",
+  "venue": "IEEE Intelligent Systems",
+  "year": 2004,
+  "url": "https://doi.org/10.1109/MIS.2004.74",
+  "shows": "Lists requirements for automation to cooperate with people, such as keeping common ground and making its actions and intentions observable. Relevant to what an agent reports in chat.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "hutchins1985direct",
+  "authors": "Edwin L. Hutchins, James D. Hollan, Donald A. Norman",
+  "surnames": [
+   "Hutchins",
+   "Hollan",
+   "Norman"
+  ],
+  "title": "Direct Manipulation Interfaces",
+  "venue": "Human-Computer Interaction",
+  "year": 1985,
+  "url": "https://doi.org/10.1207/s15327051hci0104_2",
+  "shows": "Analyses interfaces in terms of the gulfs of execution and evaluation between user goals and system state. Used to frame feedback an agent owes after acting on a person's behalf.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "weiser1996calm",
+  "authors": "Mark Weiser, John Seely Brown",
+  "surnames": [
+   "Weiser",
+   "Brown"
+  ],
+  "title": "The Coming Age of Calm Technology",
+  "venue": "Xerox PARC essay (reprinted in Beyond Calculation, Springer, 1997)",
+  "year": 1996,
+  "url": "https://calmtech.com/papers/coming-age-calm-technology",
+  "shows": "Argues that technology should move between the centre and periphery of attention rather than demand it. Frames the design of notifications from a long-running agent.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "clark1991grounding",
+  "authors": "Herbert H. Clark, Susan E. Brennan",
+  "surnames": [
+   "Clark",
+   "Brennan"
+  ],
+  "title": "Grounding in communication",
+  "venue": "Perspectives on Socially Shared Cognition, American Psychological Association",
+  "year": 1991,
+  "url": "https://doi.org/10.1037/10096-006",
+  "shows": "Describes how conversation partners establish mutual understanding and repair misunderstandings at a cost depending on the medium. Basis for clarification and confirmation behaviour in an agent chat.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "mark2008interrupted",
+  "authors": "Gloria Mark, Daniela Gudith, Ulrich Klocke",
+  "surnames": [
+   "Mark",
+   "Gudith",
+   "Klocke"
+  ],
+  "title": "The cost of interrupted work",
+  "venue": "CHI 2008, ACM",
+  "year": 2008,
+  "url": "https://doi.org/10.1145/1357054.1357072",
+  "shows": "Reports an experiment in which interrupted workers finished faster but with more stress and effort. Evidence that unprompted agent messages have a cost.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "czerwinski2004diary",
+  "authors": "Mary Czerwinski, Eric Horvitz, Susan Wilhite",
+  "surnames": [
+   "Czerwinski",
+   "Horvitz",
+   "Wilhite"
+  ],
+  "title": "A diary study of task switching and interruptions",
+  "venue": "CHI 2004, ACM",
+  "year": 2004,
+  "url": "https://doi.org/10.1145/985692.985715",
+  "shows": "Diary study of how knowledge workers experience switching and interruption, including difficulty resuming tasks. Informs when an agent should defer a message.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "horvitz1999attention",
+  "authors": "Eric Horvitz, Andy Jacobs, David Hovel",
+  "surnames": [
+   "Horvitz",
+   "Jacobs",
+   "Hovel"
+  ],
+  "title": "Attention-Sensitive Alerting",
+  "venue": "Uncertainty in Artificial Intelligence (UAI 1999); arXiv:1301.6707",
+  "year": 1999,
+  "url": "https://arxiv.org/abs/1301.6707",
+  "shows": "Casts alert delivery as a decision weighing the value of information against the cost of interruption given the user's attention. Gives a formal basis for an agent's notification policy.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "bush1945think",
+  "authors": "Vannevar Bush",
+  "surnames": [
+   "Bush"
+  ],
+  "title": "As We May Think",
+  "venue": "The Atlantic Monthly",
+  "year": 1945,
+  "url": "https://www.w3.org/History/1945/vbush/vbush.shtml",
+  "shows": "Proposes the memex, a personal device for storing and linking a person's records. Historical statement of the personal-memory aim an agent's journal serves.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "licklider1960symbiosis",
+  "authors": "J. C. R. Licklider",
+  "surnames": [
+   "Licklider"
+  ],
+  "title": "Man-Computer Symbiosis",
+  "venue": "IRE Transactions on Human Factors in Electronics",
+  "year": 1960,
+  "url": "https://doi.org/10.1109/THFE2.1960.4503259",
+  "shows": "Envisions a division of labour in which computers handle routine work and preparation so people can focus on formulating and judging. Early statement of the delegation model behind personal agents.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "maes1994agents",
+  "authors": "Pattie Maes",
+  "surnames": [
+   "Maes"
+  ],
+  "title": "Agents that reduce work and information overload",
+  "venue": "Communications of the ACM",
+  "year": 1994,
+  "url": "https://doi.org/10.1145/176789.176792",
+  "shows": "Describes personal software agents that learn a user's habits to handle email, meetings and filtering, and discusses trust and control. Early model for an agent that learns what to do for one person.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "myers2007calo",
+  "authors": "Karen Myers, Pauline Berry, Jim Blythe, Ken Conley, Melinda Gervasio, Deborah McGuinness, David Morley, Avi Pfeffer, Martha Pollack, Milind Tambe",
+  "surnames": [
+   "Myers",
+   "Berry",
+   "Blythe",
+   "Conley",
+   "Gervasio",
+   "McGuinness",
+   "Morley",
+   "Pfeffer",
+   "Pollack",
+   "Tambe"
+  ],
+  "title": "An Intelligent Personal Assistant for Task and Time Management",
+  "venue": "AI Magazine 28(2), pp. 47-61",
+  "year": 2007,
+  "url": "https://www.sri.com/publication/artificial-intelligence-pubs/an-intelligent-personal-assistant-for-task-and-time-management/",
+  "shows": "Describes a deployed assistant from the CALO project that manages time commitments and tasks for a knowledge worker. Primary example of a personal assistant built from a task-execution architecture.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "page"
+ },
+ {
+  "key": "whittaker1996email",
+  "authors": "Steve Whittaker, Candace Sidner",
+  "surnames": [
+   "Whittaker",
+   "Sidner"
+  ],
+  "title": "Email overload",
+  "venue": "CHI '96, ACM",
+  "year": 1996,
+  "url": "https://doi.org/10.1145/238386.238530",
+  "shows": "Studies how people use mailboxes as to-do lists and archives and describes why they become overloaded. Informs what an agent can triage and what it must leave in view.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "bellotti2003email",
+  "authors": "Victoria Bellotti, Nicolas Ducheneaut, Mark Howard, Ian Smith",
+  "surnames": [
+   "Bellotti",
+   "Ducheneaut",
+   "Howard",
+   "Smith"
+  ],
+  "title": "Taking email to task",
+  "venue": "CHI 2003, ACM",
+  "year": 2003,
+  "url": "https://doi.org/10.1145/642611.642672",
+  "shows": "Presents and evaluates an email tool organised around tasks rather than messages. Evidence for task-centred handling of mail by an assistant.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "cranshaw2017calendarhelp",
+  "authors": "Justin Cranshaw, Emad Elwany, Todd Newman, Rafal Kocielnik, Bowen Yu, Sandeep Soni, Jaime Teevan, Andres Monroy-Hernandez",
+  "surnames": [
+   "Cranshaw",
+   "Elwany",
+   "Newman",
+   "Kocielnik",
+   "Yu",
+   "Soni",
+   "Teevan",
+   "Monroy-Hernandez"
+  ],
+  "title": "Calendar.help: Designing a Workflow-Based Scheduling Agent with Humans in the Loop",
+  "venue": "CHI 2017, ACM",
+  "year": 2017,
+  "url": "https://doi.org/10.1145/3025453.3025780",
+  "shows": "Describes a meeting-scheduling agent that splits email scheduling into micro-tasks done by software and people. Case study on the limits of fully automatic scheduling.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "fellegi1969linkage",
+  "authors": "Ivan P. Fellegi, Alan B. Sunter",
+  "surnames": [
+   "Fellegi",
+   "Sunter"
+  ],
+  "title": "A Theory for Record Linkage",
+  "venue": "Journal of the American Statistical Association",
+  "year": 1969,
+  "url": "https://doi.org/10.1080/01621459.1969.10501049",
+  "shows": "Gives the probabilistic framework for deciding whether two records refer to the same entity using match and non-match weights. Foundation for linking contacts across a person's accounts.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "elmagarmid2007duplicate",
+  "authors": "Ahmed K. Elmagarmid, Panagiotis G. Ipeirotis, Vassilios S. Verykios",
+  "surnames": [
+   "Elmagarmid",
+   "Ipeirotis",
+   "Verykios"
+  ],
+  "title": "Duplicate Record Detection: A Survey",
+  "venue": "IEEE Transactions on Knowledge and Data Engineering",
+  "year": 2007,
+  "url": "https://doi.org/10.1109/TKDE.2007.250581",
+  "shows": "Surveys techniques for field matching and duplicate detection. Overview reading for CRM-style contact deduplication.",
+  "level": "core",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "papadakis2020blocking",
+  "authors": "George Papadakis, Dimitrios Skoutas, Emmanouil Thanos, Themis Palpanas",
+  "surnames": [
+   "Papadakis",
+   "Skoutas",
+   "Thanos",
+   "Palpanas"
+  ],
+  "title": "Blocking and Filtering Techniques for Entity Resolution",
+  "venue": "ACM Computing Surveys",
+  "year": 2020,
+  "url": "https://doi.org/10.1145/3377455",
+  "shows": "Surveys methods that cut the number of record pairs compared in entity resolution. Relevant when contact and company data grows beyond pairwise comparison.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ },
+ {
+  "key": "xu2020layoutlm",
+  "authors": "Yiheng Xu, Minghao Li, Lei Cui, Shaohan Huang, Furu Wei, Ming Zhou",
+  "surnames": [
+   "Xu",
+   "Li",
+   "Cui",
+   "Huang",
+   "Wei",
+   "Zhou"
+  ],
+  "title": "LayoutLM: Pre-training of Text and Layout for Document Image Understanding",
+  "venue": "KDD 2020, ACM",
+  "year": 2020,
+  "url": "https://doi.org/10.1145/3394486.3403172",
+  "shows": "Introduces joint pre-training on text and page layout for tasks such as form and receipt understanding. Representative of model-based extraction from scanned documents.",
+  "level": "further",
+  "group": "Systems, reliability, people and economics",
+  "checked": "records"
+ }
+]

@@ -8,6 +8,15 @@
 <li>Read a table of measured costs critically: what each figure measured, how many times, and what it leaves out.</li>
 </ul></div>
 
+<div class="box unit"><div class="label">This unit</div>
+<dl>
+<dt>Week</dt><dd>12 of 14</dd>
+<dt>Before it</dt><dd>{{ch:the-agent-loop}}, {{ch:the-conversation}} and {{ch:testing-and-evaluation}}; Definitions 1, 3, 8 and 9, Property 3 and the cost formula of <a href="notation.html">the model</a>.</dd>
+<dt>Read first</dt><dd>{{cite:anthropic2026promptcaching}}; {{cite:kapoor2024agentsmatter}}.</dd>
+<dt>Laboratory</dt><dd><a href="labs.html#lab5">5: measuring it</a></dd>
+<dt>Problem set</dt><dd><a href="problem-sets.html#ps5">5</a></dd>
+</dl></div>
+
 <h2 id="problem">The problem: money that moves without anyone noticing</h2>
 <p>An agent spends money every time it calls a model, searches the web, opens a browser or reads from a paid service. Nobody sees an invoice per message. If the program does not count, the first sign of a fault is the monthly bill.</p>
 <p>The case this chapter is built around: the owner sends a fourteen-page pitch deck, as a PDF, into the chat. In the design first built, so that the model could see the charts and logos that text recognition drops ({{ch:files-pictures-and-voice}}), the PDF was placed in the conversation itself. The reply cost 12 cents. Later in the same long-running conversation the deck was sent again, and then a third time. The third sending cost 34 cents. <span class="g v">Verified</span>, one sending each. The deck was the same each time; the conversation before it was longer.</p>
@@ -287,6 +296,37 @@ def cost_of(rec: dict[str, Any]) -> float:
 </tbody></table></div>
 <p>The table supports orders of magnitude: a cent or two for a question, a fraction of a cent for a routine on the small model, five to twenty cents for a deck or a browser, a few dollars for an evaluation. It supports no average, rate or monthly figure. The three-dollar daily budget is a guess, not derived from these figures, and it is the default in the code.</p>
 
+<h2 id="theory">The theory</h2>
+<p>This section derives, from the cost formula of <a href="notation.html#cost">the model</a>, what a conversation costs with and without a cache and when a cache that expires pays, and states each decision of the chapter as a reduction of one term.</p>
+<p><strong>Properties and measurements.</strong> The properties concern the ledger, derived state in the sense of Definition 8, so by Property 3 a restart leaves it unchanged; and the day's budget is checked before a task starts, so a refused task calls no model. The table of real runs holds measurements, mostly single runs. The derivations are arithmetic on the price table: they give the shape of costs and leave their size to measurement.</p>
+<div class="box theory"><div class="label">Derivation: a conversation with and without a cache</div>
+<p>Let call <span class="math">t</span> of a conversation send <span class="math">c₀ + tδ</span> input tokens, as in the model. With no cache its input costs</p>
+<p class="eq">C<sub>none</sub>(m) = p<sub>in</sub> · (m·c₀ + δ·m(m+1)/2)</p>
+<p>If every call follows the last within the cache's lifetime and writes what it adds, call 1 writes <span class="math">c₀ + δ</span> and call <span class="math">t &gt; 1</span> reads <span class="math">c₀ + (t − 1)δ</span> and writes <span class="math">δ</span>. Summing,</p>
+<p class="eq">C<sub>warm</sub>(m) = p<sub>cw</sub> · (c₀ + m·δ) + p<sub>cr</sub> · ((m − 1)·c₀ + δ·m(m − 1)/2)</p>
+<p>The square of <span class="math">m</span> survives, with <span class="math">p<sub>cr</sub></span> in place of <span class="math">p<sub>in</sub></span>: in the program's table, a twentieth on the two larger models and a tenth on the small one. If the cache has expired before every call, each call writes everything, and</p>
+<p class="eq">C<sub>cold</sub>(m) = (p<sub>cw</sub> / p<sub>in</sub>) · C<sub>none</sub>(m)</p>
+<p>which in the table is 1.25 times the cost of no cache at all.</p></div>
+<p><strong>When a cache that expires pays.</strong> A prefix of <span class="math">n</span> tokens written once and read <span class="math">r</span> times before expiry costs <span class="math">n·(p<sub>cw</sub> + r·p<sub>cr</sub>)</span>, against <span class="math">n·(1 + r)·p<sub>in</sub></span> uncached. Writing pays when</p>
+<p class="eq">r &gt; (p<sub>cw</sub> − p<sub>in</sub>) / (p<sub>in</sub> − p<sub>cr</sub>)</p>
+<p>At the five-minute rate on the main model that is 0.50 / 1.90 ≈ 0.26, so one read repays the write. For a one-hour lifetime written at twice the input price and read at the same price it is 2.00 / 1.90 ≈ 1.05: two reads are needed. Within a task, several calls in quick succession, the cache pays. Between tasks the owner's habit (a message, then nothing for an hour) leaves the next task's first call paying <span class="math">p<sub>cw</sub></span> on the whole conversation behind it.</p>
+<p><strong>Beginning again.</strong> Split a conversation of <span class="math">m = m₁ + m₂</span> calls at a pause, and let the second part start from <span class="math">c₀ + s</span>, where <span class="math">s</span> is what is carried. With no cache the input saved is</p>
+<p class="eq">δ·m₁·m₂ − s·m₂ = m₂ · (δ·m₁ − s)</p>
+<p>so beginning again pays when the history dropped, <span class="math">δ·m₁</span>, exceeds what is carried, and pays on each of the <span class="math">m₂</span> later calls. The closing summary, about two hundredths of a cent, is the price of writing about 80 tokens at the main model's write price and hardly moves the condition. The code's thresholds agree with this without being derived from it; a message's cost before and after the rule is unmeasured.</p>
+<p><strong>Each decision as a term.</strong> Reading a file's pages in a separate run reduces <span class="math">δ</span>: notes arrive in place of pages and are what every later call carries. Cutting a search's results to 12,000 characters reduces <span class="math">δ</span>. Beginning again reduces <span class="math">m</span> per conversation at the price of <span class="math">s</span> added to the next <span class="math">c₀</span>, and leaving a file's text out keeps <span class="math">s</span> small. Code in place of a model, and refusals before any call, reduce <span class="math">m</span>. The cap of eight paid reads bounds a routine's metered reads and with them its calls. Looking only at pages with pictures reduces <span class="math">c₀</span> of the reader's run. Two decisions fit no term: a cheaper model scales all three through the prices, and preferring web search to X changes a metered price outside the formula. The model's sentence holds for decisions about tokens; price is a fourth lever. Budgets bound <span class="math">m</span> and the day's total and reduce nothing on average.</p>
+<p>The hypotheses fail where the chapter says: <span class="math">δ</span> is not constant (a file is a spike, the opening case), the library condenses a long conversation, which bounds <span class="math">t·δ</span>, and the table omits the small model's higher price above 100,000 tokens.</p>
+<div class="tbl"><table>
+<thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
+<tbody>
+<tr><td>The ledger is the same before and after a restart</td><td>Property</td><td>Property 3; the nine-line test</td></tr>
+<tr><td>A task refused by the day's budget calls no model</td><td>Property</td><td>Argued from the order of the checks; tested</td></tr>
+<tr><td>Uncached input grows with the square of the number of calls</td><td>Derivation</td><td>From the model; not measured here</td></tr>
+<tr><td>The deck's third sending cost 34 cents against 12</td><td>Measurement</td><td>One sending each; cached and uncached tokens not separated</td></tr>
+<tr><td>A day's spending cannot exceed $3.00</td><td>False as stated</td><td>A task that starts under the limit may spend $0.50 more</td></tr>
+<tr><td>The separate reader keeps a conversation's cost flat over several decks</td><td>Neither yet</td><td>Not tested</td></tr>
+</tbody>
+</table></div>
+
 <h2 id="wrong">What goes wrong</h2>
 <h3>A total read as a cost</h3>
 <div class="box example"><div class="label">Case note</div>
@@ -317,6 +357,13 @@ def cost_of(rec: dict[str, Any]) -> float:
 <p><span class="g v">Verified</span> by unit tests: the ledger's single definition and everything listed above. <span class="g v">Verified</span> live, once each: the deck's 12 and 34 cents in a long conversation, and 20 cents with the separate reader in a fresh one; the reader's cost on each of two models; and the other single runs in the table of measured costs.</p>
 <p><span class="g u">Not tested</span>: whether the cost of a conversation stays flat across several decks with the separate reader, which is the claim the design rests on; any reconciliation of the ledger with a vendor's invoice; X's per-item estimate against a read that returned items; what a message costs before and after the rule that begins a new conversation after a pause, and whether the three exchanges it carries are enough for the owner not to notice; whether costs are counted correctly across a resumed conversation. The daily budget's value was a guess and remains one.</p></div>
 
+<h2 id="literature">Where this sits in the literature</h2>
+<p>The prices behind this chapter's arithmetic come from the model maker's documentation. {{cite:anthropic2026promptcaching}} describes caching a prompt's prefix with a five-minute or a one-hour lifetime, writes at 1.25 or 2 times the input price, and reads at a tenth of it or less. The program's table agrees for writes and records reads at a twentieth for the two larger models, which is within that range. The derivations in the theory section follow from those ratios alone. The one-hour lifetime is documented and untried here, and the break-even above says when it would pay: two reads of the same prefix within the hour.</p>
+<p>On how costs should be reported, {{cite:kapoor2024agentsmatter}} argue that evaluations of agents should report cost alongside accuracy, guard against overfitting with held-out sets, and fix problems of reproducibility. The decision about the thinking dial follows the first point: score, calls and cost were measured together, and the dial was left alone because none moved. The table of real runs falls short of the paper's standard: most figures are single runs, so they carry no interval in the sense of Definition 9, and none can be compared with another system's. {{cite:kapoor2025hal}} describe shared infrastructure for running agent evaluations in a standardised way across benchmarks, which is what such a comparison needs and what this program does not have. Here the published work is plainly stronger.</p>
+<p>The design decisions have counterparts in practitioners' accounts of managing context. {{cite:anthropic2025contexteng}} describe just-in-time retrieval, compaction and sub-agents. The page reader is a sub-agent whose context is thrown away; beginning again with three exchanges in words is a compaction done by code at a time code chooses; and the files kept for the owner are fetched only when asked for. {{cite:anthropic2025advancedtool}} describe a tool that discovers tools on demand instead of loading every definition, which is an attack on <span class="math">c₀</span>, since tool descriptions belong to the fixed part <span class="math">s</span> of Definition 1. This chapter never measures how much of <span class="math">c₀</span> is tool descriptions, so it cannot say whether that would matter here. {{cite:packer2023memgpt}} let the model itself move information between the context and outside storage through function calls. This program keeps that decision in code, where it costs nothing and can be tested, and gives up the model's judgment of what is worth keeping.</p>
+<p>Two further readings bear on what is lost. {{cite:liu2023lostmiddle}} found that a model's accuracy depends on where in a long context the relevant information sits, and is often lower in the middle. A shorter context may therefore be better as well as cheaper, though this program has not measured whether beginning again changes the quality of answers. That question, how much of a conversation can be dropped before the owner notices, is not settled by any of these readings.</p>
+<p>The ledger itself is event sourcing: {{cite:fowler2005eventsourcing}} records every change as an ordered event and rebuilds state by replaying the events, and the ledger is the journal replayed through <span class="math">cost_of</span>. The chapter's case of the browser counted twice shows the risk this moves, from forgetting to record to counting one record twice. Budgets borrow less well. {{cite:sre-embracing-risk}} introduce error budgets, a stated amount of unreliability derived from an objective so that change can proceed. The three-dollar daily budget is a limit of the same form with no objective behind it: the chapter says it is a guess.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>A model call is billed by tokens in and out. Every call re-sends the whole context, so in a long conversation the input side dominates, and anything placed in the conversation is paid for again by every later call.</li>
@@ -327,11 +374,33 @@ def cost_of(rec: dict[str, Any]) -> float:
 <li>A PDF kept in the conversation cost 34 cents on its third sending against 12 on its first. Reading its pages once, in a throwaway run with no tools, and passing on only text, is the fix; its long-run saving is not measured.</li>
 </ul></div>
 
-<div class="box exercises"><div class="label">Exercises</div>
+<div class="box exercises"><div class="label">Problems</div>
+<h3>Review</h3>
 <ol>
 <li>Using the price table, work out the estimated cost of a model call that reports 40,000 input tokens, 600 output tokens and no cached tokens on the main model. Then work it out again with 38,000 of those input tokens read from the cache. What fraction of the first figure is the second?</li>
 <li>Why does <code>cost_of</code> price a <code>browse</code> line at zero but a <code>see_pages</code> line at its full cost, when both are separate runs of another model or service? What would go wrong if the page reader's cost were added to the conversation task's <code>task_end</code> instead?</li>
 <li>Extend the code: make the daily budget a hard ceiling by checking the ledger during a task as well as before it. Which existing mechanism would you reuse to end the task, and what new failure mode does this introduce for a task that is halfway through changing the owner's records?</li>
 <li>The text-recognition price is a fixed estimate in the code. Design a way to reconcile the ledger with a vendor's monthly invoice. What would you do with a discrepancy: change past journal lines, add new ones, or change the function? Defend your answer in terms of the rule that the journal is append-only.</li>
+</ol>
+<h3>Analysis</h3>
+<ol start="5">
+<li>A conversation starts with <span class="math">c₀ = 20,000</span> tokens and adds <span class="math">δ = 1,500</span> per call, over <span class="math">m = 40</span> calls on the main model (input $2.00 a million tokens, cache write $2.50, cache read $0.10). Count input only. (a) With no cache, find the total input tokens and their cost. (b) With a cache kept warm throughout, as in the derivation, find the cost. (c) With no cache, the conversation is split after 20 calls into two of 20 calls each, and the second starts from <span class="math">c₀ + s</span> with <span class="math">s = 3,000</span>. Find the total input tokens and the cost, and check your answer against the formula for the saving. (d) With a cache that has expired before every call, find the cost, and say what this does to the claim that caching makes a conversation cheaper.</li>
+<li>(a) Derive the break-even number of reads <span class="math">r</span> for a cache that expires, and evaluate it from the program's table for the five-minute rate on the main model and on the small model, and for a one-hour lifetime written at twice the input price and read at the price in the table. (b) The owner sends a message every 50 minutes, and each task makes three calls within a minute on a context of <span class="math">n</span> tokens; ignore growth. Assume that a read inside the lifetime keeps the cached prefix alive at no extra charge. In steady state, find the cost of one task's input under the five-minute lifetime and under the one-hour lifetime, in dollars per million tokens times <span class="math">n</span>. (c) Which assumption in (b) would you check first in the documentation, and what happens to your answer if it is false?</li>
+<li>The model states that every design decision in this chapter is a smaller <span class="math">c₀</span>, a smaller <span class="math">δ</span> or a smaller <span class="math">m</span>. Find the decisions in the chapter for which that is false, and state the lever each uses. Then prove that, with no cache, beginning again after <span class="math">m₁</span> calls saves input exactly when <span class="math">δ·m₁ &gt; s</span>, and construct a conversation in which the rule in the code begins again and costs more than continuing would have. Name the hypothesis of the derivation that your example breaks.</li>
+<li>Prove from Property 3 and the code of <code>Ledger._count</code> that the day's figure after a restart equals the figure before it. Then give two changes that alter the figure for a past day without violating Property 3, and one change to the program that would violate it. The first version of the ledger, which added the library's running totals, is one candidate; say whether it is of the first kind or the second.</li>
+</ol>
+<h3>Design</h3>
+<ol start="9">
+<li>A vendor offers the model at a flat monthly price, with a limit on calls a minute in place of a price per token. Redesign the ledger, <code>cost_of</code> and the three budgets for that world. Say what a budget then guarantees, which of this chapter's design decisions still matter and which become pointless, and what is given up if the vendor's limit is reached in the middle of a task that is changing the owner's records.</li>
+<li>Design the cost report for one evaluation suite (Definition 9), meeting the demand that cost be reported alongside accuracy. Say which figures are derived state that can be recomputed from the journal, which are measurements that need an interval, how the interval is computed over cases, and how a reader would tell a change in cost from noise. Then say what your report could not show without an invoice.</li>
+</ol>
+<h3>Reading</h3>
+<ol start="11">
+<li>{{cite:anthropic2026promptcaching}}. In about four hundred words: what the document claims about lifetimes and prices; why it matters for the rule that begins a new conversation after a pause and for the one-hour lifetime that was never tried; where you were not convinced that the derivation in this unit captures how the cache behaves; and what you would measure next, with the journal's token counts.</li>
+<li>{{cite:kapoor2024agentsmatter}}. In about four hundred words: what the paper claims; why it matters for the table of real runs and for the decision to leave the thinking dial alone; where you were not convinced, for a system used by one person; and what you would measure or build next so that this program's costs could be compared with another's.</li>
+</ol>
+<h3>Open</h3>
+<ol start="13">
 <li>Hard, open: the claim behind the page reader is that a file's cost stays flat over a long conversation. Design an experiment that would test it fairly: how many decks, in what kind of conversation, compared with what, measuring which numbers, and what result would make you go back to putting pages in the conversation.</li>
+<li>Find how much of a conversation can be dropped before its owner notices. Define "notices" as something that can be counted (a repeated question, a correction, a worse answer judged blind), propose a rule for what to carry that is cheaper than three exchanges in words, and design the measurement that would place it on a curve of cost against that count, with intervals over cases. Progress would be a rule that is cheaper at the same count, outside the noise floor.</li>
 </ol></div>

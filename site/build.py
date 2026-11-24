@@ -12,13 +12,18 @@ Content lives in site/content:
   deploy.html          the deploy guide
   cover.html           the opening of the book's contents page
   chapters/<slug>.html one chapter body each, as an HTML fragment
+  readings.json        the bibliography: every work a chapter may cite, each one checked to exist
+  course/*.html        the course built on the book: syllabus, problem sets, labs, project, examination;
+                       first line is a comment with "key: value" pairs (order, slug, title, summary)
   log/*.html           one build-log entry each; first line is a comment with
                        "key: value" pairs (n, date, title, summary)
 
 The build numbers sections, figures and tables, so chapter files never carry
 numbers by hand. A chapter refers to another by its name, written {{ch:the-gate}},
 and the build turns that into a link reading "Chapter 8". The book can then be
-reordered without a single chapter being edited.
+reordered without a single chapter being edited. A work in the bibliography is cited by
+its key, written {{cite:yao2023react}}; a key that is not in readings.json stops the build,
+so nothing can be cited that was not checked.
 """
 import html
 import json
@@ -69,12 +74,12 @@ def page(title, description, body, current=""):
 <body>
 <header class="masthead"><div class="masthead-inner">
 <a class="brand" href="index.html">{MARK}Odysseus</a>
-<nav aria-label="Site">{nav("index.html", "Product", "hide-sm")}{nav("book.html", "The book")}{nav("deploy.html", "Run your own", "go")}</nav>
+<nav aria-label="Site">{nav("index.html", "Product", "hide-sm")}{nav("book.html", "The book")}{nav("course.html", "The course")}{nav("deploy.html", "Run your own", "go")}</nav>
 </div></header>
 {body}
 <footer><div>
 <p>Odysseus is built in the open. Every factual claim on this site carries an evidence grade, and anything not yet run is marked as such.</p>
-<nav aria-label="Footer"><a href="book.html">The book</a><a href="what-is-built.html">What is built</a><a href="deploy.html">Run your own</a><a href="evidence.html">How to read the evidence</a></nav>
+<nav aria-label="Footer"><a href="book.html">The book</a><a href="course.html">The course</a><a href="readings.html">Readings</a><a href="what-is-built.html">What is built</a><a href="deploy.html">Run your own</a><a href="evidence.html">How to read the evidence</a></nav>
 </div></footer>
 </body>
 </html>
@@ -137,6 +142,30 @@ def cross_refs(text, numbers, where):
     return re.sub(r"\{\{ch:([a-z0-9-]+)\}\}", one, text)
 
 
+def short_cite(entry):
+    """How a work is named in running text: Yao et al. 2023; Saltzer and Schroeder 1975."""
+    if entry.get("short"):
+        return entry["short"]
+    names = entry.get("surnames") or []
+    who = names[0] if len(names) == 1 else f"{names[0]} and {names[1]}" if len(names) == 2 else f"{names[0]} et al." if names else entry["key"]
+    return f"{who} {entry['year']}"
+
+
+def citations(text, readings, where, used):
+    """Turn {{cite:key}} into a link to the bibliography. An unknown key stops the build. Several keys may be given, separated by commas."""
+    def one(m):
+        out = []
+        for key in (k.strip() for k in m.group(1).split(",")):
+            if key not in readings:
+                raise SystemExit(f"{where}: cites a work that is not in readings.json: {key}")
+            used.setdefault(key, [])
+            if where not in used[key]:
+                used[key].append(where)
+            out.append(f'<a class="cite" href="readings.html#{key}">{html.escape(short_cite(readings[key]))}</a>')
+        return "[" + "; ".join(out) + "]"
+    return re.sub(r"\{\{cite:([a-z0-9_, -]+)\}\}", one, text)
+
+
 def read_entry(path):
     text = path.read_text(encoding="utf-8")
     m = re.match(r"\s*<!--(.*?)-->", text, re.S)
@@ -170,12 +199,16 @@ def build():
     repo = site.get("repo", "").strip()
     written = [(p, c) for p in contents["parts"] for c in p["chapters"] if c.get("slug")]
     numbers = {c["slug"]: c["n"] for _, c in written}
+    titles = {c["slug"]: c["title"] for _, c in written}
+    reading_list = json.loads((CONTENT / "readings.json").read_text(encoding="utf-8")) if (CONTENT / "readings.json").exists() else []
+    readings = {r["key"]: r for r in reading_list}
+    used = {}       # key -> the chapters and course pages that cite it
     entries = sorted((read_entry(p) for p in PRIVATE_LOG.glob("*.html")), key=lambda e: int(e[0]["n"])) if "--log" in sys.argv else []
 
     # Chapters
     for i, (part, ch) in enumerate(written):
         raw = (CONTENT / "chapters" / f'{ch["slug"]}.html').read_text(encoding="utf-8")
-        body, sections = number_chapter(ch["n"], cross_refs(raw, numbers, ch["slug"]))
+        body, sections = number_chapter(ch["n"], citations(cross_refs(raw, numbers, ch["slug"]), readings, ch["slug"], used))
         prev_ = written[i - 1][1] if i else None
         next_ = written[i + 1][1] if i + 1 < len(written) else None
         pager = ['<nav class="pager" aria-label="Chapters">']
@@ -222,6 +255,45 @@ def build():
         private_page = private_page.replace('href="assets/', 'href="../site/assets/')
         private_page = re.sub(r'href="(index|book|deploy|evidence)\.html"', r'href="../site/dist/\1.html"', private_page)
         (PRIVATE_LOG.parent / "log.html").write_text(private_page, encoding="utf-8")
+
+    # The course: syllabus, problem sets, labs, project, examination
+    course = sorted((read_entry(p) for p in (CONTENT / "course").glob("*.html")), key=lambda e: int(e[0]["order"])) if (CONTENT / "course").exists() else []
+    tabs = "".join(f'<a href="{m["slug"]}.html">{html.escape(m.get("tab") or m["title"])}</a>' for m, _ in course) + '<a href="readings.html">Readings</a>'
+    for meta, body in course:
+        body = citations(cross_refs(body, numbers, meta["slug"]), readings, meta["slug"], used)
+        here = tabs.replace(f'<a href="{meta["slug"]}.html">', f'<a aria-current="page" href="{meta["slug"]}.html">')
+        (DIST / f'{meta["slug"]}.html').write_text(
+            page(f'{meta["title"]} | Odysseus', meta.get("summary", ""),
+                 f'<div class="frame plain"><main><article class="text course"><nav class="coursetabs" aria-label="The course">{here}</nav>'
+                 f'<header class="opener"><div class="part">The course</div><h1>{html.escape(meta["title"])}</h1>'
+                 f'<p class="lede">{meta.get("summary", "")}</p></header>{body}</article></main></div>', "course.html"),
+            encoding="utf-8")
+
+    # The bibliography, with the places each work is cited
+    if reading_list:
+        groups = []
+        for r in reading_list:
+            if r["group"] not in groups:
+                groups.append(r["group"])
+        out = [f'<nav class="coursetabs" aria-label="The course">{tabs.replace(chr(60) + "a href=" + chr(34) + "readings.html" + chr(34) + ">", chr(60) + "a aria-current=" + chr(34) + "page" + chr(34) + " href=" + chr(34) + "readings.html" + chr(34) + ">")}</nav>',
+               '<header class="opener"><div class="part">The course</div><h1>Readings</h1>'
+               f'<p class="lede">The {len(reading_list)} works the chapters and the course may cite. Each was confirmed to exist before it was listed: '
+               f'{sum(1 for r in reading_list if r.get("checked") != "records")} against a page for the work itself, and '
+               f'{sum(1 for r in reading_list if r.get("checked") == "records")}, mostly older papers that publishers keep behind a barrier, against their bibliographic records. '
+               'A chapter cannot cite a work that is not on this page. Works marked core are the ones units assign; under each is where it is cited.</p></header>']
+        for g in groups:
+            out.append(f'<h2 id="{re.sub(r"[^a-z]+", "-", g.lower()).strip("-")}">{html.escape(g)}</h2><ul class="readings">')
+            for r in sorted((x for x in reading_list if x["group"] == g), key=lambda x: (short_cite(x).lower(), x["year"])):
+                where = used.get(r["key"], [])
+                cited = ", ".join(f'<a href="{w}.html">{"Chapter " + str(numbers[w]) if w in numbers else html.escape(next((m["title"] for m, _ in course if m["slug"] == w), w))}</a>' for w in where)
+                out.append(f'<li id="{r["key"]}"><span class="who">{html.escape(r["authors"])} ({r["year"]}).</span> '
+                           f'<a href="{html.escape(r["url"], quote=True)}">{html.escape(r["title"])}</a>. <span class="venue">{html.escape(r["venue"])}.</span>'
+                           + (' <span class="core">core</span>' if r.get("level") == "core" else "")
+                           + f'<p>{html.escape(r["shows"])}</p>' + (f'<p class="cited">Cited in {cited}.</p>' if cited else "") + "</li>")
+            out.append("</ul>")
+        (DIST / "readings.html").write_text(
+            page("Readings | Odysseus", "The bibliography of the course on building personal agents.",
+                 f'<div class="frame plain"><main><article class="text course">{"".join(out)}</article></main></div>', "course.html"), encoding="utf-8")
 
     # Evidence page (plain single page)
     ev = cross_refs((CONTENT / "evidence.html").read_text(encoding="utf-8"), numbers, "evidence")

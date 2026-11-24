@@ -1,0 +1,79 @@
+<!--
+order: 4
+slug: labs
+tab: Labs
+title: Laboratories
+summary: Five cumulative laboratories on the open repository. Each builds on the last, is checked by tests you can run and by tests you cannot see, asks for a measured account of cost, and ends with questions you must be able to answer about your own code.
+-->
+<p>The laboratories are the course. A reader who does only these, with the chapters as reference, will have built the core of a personal agent and broken it in the ways that matter. They are cumulative: laboratory 3 runs on the gate you wrote in laboratory 2, and laboratory 5 measures all of it.</p>
+
+<h2 id="rules">How the laboratories work</h2>
+<ul>
+<li><strong>Starting point.</strong> A branch of the repository with the named modules reduced to their interfaces and docstrings. The reference modules stay in the main branch; read them after you have handed in, not before. Until such a branch is published, do the same by hand: move the named module aside and write it again against its tests.</li>
+<li><strong>Checked three ways.</strong> The public tests named in each laboratory must pass unmodified. A second set, which exercises the same interface on cases you have not seen, is run by whoever marks the work; a self-studying reader should swap work with another reader and write ten such cases for each other. And a short written report answers the questions listed.</li>
+<li><strong>Cost is part of the answer.</strong> Any laboratory that calls a real model reports calls, tokens by kind, money and seconds, with the number of runs behind each figure. A result with no cost beside it is incomplete.</li>
+<li><strong>Explaining your code.</strong> Each laboratory ends with questions asked in person, about the code you handed in. You may use any tool to write the code. You must be able to explain every line of it without the tool, and say why the obvious alternative is wrong. Work you cannot explain earns nothing, whoever or whatever wrote it.</li>
+<li><strong>The consent boundary.</strong> The laboratories on safety ask you to defeat defences. You do this only against the simulated mailbox, calendar, web and database in <code>evals/</code>, or against accounts that are yours. Never against another person's account, a shared deployment, or a third party's service. Report what you find to whoever maintains the system you broke.</li>
+<li><strong>Made-up content only.</strong> Every name, company, address and figure in what you hand in is invented. Nothing from a real mailbox goes into a test, a report or a repository.</li>
+</ul>
+
+<h2 id="lab1">Laboratory 1: the loop, the journal and a conversation that can be stopped</h2>
+<p><em>Reads with</em> {{ch:the-agent-loop}}, {{ch:the-conversation}}, {{ch:staying-up}}. <em>Time:</em> about 15 hours.</p>
+<p><strong>Build.</strong> An agent loop around a real model with two tools (a clock and a web search), an append-only journal, and a conversation layer that queues a second message behind a running task, stops a task in two layers, refuses a task when the day's budget is spent, and after a restart announces interrupted work instead of resuming it.</p>
+<p><strong>Must hold.</strong> Property 3 of the <a href="notation.html#journal">model</a>: every figure your program reports (cost of a task, cost of the day, what is running, what was interrupted) is computed by a pure function of the journal. Delete all in-memory state mid-run in a test; every report must come back identical.</p>
+<p><strong>Report.</strong></p>
+<ol>
+<li>Give the journal's record types and, for each figure you report, the function that derives it. Name one question about a past run your journal cannot answer, and the record that would have to be added.</li>
+<li>Measure seconds to the first word and total seconds on twenty messages, ten that need no tool and ten that need one. Explain the difference with the formula for calls per task. What can be done about the second group without a faster model?</li>
+<li>Kill the process at each of four points: before the model call, during a tool call, after a tool call but before its result is journalled, and during the reply. For each, say what the owner sees on restart and whether any effect can happen twice.</li>
+</ol>
+<p><strong>In person.</strong> Why is "resume the interrupted task" the wrong behaviour for an agent with tools, when it is the right one for a batch job? What does your stop do to a tool call that is already at the vendor?</p>
+
+<h2 id="lab2">Laboratory 2: a gate, and a proof that it mediates</h2>
+<p><em>Reads with</em> {{ch:the-gate}}, {{ch:mail-and-calendar}}, {{ch:secrets-and-sign-ins}}. <em>Time:</em> about 20 hours.</p>
+<p><strong>Build.</strong> A gate with the three answers for the mail and calendar tools of the simulated world: rules that classify <em>calls</em> by effect, questions written by code from the call's own fields, one-use approvals bound to the exact call, a timeout that means no, and a second lock at the point of execution.</p>
+<p><strong>Must hold.</strong> Property 1. Hand in a written argument, one page, that there is no path from model output to a tool's execution that avoids the gate, and a test that fails if someone adds one. Then Property 2: a table, generated by code, of every call your gate allows unasked, with the effect class of each and a reason for each that is not "read".</p>
+<p><strong>Report.</strong></p>
+<ol>
+<li>Your allow table, and the smallest change to one input that moves each "add" into "send".</li>
+<li>Run the partner errands of the evaluation and report questions per task. Then make the gate ask about everything and report it again. Using the model of the <a href="notation.html#asking">cost of asking</a>, say what you would need to measure to choose between the two, and design the experiment.</li>
+<li>A tool call times out at the vendor. Show, with a test, that your program finds out whether the write happened before it tries again.</li>
+</ol>
+<p><strong>In person.</strong> Show the line where an approval is consumed. What happens if the model changes one field of the call after the owner said yes? Why does the question not include any text the model wrote about its reasons?</p>
+
+<h2 id="lab3">Laboratory 3: outside words</h2>
+<p><em>Reads with</em> {{ch:untrusted-content}}, {{ch:memory}}, {{ch:acting-unasked}}, {{ch:the-browser}}. <em>Time:</em> about 25 hours.</p>
+<p><strong>Part A: defend.</strong> Add provenance to your loop: every tool result is appended with a label fixed by the code path, and a record of reading that lives exactly as long as the context. Make your gate a function of that record: confine send and persist as in Definition 7. Give unattended runs a smaller tool set, and make <em>ask</em> mean <em>defer</em> for them.</p>
+<p><strong>Part B: assume the worst.</strong> Write the obedient-model audit for your own gate: no model, no attack text, every kind of harmful call put to the gate with a non-empty record. Your gate must be sound for send, persist and destroy.</p>
+<p><strong>Part C: attack, inside the boundary.</strong> Exchange agents with another student, in the simulated world. Find calls in theirs that produce a send or persist effect without a question after an outside read. You are marked on the weaknesses found, on the minimal fix for each, and on a test that would have caught each. A reader working alone can use the weaknesses this project found in its own gate, which {{ch:a-second-reading}} lists: put each back into your own code, confirm your audit from Part B catches it, and if it does not, say what the audit is missing. No reference agent with planted weaknesses is published with the repository yet.</p>
+<p><strong>Report.</strong></p>
+<ol>
+<li>State precisely what your confinement guarantees and give three flows it does not stop, one for each of: a paraphrase, a channel inside an allowed call, and a flow across two conversations.</li>
+<li>Measure, with a real model, how often a fixed set of planted instructions is followed with and without your labels, with an interval. Then explain why this number says little about an attacker who adapts, and why Part B does not have that weakness.</li>
+<li>Memory is a persist sink. Trace a planted line from a web page to a saved memory to a later run in your system, and show the point at which it is stopped.</li>
+</ol>
+<p><strong>In person.</strong> Why can the record of reading not be cleared at each message? What is the lifetime of each piece of state in your gate, and what does it guard?</p>
+
+<h2 id="lab4">Laboratory 4: many tools, other people's servers</h2>
+<p><em>Reads with</em> {{ch:any-app}}, {{ch:services-with-their-own-server}}, {{ch:files-pictures-and-voice}}, {{ch:channels}}. <em>Time:</em> about 15 hours.</p>
+<p><strong>Build.</strong> Connect your agent to a service with several hundred actions through two tools, one to find and one to run, and classify actions you have never seen into effect classes from their names, labels and inputs. Then connect a service that runs its own server, treating its tool descriptions as text of provenance <span class="math">V</span>.</p>
+<p><strong>Must hold.</strong> An action your classifier cannot place is asked about, never allowed. Your laboratory 2 and 3 properties still hold with the new tools: rerun the mediation test and the audit, unchanged.</p>
+<p><strong>Report.</strong></p>
+<ol>
+<li>Your classifier's confusion table on a labelled set of two hundred actions you did not see while writing it, with the two kinds of error kept apart and the cost of each stated.</li>
+<li>Tokens of fixed context with every tool described in full, against your two-tool design, and the number of extra model calls the second costs per task. Use the cost formula to say at how many tools the trade reverses.</li>
+<li>A tool description changes after the owner approved the connection. What does your program do, and why?</li>
+</ol>
+
+<h2 id="lab5">Laboratory 5: measuring it</h2>
+<p><em>Reads with</em> {{ch:testing-and-evaluation}}, {{ch:a-changing-world}}, {{ch:a-second-reading}}, {{ch:cost}}. <em>Time:</em> about 25 hours.</p>
+<p><strong>Build.</strong> An evaluation of your own agent: at least thirty cases in a world you can reset, in which time passes and tools fail; checks that look at the world and not at the reply; invariants checked on every run; three repeats; a judge for what code cannot check.</p>
+<p><strong>Must hold.</strong> A do-nothing agent scores near zero. An agent that claims success and does nothing scores zero. Every reported number has a sample size and an interval over cases.</p>
+<p><strong>Report.</strong></p>
+<ol>
+<li>Score, interval, noise floor and headroom. If headroom is below the noise floor, say what your suite can and cannot be used for, and add cases until it can show a five-point change. Justify the number of cases with a power calculation.</li>
+<li>Mark sixty of your judge's decisions yourself, blind. Report agreement, κ, and the two kinds of disagreement apart. Rewrite the worst statement and measure again.</li>
+<li>Make one change to a prompt, chosen by looking at failures on half the cases. Report the paired difference on the other half. Then try five more changes and say, using Property 4, what your held-out half is now worth.</li>
+<li>Read twenty runs your suite marked as passes. Report every one that should not have passed, and the fault in the check that let it through.</li>
+</ol>
+<p><strong>In person.</strong> Pick any number in your report. Where did it come from, what would make it wrong, and how would you know?</p>

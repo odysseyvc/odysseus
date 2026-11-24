@@ -7,6 +7,15 @@
 <li>State the main gaps that remain in Odysseus and take one on as an open problem.</li>
 </ul></div>
 
+<div class="box unit"><div class="label">This unit</div>
+<dl>
+<dt>Week</dt><dd>14 of 14</dd>
+<dt>Before it</dt><dd>{{ch:testing-and-evaluation}} and {{ch:a-second-reading}}, and the worked application in {{ch:a-firms-database}}, {{ch:decks-and-data-rooms}}, {{ch:sourcing}} and {{ch:a-funds-weekly-work}}; Definition 9 and the distinction between properties and measurements in <a href="notation.html">the model</a>.</dd>
+<dt>Read first</dt><dd>{{cite:kapoor2024agentsmatter}}; {{cite:zhu2025abc}}.</dd>
+<dt>Laboratory</dt><dd>None; these units feed <a href="project.html">the project</a></dd>
+<dt>Problem set</dt><dd>None; assessed through the project</dd>
+</dl></div>
+
 <h2 id="problem">The problem: "it works" has no single meaning</h2>
 <p>A partner at the firm this book's worked application serves asks a plain question: "Can I rely on it to send my email tomorrow?" The project's front page says the program has 514 automated tests, all passing. An evaluation of the agent ran 581 times against the real model and passed 563. Mail was connected to the real account and read. None of that answers the question. No email has ever been sent through Odysseus. A send was held for approval on the real account once, and declined.</p>
 <p>Every statement there is true, and a reader skimming them would conclude the wrong thing. This chapter teaches how to keep a record that prevents that, then gives the record for the whole system, which is also a map of what a reader could build next.</p>
@@ -161,6 +170,35 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 <h3>What is deliberately left out</h3>
 <p>Payments, phone calls, group chats and acting inside the owner's conversations with other people wait until the simpler system has a stable score, because each adds a way to cause harm. Two original must-haves are also absent: a vault for passwords (the owner signs in by hand, so no secret is saved) and handing bot checks to the owner (left to the browser vendor by the owner's decision).</p>
 
+<h2 id="theory">The theory</h2>
+<p>A status map has no useful formal statement of its own. It is a record of evidence, and what it needs is criteria precise enough that two people grading the same row reach the same rung. Those criteria follow.</p>
+<p><strong>Rungs.</strong> A piece of evidence <span class="math">e</span> for a claim has a kind <span class="math">κ(e)</span>, ordered from weakest to strongest:</p>
+<dl class="terms">
+<dt>0, written</dt><dd>Code, a design or a plan exists; nothing has run.</dd>
+<dt>1, unit test</dt><dd>A test passes with at least one component replaced by a stand-in. It can support a property of the program (in the sense of <a href="notation.html">the model</a>), never a measurement of a model or a service.</dd>
+<dt>2, simulated world</dt><dd>The real model and the real program, gate included, against a stand-in world. It supports a measurement of the agent's behaviour, stated as <span class="math">k</span> passes of <span class="math">n</span> runs.</dd>
+<dt>3, live</dt><dd>The real program against the real service on a real account, performing the act the claim names. A neighbouring act does not count: a send held and declined is live evidence that the question was asked, not that sending works.</dd>
+<dt>4, repeated live</dt><dd>Two or more live runs of the same act, counted, with invented examples marked.</dd>
+<dt>5, weeks</dt><dd>Ordinary use over days or weeks. The only kind that can support a claim about time: a job at its hour, memory that stays useful, a cost per month.</dd>
+</dl>
+<p>The rung of a claim is <span class="math">r(c) = max κ(e)</span> over the evidence that supports exactly <span class="math">c</span>; with no evidence it is 0.</p>
+<p><strong>Rules.</strong> (1) A capability whose parts have different rungs is split into rows until each row has one rung; reading and acting are almost always separate rows. (2) A rung rises only by a new run of the higher kind. A repair resets the repaired behaviour to the kind of evidence the repair has, so a fix that passes its unit tests is at rung 1 until it runs live again. (3) Every count gives its denominator and its sample: "7 of 8, on one invented deck". (4) An entry leaves "never run" only on a run of the right kind for that entry. (5) A note overtaken by a later fact is corrected, not left beside the new one. (6) A green evaluation row also records what would make its check fail, and the do-nothing agent must score zero on it.</p>
+<p>The grade labels (<span class="g v">Verified</span>, <span class="g s">Secondary</span>, <span class="g c">Maker's claim</span>, <span class="g u">Not tested</span>) say where a claim comes from; the rung says how strong the evidence is when it comes from here. The two are kept separate because "verified" spans rungs 1 to 4.</p>
+<div class="box theory"><div class="label">Derivation: what clean runs can show</div>
+<p>If <span class="math">n</span> independent live runs all succeed, the largest failure rate <span class="math">f</span> not rejected at the 5% level satisfies <span class="math">(1 − f)<sup>n</sup> = 0.05</span>, so</p>
+<p class="eq">f<sub>max</sub> = 1 − 0.05<sup>1/n</sup> ≈ 3/n for large n</p>
+<p>For <span class="math">n = 1</span> this is 95%: one clean run is consistent with an act that fails nineteen times in twenty. That is the formal content of "run once and run for weeks differ in kind". The hypothesis is independence, and it fails whenever runs repeat one invented example, since runs of one case are correlated (Definition 9); then <span class="math">n</span> overstates the evidence. Reliability compounds the other way: a routine that works with probability 0.9 per day works five days running with probability <span class="math">0.9<sup>5</sup> ≈ 0.59</span>, the <span class="math">pass<sup>k</sup></span> of Definition 9.</p></div>
+<div class="tbl"><table>
+<thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
+<tbody>
+<tr><td>Mail is never sent without an approval for the same people and words</td><td>Property, and a measurement</td><td>Unit tests of the gate; 581 simulated runs with none broken</td></tr>
+<tr><td>Odysseus sends an email the owner approved</td><td>Not tested</td><td>Rung 3 reached only for the question, not the send</td></tr>
+<tr><td>Nearly every reading path has run against its real service</td><td>Measurement, rung 3</td><td>At least one live run per path, counted in the map</td></tr>
+<tr><td>No capability has been used for weeks</td><td>Measurement</td><td>The top rung of the ladder is empty</td></tr>
+<tr><td>The order in which to close the gaps</td><td>Judgement</td><td>Read from the map; stated as not a measurement</td></tr>
+</tbody>
+</table></div>
+
 <h2 id="wrong">What goes wrong when keeping a map</h2>
 <p><strong>A green row that measured nothing.</strong> In the first run of the partner errands, every run passed, including five of five approved runs of one filing errand in which the program created a second copy of a company already in the database. Its lookup compared exact names, and so did the check; they agreed, and the row was green. It was found only by reading a transcript of a passing run.</p>
 <p><strong>A repair that disarmed a test.</strong> A repair made the program retry a failed read twice. The simulated faults never lasted that long, so the "faults" condition silently stopped testing the agent and tested the retry loop. The map therefore records what each check would take to fail as well as that it passed.</p>
@@ -198,6 +236,14 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 <div class="box example"><div class="label">Case note: faults found by reading the code</div>
 <p>Writing this book meant reading every module again to explain it. That reading found seven faults that no test had: a task for the meeting brief presented to the model as the owner's instructions when it quoted an invitation a stranger wrote; approval questions for two families of tool cut at a fixed length while the whole input ran; a failed watch check that was logged and never said; an address check for a connected server made once and never again; a verification message accepted with no date or from before the run; a lost conversation announced only when a task had also been interrupted; and a general app tool that neither retried a read nor warned after a failed change. An independent review of the book then found five more: a read sent in a conversation to somebody else's service was not checked for private details as a web search is; an unattended run was allowed whatever would run unasked in a conversation, so a routine could have added a note to the firm's database; a routine or watch could be set up unasked when its own text carried details from the owner's accounts; the page reader and the agent that judges incoming mail were handed servers listing search and memory, with one deny-all check in between; and a meeting brief that ended could hide an interrupted conversation. All twelve are closed and each has a test in <code>tests/test_found_by_reading.py</code>. <span class="g u">Not tested</span>: none of the repairs has been exercised against the real services. {{ch:a-second-reading}} is about why this keeps happening.</p></div>
 
+<h2 id="literature">Where this sits in the literature</h2>
+<p>The map is an answer to a complaint the agent-evaluation literature makes about published results. {{cite:kapoor2024agentsmatter}} argue that agent evaluations should report cost beside accuracy, guard against overfitting with held-out sets, and fix the reproducibility problems that make results hard to compare. The map does the first wherever a cost was recorded, which is many of its live rows. It does not do the second: the errands it reports were written by the builders and repaired against, and no held-out set of errands was kept back. On that point the published advice is stronger than this program's practice.</p>
+<p>{{cite:zhu2025abc}} analyse validity problems in agent benchmarks, including flaws in how tasks are set up and in the graders that score them, and propose a checklist. The do-nothing agent and the rule that a green row records what would make it fail are two items of that kind of checklist, arrived at here by being caught. The case of the second "Northwind", in which the program's lookup and the check shared one blind spot and agreed, is a grader flaw of the sort they warn about, and of the sort {{cite:wang2025solvedissues}} found in practice when they examined patches that passed a benchmark's tests and asked whether they were correct.</p>
+<p>The rungs are a crude response to the question {{cite:bean2025construct}} put to hundreds of benchmarks: does the score measure the thing it is named for? "It works" is named for use by a real person on a real account over time; most of what the map can cite measures something narrower, and the map's columns exist to keep the narrower thing from being read as the wider one.</p>
+<p>Repetition is treated in the literature in two ways that the map uses separately. {{cite:yao2024taubench}} measure an agent's consistency over repeated trials of the same task as a quantity of its own, distinct from success on one trial; it is the quantity a routine's per-day rate becomes when compounded over days. {{cite:miller2024errorbars}} argue that every reported result should carry an interval and that repeated runs of one case are not independent. The map gives counts and denominators but not intervals, and many of its counts are on one invented example, where the interval would be wide and the independence assumed by the derivation above does not hold.</p>
+<p>The simulated world's "faults" condition fails tool calls at random about one time in seven. {{cite:basiri2016chaos}} describe a stronger practice: experiments that inject failure into the production system itself, so that confidence comes from the real system surviving real turbulence. This program injects faults only into a stand-in world, at a rate chosen rather than measured, and the map records that as a limit. Service level objectives in the sense of {{cite:sre-slo}} would give the top rung a target: a stated fraction of reminders on time over a month, say, against which weeks of use could be scored. The map has no such targets for its live rows.</p>
+<p>What the literature has not settled is the step between rungs 2 and 4 for an agent that acts for one person. Benchmarks give simulated evidence at scale, and field studies give live evidence for products with many users. For a personal agent with one owner, how many live runs of an act are enough to rely on it, and how to combine a large simulated sample with a handful of live runs into one statement, has no agreed answer.</p>
+
 <div class="box summary"><div class="label">Summary</div>
 <ul>
 <li>"It works" splits into kinds of evidence: unit test, simulated world, live once, live repeatedly, lived with for weeks. Name the kind.</li>
@@ -205,12 +251,33 @@ Every run is also held to the invariants in invariants.py, whatever it was asked
 <li>A do-nothing agent must score zero, and passing runs must be read, or a green row can mean a blind check.</li>
 <li>For Odysseus, reading has reached live runs; most acting has reached only the simulated world; nothing has been used for weeks.</li>
 <li>Read as a plan, the map points to one cause behind many gaps: the program has no always-on home. That home is built deliberately last, and the map records what waits on it.</li>
-<li>The remaining gaps, in order: the first real acts, weeks of use, the data-vendor bake-off, a real second person, and last a home.</li>
+<li>The remaining gaps, in order: the first real acts, weeks of use, the data-vendor bake-off, and a real second person.</li>
 </ul></div>
 
-<div class="box exercises"><div class="label">Exercises and open problems</div>
+<div class="box exercises"><div class="label">Problems</div>
+<h3>Review</h3>
 <ol>
 <li>Grade the claim "Odysseus reminds the owner at the time they asked" as the worked example graded sending. Which rung has it reached, and what single run would move it up one?</li>
+</ol>
+<h3>Analysis</h3>
+<ol start="2">
+<li>Use the derivation "what clean runs can show". (a) What failure rate is consistent at the 5% level with a single clean live run? (b) How many consecutive clean days of a routine are needed before a daily failure rate above 5% is rejected at that level? (c) A reminder that fires correctly on 95% of days is used for 20 working days; what is the probability that it fails at least once? (d) What is <span class="math">0.9<sup>5</sup></span>, to three decimal places, and which sentence of the chapter does it check?</li>
+<li>The evaluation of a person's errands passed 563 of 581 runs over 83 errands. (a) Compute the 95% interval for the pass rate by the normal approximation, treating the 581 runs as independent. (b) Using Definition 9, explain why that interval is too narrow, and say what unit the bootstrap should resample. (c) Without the per-errand results you cannot compute the correct interval; say which errands' results would widen it most, and why.</li>
+<li>The rung of a claim is defined as the largest kind among the evidence that supports it. Construct a case in which this rule grades a claim too high because it ignores evidence against it, for example one live failure beside many simulated passes. Propose a rule that takes evidence against a claim into account, and show that it still never upgrades a claim without a run of the higher kind.</li>
+<li>Grade each of these against the criteria, and name the rule each tempts a careless map-keeper to break: "WhatsApp receives messages", given one text received on the server; "the leak check stops leaks", given unit tests; "the digest does not repeat itself", given two runs on one morning each; "a plan can be filed from the chat", given one filing approved by a tap that was not the owner's own.</li>
+</ol>
+<h3>Design</h3>
+<ol start="6">
+<li>Design the map as derived state in the sense of Definition 8: each live or simulated run appends a record of the act, the account, the kind of evidence and the outcome, and every rung and count in the map is computed from those records. Say what this guarantees (Property 3), what it cannot capture that the hand-kept map does, and how a repair would reset a row automatically.</li>
+<li>A vendor of an assistant publishes a page that marks mail, calendar and files each as "supported". Write the questions you would put to the vendor to place each on the ladder, and the answer to each that would put it on rung 4. Say which of the vendor's likely answers would be a maker's claim and which could be checked by you.</li>
+</ol>
+<h3>Reading</h3>
+<ol start="8">
+<li>{{cite:kapoor2024agentsmatter}}. In about four hundred words: what it claims agent evaluations should report; why it matters for the map's rows on evaluation and cost; where you were not convinced its advice fits one agent serving one owner; and what you would build next so that the map could report a held-out result.</li>
+<li>{{cite:zhu2025abc}}. In about four hundred words: what it claims makes an agent benchmark trustworthy; why it matters for the green row that hid a double; where you were not convinced its checklist would have caught that row; and which item of it you would turn into an automatic check on this program's evaluation first.</li>
+</ol>
+<h3>Open</h3>
+<ol start="10">
 <li>(Open: an always-on home.) Move the program to a server and design the watcher that runs outside it and reports its death to the owner by a route that does not depend on the program. What must it check, how often, and how does it avoid crying wolf during a deliberate restart?</li>
 <li>(Open: the first real acts.) Write the protocol for the first approved send on a real account: what is sent, to whom, what is recorded, and what result would count as failure. Then do the same for a signed-in browser run on a page that carries a planted instruction.</li>
 <li>(Open: weeks of use.) Build the missing loop over the trace store: choose which traces to read each week from their scores, name the kinds of failure found, and turn each into an errand in <code>evals/</code>. How would you know after a month whether the loop is finding anything the builders' own errands did not?</li>

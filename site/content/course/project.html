@@ -1,0 +1,61 @@
+<!--
+order: 6
+slug: project
+tab: Project
+title: The project
+summary: One piece of original work on personal agents, staged over the second half of the course: a proposal, a progress report, a talk and a paper with an artifact others can run. It is the largest part of the assessment.
+-->
+<p>The project is where the course stops asking you to rebuild what exists. It is done alone or in a group of up to three, on a question you choose and have approved, and it ends in a paper of six to ten pages with an artifact another person can run. A good project either builds a mechanism the book does not have and measures it honestly, or takes a claim the book makes with a weak grade of evidence and settles it.</p>
+
+<h2 id="tracks">Two tracks</h2>
+<dl class="terms">
+<dt>Mechanism</dt><dd>Design, build and evaluate a new capability or defence for a personal agent. The contribution is the mechanism and the evidence that it works, including what it costs and what it does not do.</dd>
+<dt>Measurement</dt><dd>Design and run a study that answers an open empirical question about agents: an instrument, a benchmark, a comparison, a replication of a published result on a different system. The contribution is a number that can be trusted and an account of why.</dd>
+</dl>
+
+<h2 id="ideas">Questions worth a project</h2>
+<p>Each of these is open in this book. The chapter named says what is known.</p>
+<ul>
+<li><strong>The approval curve.</strong> Measure <span class="math">a(λ)</span> from the <a href="notation.html#asking">model of asking</a>: how the chance that a person approves an unwanted action changes with how often they are asked and how routine the questions are. Needs a study with consenting participants and a simulated agent. ({{ch:the-gate}})</li>
+<li><strong>Confinement that survives paraphrase.</strong> Fingerprinting catches copied details and misses reworded ones. Build a confinement mechanism with a stated guarantee against a model that rewords, and measure what it costs in tasks that no longer complete. ({{ch:untrusted-content}})</li>
+<li><strong>Standing approvals.</strong> Design an approval that covers a class of future calls for a bounded time, state what it is bound to, and show by audit what a taken-over model can do inside it. ({{ch:the-gate}})</li>
+<li><strong>A judge you can trust.</strong> Take a prose-marking judge, calibrate it against several people's blind marks, and find the smallest set of statements and the judge design that reaches a stated agreement. Report what could not be made reliable. ({{ch:testing-and-evaluation}})</li>
+<li><strong>Headroom.</strong> Build a suite for an assistant's ordinary work that a strong system scores between 40% and 70% on, without making the cases unrealistic. Show the cases are valid: that a person would mark the same runs the same way. ({{ch:a-changing-world}})</li>
+<li><strong>Memory that can be audited.</strong> Compare plain files the owner can read with a retrieval store on the same errands over simulated months: accuracy, cost, and how long a planted or stale fact survives. ({{ch:memory}})</li>
+<li><strong>Claims and acts.</strong> Measure how often an agent's reply claims an act its log does not show, across models and task lengths, and evaluate a check by code against a check by a second model. ({{ch:the-conversation}})</li>
+<li><strong>Improvement without regress.</strong> Run an automatic loop that edits instructions against a suite, with a held-out half, and characterise when it helps, when it overfits and when it trades safety for score. ({{ch:testing-and-evaluation}})</li>
+<li><strong>The cost of a context.</strong> Derive and validate a cost model for a long-lived conversation under caching with pauses, and use it to choose when to begin again. ({{ch:cost}})</li>
+<li><strong>Unattended runs.</strong> Characterise what an unattended agent can safely do when <em>ask</em> is unavailable, and design a deferral mechanism whose questions the owner can answer hours later without the context being lost. ({{ch:acting-unasked}})</li>
+</ul>
+
+<h2 id="stages">Stages</h2>
+<div class="tbl"><table>
+<thead><tr><th>Stage</th><th>When</th><th>What is handed in</th><th>Share of the course</th></tr></thead>
+<tbody>
+<tr><th>Proposal</th><td>Week 6</td><td>One page: the question, why it is open (with at least three works from the <a href="readings.html">readings</a> or beyond), the method, the measure of success fixed in advance, what could make the result uninteresting, and what you will do then.</td><td>3</td></tr>
+<tr><th>Progress report</th><td>Week 10</td><td>Two pages: what is built, a first result with its sample size, what is left, what has gone wrong. A result that contradicts the proposal is welcome here and unwelcome later.</td><td>5</td></tr>
+<tr><th>Talk</th><td>Week 14</td><td>Ten minutes and five of questions. One slide must state the strongest objection to your own result.</td><td>7</td></tr>
+<tr><th>Paper and artifact</th><td>End of course</td><td>Six to ten pages in a standard two-column conference format, and a repository in which one command reproduces the main table.</td><td>15</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="rubric">How the paper is marked</h2>
+<div class="tbl"><table>
+<thead><tr><th>Criterion</th><th>Weight</th><th>What full marks looks like</th></tr></thead>
+<tbody>
+<tr><th>The problem and its model</th><td>15</td><td>The question is stated so that it could be answered no. Principals, what each can do, and what is assumed are written down in the course's notation. Prior work is cited for what it showed, not listed.</td></tr>
+<tr><th>Technical soundness</th><td>25</td><td>Properties are argued and tested without a model. Measurements are not presented as properties. The mechanism does what the text says, and the code shows it.</td></tr>
+<tr><th>Evaluation</th><td>25</td><td>A baseline that could have won. Repeats. Intervals over the right unit. A noise floor. The measure of success is the one fixed in the proposal, or the change is declared. Cost is reported beside every result.</td></tr>
+<tr><th>Reproducibility</th><td>15</td><td>One command, pinned versions, recorded model names and settings, raw rows kept. Another student reruns it and gets a result inside your interval.</td></tr>
+<tr><th>Limits and ethics</th><td>10</td><td>What the result does not show, said first by you. Any work with people had consent; any attack stayed inside the boundary; nothing private is in the artifact.</td></tr>
+<tr><th>Writing</th><td>10</td><td>A reader from outside the course can follow it. Every figure is read for the reader in the text.</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="rules">Rules</h2>
+<ul>
+<li>A negative result, honestly measured, is marked on the same scale as a positive one. A positive result that does not survive rerunning is marked as an error.</li>
+<li>Say which tools wrote or edited code and text, and where. The marks are for the question, the design, the evidence and your ability to defend them in person.</li>
+<li>Inventing, selecting or adjusting results is the one failure that cannot be recovered. Keep every run, including the ones that spoil the story.</li>
+<li>Work involving people other than yourselves needs their informed consent and, where an institution requires it, that institution's review before any data is collected.</li>
+</ul>
