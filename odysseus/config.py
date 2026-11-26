@@ -81,7 +81,8 @@ class Settings:
     speak: str = "voice"         # voice: a reply to a voice note is also spoken. off: never
     tz: str = ""                 # IANA zone such as Asia/Kolkata; empty means the machine's own clock
     max_turns: int = 25          # model round-trips allowed in one task
-    task_usd: float = 0.50       # spending limit for one task
+    task_usd: float = 0.50       # what one task is expected to cost at most. A mark, not a wall: see task_stretch
+    task_stretch: float = 4.0    # a task still getting somewhere may run to this many times task_usd and max_turns (progress.py)
     daily_usd: float = 3.00      # spending limit for one calendar day
     fresh_after_min: int = 120   # after this long without a message, the next one starts a new conversation. 0: never
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
@@ -226,6 +227,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         cache_1h=merged.get("ODYSSEUS_CACHE_1H", "").strip().lower() in ("1", "true", "yes", "on"),
         effort=(lambda e: e if e in ("low", "medium", "high", "") else "")(merged.get("ODYSSEUS_EFFORT", "").strip().lower()),
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
+        task_stretch=max(1.0, float(merged.get("ODYSSEUS_TASK_STRETCH", 4.0))),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),
         reading_repo=merged.get("ODYSSEUS_READING_REPO", "").strip(),

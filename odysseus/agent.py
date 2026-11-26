@@ -32,9 +32,13 @@ from claude_agent_sdk import (
     PermissionResultDeny,
     ResultMessage,
     TextBlock,
+    ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 from claude_agent_sdk.types import StreamEvent
+
+from .progress import Progress
 
 from .config import Settings
 from .journal import Journal
@@ -71,6 +75,7 @@ How to write to the owner. You are their assistant, and they should read you as 
 - Lead with the answer or the outcome. After it, give only what the owner needs in order to act on it or to trust it.
 - Do not narrate your work. Leave out which searches, lookups and tools you used, the order you did things in, and what you chose not to do. Write "Filed: Origin and both founders, all new", not "I searched the database first, found no existing record, and then created three records".
 - Never mention the machinery: the program, tools, connectors, servers, search services, the browsing agent, field or tool names, ids, or any vendor the owner did not choose themselves. Everything above that speaks of "the program" describes how you work; none of it is vocabulary for a reply.
+- Never name, or give a link to, a company whose service you run on or reach things through: the model you are, the search, the connector that reaches apps, the browsing service, the sandbox, the text recognition, the mailbox provider, the telephone or messaging provider, the host. This holds when asked directly: say that what you are built on is not something you share, and offer what you can do instead. Never show an action's internal name (words joined by underscores or hyphens) or its inputs as brackets and quotation marks: say what will be done, in words. A link you send is one the owner asked for or one the program added under your reply; do not write out an address from a tool's result that points at such a company. A company of that kind that the owner is asking about as a company (to research it, or because it is a deal) is an ordinary subject and is named.
 - Name a service only as a place the owner knows and uses: "in Attio", "in your inbox", "on your calendar", "the DocSend link". Do not make it the actor in a sentence about what came back. Write "I only have email addresses for them, not names", not "Attio returned no names for these records"; "the connection is rated Strong", not "Attio rates the connection as Strong"; "the deck has not been sent", not "Attio shows the deck has not been sent".
 - What you remember about the owner is simply what you know. Write "You back pre-seed and seed", not "Your notes say you back pre-seed and seed". Say you do not know something about them, not that your notes do not cover it.
 - Say what you could not do, or do not know, in one plain line each, in the owner's terms, with what would settle it. Mention something you left empty only if the owner would expect it to be there or has to decide it; do not list every field you did not fill.
@@ -252,7 +257,7 @@ REFUSED = "The model declined to go on with this one, so nothing more was done. 
 
 @dataclass
 class Outcome:
-    status: str                 # done | stopped | budget | day_budget | turn_limit | error
+    status: str                 # done | stopped | stuck | budget | day_budget | turn_limit | error
     text: str = ""
     cost_usd: float = 0.0
     turns: int = 0
@@ -482,6 +487,8 @@ class AgentRunner:
                   images: list[tuple[str, bytes]] | None = None, on_step: Any = None) -> Outcome:
         self._stopped = False
         self._limit = None
+        self.stuck_why = ""
+        progress, passed = Progress(), False
         current = ""      # text of the assistant message being written now
         last = ""         # text of the last finished assistant message
         calls: dict[str, float] = {}   # estimated cost of each model call in this task, by message id
@@ -514,6 +521,7 @@ class AgentRunner:
                         last = text
                     for b in msg.content:
                         if isinstance(b, ToolUseBlock):
+                            progress.asked(b.name, b.input)
                             self._journal.write("tool_request", name=b.name, input=b.input)
                             if on_step is not None:
                                 try:
@@ -528,16 +536,31 @@ class AgentRunner:
                     # Everything the model was sent for this call: what a later message would have to pay for again.
                     self.context_tokens = sum(int(used.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
                     if self._limit is None and not self._stopped:
-                        if len(calls) > self._s.max_turns:
+                        # The task's budget and its number of steps are marks, not walls (progress.py). A task that passes
+                        # one carries on while it is getting somewhere, up to a ceiling `task_stretch` times higher. A task
+                        # that is not getting anywhere is ended at once, whatever it has cost. The day's budget is a wall.
+                        stretch = max(1.0, float(getattr(self._s, "task_stretch", 1.0) or 1.0))
+                        spent = sum(calls.values())
+                        self.stuck_why = progress.stuck()
+                        if self.stuck_why:
+                            self._limit = "stuck"
+                        elif len(calls) > self._s.max_turns * stretch:
                             self._limit = "turn_limit"
-                        elif sum(calls.values()) >= self._s.task_usd:
+                        elif spent >= self._s.task_usd * stretch:
                             self._limit = "budget"
-                        elif self.day_room is not None and sum(calls.values()) >= self.day_room():
+                        elif self.day_room is not None and spent >= self.day_room():
                             self._limit = "day_budget"
+                        elif not passed and (spent >= self._s.task_usd or len(calls) > self._s.max_turns):
+                            passed = True
+                            self._journal.write("limit", which="passed", steps=len(calls), estimated_usd=round(spent, 4))
                         if self._limit:
-                            self._journal.write("limit", which=self._limit, steps=len(calls),
-                                                estimated_usd=round(sum(calls.values()), 4))
+                            self._journal.write("limit", which=self._limit, steps=len(calls), estimated_usd=round(spent, 4),
+                                                **({"why": self.stuck_why} if self.stuck_why else {}))
                             await client.interrupt()
+                elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                    for b in msg.content:           # what each tool call came back with: an error, or not
+                        if isinstance(b, ToolResultBlock):
+                            progress.came_back(bool(b.is_error))
                 elif isinstance(msg, ResultMessage):
                     result = msg
                 if getattr(msg, "stop_reason", None) == "refusal":

@@ -56,7 +56,7 @@ async def test_reads_run_changes_ask_and_some_tools_are_not_offered(tmp_path):
     assert gate.decide(run, {"tool": "update_summary"}) == "ask" and gate.decide(run, {"tool": "update_private_notes"}) == "ask"
     assert gate.decide(run, {"tool": "sign_out"}) == "ask" and (await h["granola_run"]({"tool": "sign_out"})).get("is_error"), "hidden tools cannot be run either"
     q = app.describe({"tool": "update_summary", "arguments": {"meeting_id": "m1"}})
-    assert q.startswith("Do this in Granola?") and "Update summary (update_summary)" in q and '"meeting_id": "m1"' in q
+    assert q.startswith("Do this in Granola?") and "Update summary" in q and "update_summary" not in q and "Meeting id: m1" in q
 
 
 async def test_what_comes_back_is_material_and_is_remembered_as_private(tmp_path):

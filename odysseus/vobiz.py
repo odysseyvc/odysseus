@@ -56,7 +56,7 @@ class VobizChat:
             # Most often: no conversation is open, which is the 24-hour window. Raised so the reply is not counted as delivered.
             error = data.get("error") if isinstance(data, dict) else data
             self._journal.write("error", where="vobiz.send", status=status, message=(json.dumps(error) if isinstance(error, dict) else str(error))[:300])
-            raise RuntimeError(f"Vobiz refused the message ({status})")
+            raise RuntimeError(f"the WhatsApp line refused the message ({status})")
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):

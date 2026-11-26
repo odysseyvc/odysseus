@@ -502,9 +502,9 @@ class Attio:
         inputs = args.get("arguments") or {}
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
-        title = (self._tools.get(name) or {}).get("title") or name
-        shown = json.dumps(inputs, ensure_ascii=False, indent=1, default=str)
-        return f"Do this in Attio?\n\nAction: {title} ({name})\nWith:\n{shown}"
+        from . import plain
+        title = (self._tools.get(name) or {}).get("title") or plain.action("x_" + name.replace("-", "_"))
+        return f"Do this in Attio?\n\n{title}\n{plain.inputs(inputs)}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(ATTIO_FIND, ALLOW)

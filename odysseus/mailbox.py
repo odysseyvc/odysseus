@@ -84,7 +84,7 @@ class AgentMail:
             if code == "missing_permission":
                 # The key in the settings was made to read only. Nothing the model or the owner can do in the chat changes that.
                 raise MailboxError("the key for the mailbox service in my settings is not allowed to do this (it can read, not send). "
-                                   "The owner has to make a key with the message_send permission in the AgentMail console and put it in the settings")
+                                   "The owner has to make a key with the message_send permission in the mailbox service's console and put it in the settings")
             raise MailboxError(f"the mailbox service answered {r.status_code}" + (f": {why}" if why else "") + (f" ({code})" if code else ""))
         try:
             return r.json()

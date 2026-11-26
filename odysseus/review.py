@@ -210,8 +210,8 @@ def make_escalator(journal: Journal, call: Call | None, model: str, clock: Calla
     async def check(tool: str, args: dict[str, Any], question: str, request: str, nth: int) -> str:
         if nth > MAX_UNASKED:
             journal.write("gate", tool=tool, verdict="escalated", reason="count", nth=nth)
-            return (f"This would be change number {nth} made without asking in one task, after reading what other people wrote. "
-                    f"The first {MAX_UNASKED} ran and are listed in the reply; from here on each is put to you.")
+            return (f"I am asking because I have already made {MAX_UNASKED} changes in this task without asking, after reading things "
+                    "other people wrote. Those are listed in my reply. From here on I check each one with you.")
         if call is None:
             return ""
         began = clock()

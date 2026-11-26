@@ -382,14 +382,15 @@ class McpApp:
         inputs = args.get("arguments") or {}
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
-        title = (self._tools.get(name) or {}).get("title") or name
-        shown = json.dumps(inputs, ensure_ascii=False, indent=1, default=str)
+        from . import plain
+        title = (self._tools.get(name) or {}).get("title") or plain.action("x_" + name.replace("-", "_"))
+        shown = plain.inputs(inputs)
         if self.reads(args):
             found = self._leak(args)
             if found:
                 return (f"Send these details to {self.title}? They came from your mail, calendar or apps.\n\nDetails recognised: "
-                        f"{', '.join(found)}\n\nAction: {title} ({name})\nWith:\n{shown}")
-        return f"Do this in {self.title}?\n\nAction: {title} ({name})\nWith:\n{shown}"
+                        f"{', '.join(found)}\n\n{title}\n{shown}")
+        return f"Do this in {self.title}?\n\n{title}\n{shown}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(self.find_tool, ALLOW)

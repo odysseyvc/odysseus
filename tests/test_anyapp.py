@@ -143,14 +143,15 @@ async def test_every_change_in_an_app_is_asked_about_by_itself(tmp_path):
     assert (await x.run(first))["is_error"] is True and x.backend.calls == [], "no approval, no change"
     asked = approving(x)
     out = await x.gate.permission(APP_RUN, first)
-    assert asked[0].startswith("Do this in Googlesheets?") and APPEND in asked[0] and '"spreadsheetId": "s1"' in asked[0]
+    assert asked[0].startswith("Do this in Google Sheets?") and "Append values to a spreadsheet" not in asked[0] and "Spreadsheet id: s1" in asked[0]
+    assert APPEND not in asked[0] and "{" not in asked[0] and "Values (1 row):\n1. a" in asked[0], "words and rows, not the service's name for it and not brackets"
     await x.run(out.updated_input)
     assert (await x.run(dict(second)))["is_error"] is True, "one approval does not cover the next change in the same app"
     out = await x.gate.permission(APP_RUN, second)
-    assert len(asked) == 2 and "GOOGLESHEETS_VALUES_UPDATE" in asked[1], "the second change is asked about too"
+    assert len(asked) == 2 and "Values update" in asked[1] and "GOOGLESHEETS" not in asked[1], "the second change is asked about too"
     await x.run(out.updated_input)
     assert [c[0] for c in x.backend.calls] == [APPEND, "GOOGLESHEETS_VALUES_UPDATE"]
-    assert x.anyapp.pop_changes() == [f"ran {APPEND} in Googlesheets", "ran GOOGLESHEETS_VALUES_UPDATE in Googlesheets"]
+    assert x.anyapp.pop_changes() == ["spreadsheets values append in Google Sheets", "values update in Google Sheets"]
     # An action whose name is on no list (the hole in the earlier design: one approval used to cover it) asks as well.
     unlisted = call("GOOGLESHEETS_VOID_SPREADSHEET", spreadsheetId="s1")
     assert x.gate.decide(APP_RUN, unlisted) == "ask"
@@ -178,7 +179,7 @@ async def test_sending_sharing_and_deleting_ask_every_time_even_after_changes_ar
     await x.gate.permission(APP_RUN, call(APPEND, spreadsheetId="s1", values=[["a"]]))
     share = call("GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", file_id="f1", email="stranger@example.net")
     out = await x.gate.permission(APP_RUN, share)
-    assert len(asked) == 2 and asked[1].startswith("Do this in Googledrive?") and "stranger@example.net" in asked[1]
+    assert len(asked) == 2 and asked[1].startswith("Do this in Google Drive?") and "stranger@example.net" in asked[1]
     await x.run(out.updated_input)
     out2 = await x.gate.permission(APP_RUN, dict(share))
     assert len(asked) == 3, "the same share is asked about again"
@@ -302,7 +303,7 @@ async def test_with_less_asking_an_edit_in_the_owners_own_google_file_runs_and_i
     assert x.gate.decide(APP_RUN, row) == "allow"
     assert "is_error" not in await x.run(row) and asked == [] and x.backend.calls == [(APPEND, {"spreadsheetId": "s1", "values": [["a"]]})]
     told = x.anyapp.pop_changes()
-    assert told[0].startswith(f"ran {APPEND} in Googlesheets without asking (") and '"spreadsheetId": "s1"' in told[0]
+    assert told[0].startswith("spreadsheets values append in Google Sheets without asking (") and APPEND not in told[0]
     assert x.gate.decide(APP_RUN, call("GOOGLEDOCS_CREATE_DOCUMENT", title="Memo")) == "allow"
 
 

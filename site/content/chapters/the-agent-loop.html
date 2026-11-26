@@ -80,16 +80,17 @@ PRICES = {
 </svg>
 <figcaption>The agent loop. Notice that the model appears in one box only. Every arrow out of the model goes through code before anything happens, and the conditions that end a turn early are checked by code without asking the model.</figcaption>
 </figure>
-<p>A turn can end in six ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>budget</code>, <code>day_budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
+<p>A turn can end in seven ways, and the code names each one. The status of every task is one of <code>done</code>, <code>stopped</code>, <code>stuck</code>, <code>budget</code>, <code>day_budget</code>, <code>turn_limit</code> or <code>error</code>:</p>
 <ul>
 <li>done: the model replied with text and no further tool request.</li>
 <li>stopped: the owner sent "stop". This is matched by the shell and never shown to the model ({{ch:the-conversation}}).</li>
-<li>budget: the estimated cost of this task's steps reached the per-task limit, by default $0.50.</li>
+<li>stuck: the task was not getting anywhere. The same call was asked for three times, or four calls in a row failed ({{ch:the-conversation}}).</li>
+<li>budget: the estimated cost of this task's steps reached the most one task may cost: four times its expected cost of $0.50, by default.</li>
 <li>day_budget: the task's estimated cost reached what was left of the day's budget ({{ch:the-conversation}}).</li>
-<li>turn_limit: the task used more steps than allowed, by default 25. The count is checked after each step, so the limit is noticed on the step after the last one allowed.</li>
+<li>turn_limit: the task used more steps than the most one task may take, by default four times 25. The count is checked after each step, so the limit is noticed on the step after the last one allowed.</li>
 <li>error: something failed, and the owner is told it could not finish.</li>
 </ul>
-<p>Only the first is chosen by the model. The other five are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
+<p>Only the first is chosen by the model. The other six are imposed on it. A loop that could end only when the model decided to end it would run, and spend, for as long as a confused model kept requesting tools.</p>
 
 <h2 id="context">Context, and why it runs out</h2>
 <div class="box definition"><div class="label">Definitions</div>
@@ -366,7 +367,7 @@ else:
 <h3>Review</h3>
 <ol>
 <li>A conversation has ten messages. On the eleventh, the model makes two calls. How many times has the first message been sent to the model in total? What does your answer imply for the cost of a long conversation, and how does the cache-read price change it?</li>
-<li>List the six statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
+<li>List the seven statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
 <li>The search tool is on <code>ALLOWED_TOOLS</code>, yet under the full gate it is not on the list of tools that skip the policy. Explain why, and what would go wrong if it were added to the skip list.</li>
 <li>Write a new read-only tool, <code>current_time</code>, that returns the date and time in the owner's zone. Give its description and schema, the handler, where it is registered in <code>make_tool_server</code>, and which lists it belongs on. Then write the test that proves the policy allows it.</li>
 <li>The loop counts a step when an <code>AssistantMessage</code> arrives. Suppose the library delivered a tool result between two pieces of the same model call. Would the count be wrong? Write a stand-in script that tests your answer.</li>

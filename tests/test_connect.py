@@ -144,7 +144,7 @@ async def test_a_sign_in_nobody_approves_and_one_that_fails_save_nothing_and_do_
 async def test_the_list_and_forgetting_a_service(tmp_path):
     c, send, sent, restarts = make(tmp_path, FakeServer([tool("list_issues", True)]))
     await c.connect("", send)
-    assert sent[0].startswith("Connected: none.") and "Granola (granola)" in sent[0] and "/connect exa" in sent[0]
+    assert sent[0].startswith("Connected: none.") and "Granola (granola)" in sent[0] and "/connect linear" in sent[0]
     await c.connect("https://mcp.linear.app/mcp", send)
     await c._task
     await c.connect("", send)

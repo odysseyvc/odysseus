@@ -62,7 +62,7 @@ async def test_reads_are_allowed_and_every_change_is_asked_about_with_its_inputs
     assert gate.decide(ATTIO_RUN, note) == "ask" and gate.decide(ATTIO_RUN, {"tool": "merge-records"}) == "ask"
     assert gate.decide(ATTIO_RUN, {"tool": "update-data-model"}) == "ask" and gate.decide(ATTIO_RUN, {"tool": "no-such-tool"}) == "ask"
     question = attio.describe(note)
-    assert question.startswith("Do this in Attio?") and "Create note (create-note)" in question and "They are raising in March." in question
+    assert question.startswith("Do this in Attio?") and "Create note" in question and "create-note" not in question and "{" not in question and "They are raising in March." in question
     assert backend.listed == 1, "the list of tools is fetched once"
 
 

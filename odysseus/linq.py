@@ -138,7 +138,7 @@ class Linq:
             error = data.get("error") if isinstance(data, dict) else None
             detail = {"code": error.get("code"), "message": str(error.get("message", ""))[:200]} if isinstance(error, dict) else {}
             self._journal.write("error", where=what, status=status, **detail)
-            raise RuntimeError(f"Linq refused the message ({status})")
+            raise RuntimeError(f"the iMessage line refused the message ({status})")
         return data
 
     async def post_text(self, text: str) -> None:

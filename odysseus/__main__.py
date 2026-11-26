@@ -601,6 +601,8 @@ async def main() -> int:
     door = Door()
     if settings.public_url or imessage_on(settings) or vobiz_on(settings) or (settings.whatsapp_token and settings.whatsapp_phone_id and settings.whatsapp_app_secret and settings.owner_whatsapp):
         await door.open(settings.whatsapp_port)
+        from . import shortlink
+        shortlink.LINKS.open(door, settings.public_url)       # links the owner is sent go out under this address, not a supplier's
     # What there is one of, however many people are served: the bot, the search client, one plain call to the small model
     # (the second reader, and closing a conversation), and the optional record of every task in Langfuse, from which
     # every secret in the settings is removed.

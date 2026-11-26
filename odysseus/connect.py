@@ -217,7 +217,7 @@ class Connector:
             off.insert(0, "Attio (attio)")
         return ("Connected: " + (", ".join(on) or "none") + "."
                 + ("\nKnown and not connected: " + ", ".join(off) + "." if off else "")
-                + "\n\nTo connect one, send /connect and its name (for example /connect exa), its website, or the address of its "
+                + "\n\nTo connect one, send /connect and its name (for example /connect linear), its website, or the address of its "
                   "server. To forget one, send /disconnect and its name.")
 
     async def _spec(self, arg: str) -> tuple[str, dict[str, Any], str] | str:

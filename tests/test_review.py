@@ -206,7 +206,7 @@ async def test_the_fourth_unasked_change_in_one_task_is_asked_about_whatever_any
     for _ in range(MAX_UNASKED):
         assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow)
     assert isinstance(await gate.permission(RUN, NOTE), PermissionResultDeny) and len(asked) == 1 and len(seen) == MAX_UNASKED, "the count needs no model"
-    assert f"change number {MAX_UNASKED + 1} made without asking in one task" in asked[0]
+    assert f"I have already made {MAX_UNASKED} changes in this task without asking" in asked[0]
     gate.new_task("The owner said: something else")
     gate.taint.saw("your mail")
     assert isinstance(await gate.permission(RUN, NOTE), PermissionResultAllow), "a new task begins a new count"

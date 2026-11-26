@@ -107,7 +107,7 @@ class FakeChat:
 def make(tmp_path: Path, scripts=None, **kw):
     settings = Settings(telegram_token="t", owner_id=OWNER, anthropic_api_key="k", exa_api_key="e",
                         data_dir=tmp_path, stop_grace_s=kw.pop("grace", 0.2), daily_usd=kw.pop("daily", 3.0),
-                        max_turns=kw.pop("max_turns", 25), task_usd=kw.pop("task_usd", 0.50))
+                        max_turns=kw.pop("max_turns", 25), task_usd=kw.pop("task_usd", 0.50), task_stretch=kw.pop("stretch", 1.0))
     journal = Journal(tmp_path / "journal.jsonl")
     ledger = Ledger(journal)
     clients = []
@@ -286,7 +286,7 @@ async def test_task_over_budget_is_ended_by_our_own_count(tmp_path):
     script = [call(1, "Partial answer", big), call(2, "More", big), call(3, "Never reached", big), result(cost=0.9)]
     x = make(tmp_path, [script])
     await say(x, "expensive")
-    assert "reached its budget of $0.50" in x.chat.sent[-1] and "More" in x.chat.sent[-1]
+    assert "reached $0.50, the most one task may cost" in x.chat.sent[-1] and "More" in x.chat.sent[-1] and "carry on" in x.chat.sent[-1]
     assert x.clients[0].interrupted.is_set()
     assert ends(x.journal)[-1]["status"] == "budget" and ends(x.journal)[-1]["turns"] == 2
     assert "limit" in kinds(x.journal)
@@ -295,7 +295,7 @@ async def test_task_over_budget_is_ended_by_our_own_count(tmp_path):
 async def test_task_over_step_limit_is_ended_by_our_own_count(tmp_path):
     x = make(tmp_path, [[call(i) for i in range(1, 10)] + [result()]], max_turns=3)
     await say(x, "long")
-    assert "limit of 3 steps" in x.chat.sent[-1]
+    assert "after 3 steps, the most one task may take" in x.chat.sent[-1]
     assert ends(x.journal)[-1]["status"] == "turn_limit" and ends(x.journal)[-1]["turns"] == 4
 
 

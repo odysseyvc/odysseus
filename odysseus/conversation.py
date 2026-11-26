@@ -21,6 +21,8 @@ from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
 from .offers import Offers
 from . import deckview as deckview_mod
+from . import progress as progress_mod
+from . import shortlink
 from .reading import Reader
 from . import links as links_mod
 from .connect import pasted_address
@@ -84,9 +86,9 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
             cut = limit
         parts.append(text[:cut])
         text = text[cut:].lstrip("\n")
-    if text:
+    if text.strip():            # a message of nothing but space is not sent: the owner would see an empty bubble
         parts.append(text)
-    return parts
+    return [p for p in parts if p.strip()]
 
 
 class Conversation:
@@ -1237,9 +1239,13 @@ class Conversation:
 
         notes = {
             "stopped": "Stopped.",
-            "budget": f"I ended this task because it reached its budget of ${self._s.task_usd:.2f}.",
+            "stuck": "I stopped this because " + progress_mod.WHY.get(getattr(self._runner, "stuck_why", ""), "it was not getting anywhere")
+                     + ". What I have so far is above. Tell me what to do differently and I will pick it up from there.",
+            "budget": f"I ended this task because it reached ${self._s.task_usd * getattr(self._s, 'task_stretch', 1.0):.2f}, the most one task may cost. "
+                      "What I have so far is above. Say \"carry on\" and I will continue from here.",
             "day_budget": f"I ended this task because today's budget of ${self._s.daily_usd:.2f} is used up.",
-            "turn_limit": f"I ended this task because it reached its limit of {self._s.max_turns} steps.",
+            "turn_limit": f"I ended this task after {int(self._s.max_turns * getattr(self._s, 'task_stretch', 1.0))} steps, the most one task may take. "
+                          "What I have so far is above. Say \"carry on\" and I will continue from here.",
             "error": "Something went wrong and I could not finish. The details are in the log.",
         }
         body = outcome.text.strip()
@@ -1286,7 +1292,7 @@ class Conversation:
             + (self._inbox.pop_changes() if self._inbox is not None and hasattr(self._inbox, "pop_changes") else [])
         # A connection link is added by code, exactly as the connector gave it. The model never handles it.
         for app_name, link in (self._anyapp.pop_links() if self._anyapp is not None else []):
-            body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{link}"
+            body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{shortlink.LINKS.wrap(link)}"
         if acted:
             body += "\n\nDone on your accounts: " + "; ".join(acted) + "."
         unseen = self._gate.pop_standing() if self._gate is not None and hasattr(self._gate, "pop_standing") else []

@@ -40,6 +40,7 @@ import re
 from typing import Any, Protocol
 
 from .apps import CALENDAR, CALL_TIMEOUT_S, GMAIL, AppError, hide_secrets
+from . import plain
 from .gate import ALLOW, ASK, Gate
 from .journal import Journal
 
@@ -123,6 +124,7 @@ class AnyApp:
         self._names: dict[str, str] = {}        # toolkit slug -> display name, as learned
         self._changes: list[str] = []
         self._links: list[tuple[str, str]] = []
+        self._said: dict[str, str] = {}         # tool slug -> the catalogue's own sentence on what it does, learned in app_find
         self.taint = None                       # set by make_gate; remembers what was read from the apps
         self._labels: dict[str, frozenset[str]] = {}    # tool slug -> the connector's labels, learned in app_find
         self.own_apps: frozenset[str] = frozenset()     # set by make_gate: apps where a small change runs unasked. Empty: every change asks
@@ -154,7 +156,7 @@ class AnyApp:
     # --- what the owner is shown ---------------------------------------------------
 
     def name(self, toolkit: str) -> str:
-        return self._names.get(toolkit) or toolkit.replace("_", " ").title()
+        return self._names.get(toolkit) or plain.app(toolkit)
 
     def pop_changes(self) -> list[str]:
         out, self._changes = self._changes, []
@@ -192,10 +194,11 @@ class AnyApp:
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
         app = self.name(toolkit_of(slug))
+        what = plain.action(slug, self._said.get(slug, ""))
         if self.kind(slug) == "read":
             return (f"Send these details to {app}? They came from your mail, calendar or apps.\n\nDetails recognised: "
-                    f"{', '.join(self._leak(args))}\n\nAction: {slug}\nWith:\n{_pretty(inputs)}")
-        return f"Do this in {app}?\n\nAction: {slug}\nWith:\n{_pretty(inputs)}"
+                    f"{', '.join(self._leak(args))}\n\n{what}\n{plain.inputs(inputs)}")
+        return f"Do this in {app}?\n\n{what}\n{plain.inputs(inputs)}"
 
     def add_rules(self, gate: Gate) -> None:
         gate.rule(APP_FIND, ALLOW)
@@ -243,6 +246,7 @@ class AnyApp:
             lines = []
             for slug in wanted:
                 info = schemas.get(slug) or {}
+                self._said[slug] = " ".join(str(info.get("description", "")).split())
                 kit = toolkit_of(slug)
                 state = statuses.get(kit, {})
                 connected = state.get("has_active_connection", state.get("is_connected"))
@@ -300,9 +304,9 @@ class AnyApp:
                                    "so that nothing is done twice, and tell the owner what you found.") from None
             self._journal.write("tool", name="app_run", ok=True, tool=slug, action=kind)
             if kind != "read":
-                brief = json.dumps(inputs, ensure_ascii=False, default=str)
+                brief = plain.inputs(inputs).replace("\n", "; ")
                 unasked = f" without asking ({brief[:140]}{'…' if len(brief) > 140 else ''})" if self.small(slug) else ""
-                self._changes.append(f"ran {slug} in {self.name(toolkit_of(slug))}{unasked}")
+                self._changes.append(f"{plain.action(slug, self._said.get(slug, '')).lower()} in {self.name(toolkit_of(slug))}{unasked}")
             # One field per line, so that hiding a line that looks like a sign-in code hides that field and not the whole result.
             text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False, default=str, indent=1)
             cut = "" if len(text) <= 8000 else f"\n[Cut: {len(text)} characters in all. Ask for less, or a narrower range.]"
