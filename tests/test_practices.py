@@ -268,3 +268,18 @@ def test_the_hour_long_cache_is_off_unless_asked_for_and_only_the_conversation_g
     five = estimate_usd("claude-sonnet-5-5", {"cache_creation_input_tokens": 1_000_000})
     hour = estimate_usd("claude-sonnet-5-5", {"cache_creation_input_tokens": 1_000_000, "cache_creation": {"ephemeral_1h_input_tokens": 1_000_000}})
     assert (five, hour) == (2.50, 4.00)
+
+
+def test_tools_on_demand_is_off_unless_asked_for_and_only_for_the_agents_behind_the_gate(tmp_path):
+    from dataclasses import replace
+    from odysseus.agent import LOOK_UP
+    from odysseus.tools import make_gate
+    s, journal = settings(tmp_path), Journal(tmp_path / "j.jsonl")
+    make = lambda st, **kw: AgentRunner(st, journal, object(), client_factory=lambda options=None: FakeClient([[result()]], options=options), **kw)
+    off = make(s, gate=make_gate(journal)).options()
+    assert off.tools == [] and LOOK_UP not in off.allowed_tools and off.env["ENABLE_TOOL_SEARCH"] == "false", "said outright, whatever the library's default"
+    on = replace(s, tools_on_demand=True)
+    gated = make(on, gate=make_gate(journal)).options()
+    assert gated.tools == [LOOK_UP] and LOOK_UP in gated.allowed_tools and gated.env["ENABLE_TOOL_SEARCH"] == "true"
+    small = make(on).options()
+    assert small.tools == [] and small.env["ENABLE_TOOL_SEARCH"] == "false", "an agent with a handful of tools is sent them in full"

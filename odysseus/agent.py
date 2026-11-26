@@ -251,6 +251,7 @@ def make_policy(allowed: frozenset[str]):
 tool_policy = make_policy(ALLOWED_TOOLS)
 
 
+LOOK_UP = "ToolSearch"     # the agent library's own tool for finding one of the tools it was given
 WEIGH_TIMEOUT_S = 5.0     # for the one question put to the agent library about what the tools weigh
 REFUSED = "The model declined to go on with this one, so nothing more was done. If that looks wrong, say it another way."
 
@@ -335,14 +336,26 @@ class AgentRunner:
         and the agent library never reports its own figure."""
         return sum(self._calls.values())
 
+    @property
+    def _on_demand(self) -> bool:
+        """Whether this agent is sent its tools' names only. Only the agents that do the owner's work behind the gate:
+        the small ones have a handful of tools, and looking one up would cost them a call each time."""
+        return bool(self._gated and getattr(self._s, "tools_on_demand", False))
+
     def options(self) -> ClaudeAgentOptions:
         return ClaudeAgentOptions(
             model=self._model,
             system_prompt=self._system_prompt,
-            tools=[],                          # none of the SDK's built-in tools (shell, files, ...)
+            # None of the agent library's built-in tools (shell, files, ...). One exception when the owner has switched
+            # it on (Settings.tools_on_demand): the library's own tool for looking a tool up, without which it sends every
+            # tool's full description on every call. That tool reads the list of tools already given here and nothing else.
+            # Measured on the fund suite and left off: the opening fell from about 16,000 tokens to about 8,000, and the
+            # model stopped calling the tool that does a round's sums (5 runs of 18 against 36 of 36), doing them itself and
+            # getting 4 of 21 wrong where none had been. A tool the model is not shown is a tool it does not think to use.
+            tools=[LOOK_UP] if self._on_demand else [],
             mcp_servers={SERVER: self._server},
             strict_mcp_config=True,            # ignore any tool servers configured on the machine
-            allowed_tools=sorted(self._allowed),
+            allowed_tools=sorted(self._allowed | ({LOOK_UP} if self._on_demand else set())),
             can_use_tool=self._policy,         # anything not listed above is refused by code
             setting_sources=[],                # ignore settings files on the machine
             include_partial_messages=True,
@@ -357,6 +370,7 @@ class AgentRunner:
             # Only the agent that keeps a conversation going is given the hour-long cache, and only when the owner has
             # switched it on: an agent that starts clean each time never reads back what it would pay more to write.
             env={"ANTHROPIC_API_KEY": self._s.anthropic_api_key, "CLAUDE_CONFIG_DIR": str(self._transcripts.resolve()),
+                 "ENABLE_TOOL_SEARCH": "true" if self._on_demand else "false",      # said outright, so that the library's default cannot change it
                  **({"ENABLE_PROMPT_CACHING_1H": "1"} if self._persist and getattr(self._s, "cache_1h", False) else {})},
         )
 

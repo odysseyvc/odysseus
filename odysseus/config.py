@@ -87,6 +87,7 @@ class Settings:
     fresh_after_min: int = 120   # after this long without a message, the next one starts a new conversation. 0: never
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
     effort: str = ""             # how hard the model thinks before each step: low, medium or high; empty leaves it to the model's default. Measured: medium moved nothing, so it is off (agent.py)
+    tools_on_demand: bool = False    # send the model the tools' names only, and each tool's full description when it looks one up. Measured: the model then does by itself what a tool it cannot see would have done, so it is off (agent.py)
     cache_1h: bool = False       # keep the conversation's cache for an hour, not five minutes: a dearer write, fewer of them (agent.py)
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
@@ -224,6 +225,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         max_turns=int(merged.get("ODYSSEUS_MAX_TURNS", 25)),
         fresh_after_min=int(merged.get("ODYSSEUS_FRESH_AFTER_MIN", 120)),
         fresh_above_tokens=int(merged.get("ODYSSEUS_FRESH_ABOVE_TOKENS", 40000)),
+        tools_on_demand=merged.get("ODYSSEUS_TOOLS_ON_DEMAND", "").strip().lower() in ("1", "true", "yes", "on"),
         cache_1h=merged.get("ODYSSEUS_CACHE_1H", "").strip().lower() in ("1", "true", "yes", "on"),
         effort=(lambda e: e if e in ("low", "medium", "high", "") else "")(merged.get("ODYSSEUS_EFFORT", "").strip().lower()),
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
