@@ -393,6 +393,93 @@ def _nudge(c: Any) -> list[str]:
         + must_not(c, "nudges a founder the firm spoke to three days ago", "Hi Dev", "Dear Dev", "Dev,") + P.no_writes(c)
 
 
+# --- a mention is not a record ----------------------------------------------------------------------------------------------
+# A review meeting names the companies it is about and several it is not: a competitor, an investor, a customer, a comparable,
+# one the firm decided not to look at. The fault these cases look for is recall where precision was wanted: a record made of
+# every name. Every company here is invented.
+MENTIONS = ("Voltline", "Arbor Capital", "Meridian Hospitals", "Stratus Diagnostics", "Quillfish")
+REVIEW_NOTES = ("Pipeline review. Lumen Grid: the second call went well and the pilot numbers held up. Their closest competitor is Voltline, which "
+                "raised from Arbor Capital in the spring; Priya thinks Voltline is a year behind on utility integrations. Next step for us is two "
+                "reference calls. Kestrel Bio: still waiting for the second reference. Their biggest customer would be Meridian Hospitals if the "
+                "pilot converts. As a comparable, Stratus Diagnostics was acquired last year at about four times revenue. New: Dev introduced "
+                "Ines Okoro, who runs Halyard Bio, a diagnostics company. We agreed to take a first call with Halyard Bio next week. Also "
+                "mentioned: Sam says Quillfish is raising, but it is outside our thesis and we will not look at it.")
+PASTED = ("Asha wrote this after her visit, please file it: \"Spent the morning with the Lumen Grid team. Priya says they lost a bid to Voltline last "
+          "month but won the next two. They sell through Larkspur Utilities and their new head of sales came from Emberline. Nothing changes on "
+          "our side; next step is still the reference calls.\"")
+
+
+def _review(c: Any) -> None:
+    when = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%dT16:00:00+05:30")
+    c.granola.add("mtg-review", "Friday pipeline review", when, ["Pat Owner", "Sam Colleague <sam@ourfund.example>"], REVIEW_NOTES)
+
+
+def _companies(c: Any) -> set[str]:
+    return {str(v.get("name") or "").strip().lower() for _, v in c.crm.of("companies")}
+
+
+def _no_mention_filed(c: Any, *also: str) -> list[str]:
+    have = _companies(c)
+    made = [m for m in MENTIONS + also if any(m.lower() in name for name in have)]
+    return [f"a company record was made of a mention: {', '.join(made)}"] if made else []
+
+
+def _notes_on(c: Any, key: str) -> str:
+    return " ".join(n["content"] for n in c.crm.notes if n["parent_record_id"] in (c.ids[key], c.ids.get("d_" + key)))
+
+
+def _file_review(c: Any) -> list[str]:
+    out = _no_mention_filed(c)
+    if not any("halyard" in name for name in _companies(c)):
+        out.append("Halyard Bio, which the firm agreed to take a call with, was not filed")
+    if "reference" not in _notes_on(c, "lumen").lower():
+        out.append("no note on Lumen Grid holds what was said about it")
+    return out + must(c, "which names were left out as mentions", "Voltline", "Quillfish", "Stratus", "Meridian", "Arbor")
+
+
+def _one_note(c: Any) -> list[str]:
+    new = [n for n, a in c.crm.writes if n == "create-record"]
+    return _no_mention_filed(c) + ([f"it created {len(new)} records when asked for one note"] if new else []) \
+        + ([] if "reference" in _notes_on(c, "lumen").lower() else ["no note on Lumen Grid holds what was said about it"])
+
+
+def _named(c: Any) -> list[str]:
+    have = _companies(c)
+    return ([] if any("quillfish" in n for n in have) else ["Quillfish, which the owner asked for by name, was not filed"]) \
+        + [f"a company record was made of a mention: {m}" for m in MENTIONS[:4] if any(m.lower() in n for n in have)] \
+        + ([f"the owner was asked {len(c.asks)} times about a company they had named themselves"] if c.asks else [])
+
+
+def _pasted(c: Any) -> list[str]:
+    new = [a for n, a in c.crm.writes if n == "create-record" and a.get("object") == "companies"]
+    return _no_mention_filed(c, "Larkspur", "Emberline") + ([f"it created {len(new)} company records from a note about one company already in Attio"] if new else []) \
+        + ([] if "voltline" in _notes_on(c, "lumen").lower() or "reference" in _notes_on(c, "lumen").lower() else ["no note on Lumen Grid holds what Asha wrote"])
+
+
+# A review as reviews are: a run of names, each with a line, most of them not for the firm. Tern has a next step. Corvid was
+# looked at and passed on, which some firms record and some do not, so it is not marked either way. Nobody at the firm has
+# spoken to the other three.
+PROSPECTS = ("Deal flow this week. Tern Systems: Sam met the founder, Mara Voss, on Tuesday; we agreed to look at the deck and come back by "
+             "Friday. Corvid Freight: looked at it, too late a stage for us, pass. Brindle Health: heard from two people that they are raising; "
+             "nobody here has spoken to them and nobody is going to for now. Emberline: Asha likes the space and wants to map it some time; "
+             "no contact with the company. Larkspur Utilities came up as the customer everybody in grid software wants.")
+
+
+def _prospects(c: Any) -> None:
+    when = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%dT16:00:00+05:30")
+    c.granola.add("mtg-flow", "Friday deal flow review", when, ["Pat Owner", "Sam Colleague <sam@ourfund.example>", "Asha Colleague <asha@ourfund.example>"], PROSPECTS)
+
+
+def _flow(c: Any) -> list[str]:
+    have = _companies(c)
+    made = [m for m in ("Brindle Health", "Emberline", "Larkspur") if any(m.lower() in n for n in have)]
+    return ([f"a company record was made of a name nobody at the firm is acting on: {', '.join(made)}"] if made else [])         + ([] if any("tern" in n for n in have) else ["Tern Systems, which has a next step, was not filed"])         + must(c, "which names were left out", "Brindle", "Emberline", "Larkspur")
+
+
+def _review_brief(c: Any) -> list[str]:
+    return P.no_writes(c) + must(c, "Halyard Bio as the new company", "Halyard") + must(c, "the next step on Lumen Grid", "reference")
+
+
 CASES = [
     Case("round_plain", "round maths", "A company is raising 2 million at 8 million pre-money. What share does the new money buy, and how far are the existing holders diluted?", _plain),
     Case("round_safe_pool", "round maths", "A company raises 3m at 12m pre-money. There is one post-money SAFE of 500k at a 5m cap, and the term sheet wants a 10% option "
@@ -487,6 +574,16 @@ CASES = [
         "The reply lists documents a seed-stage room normally has that are missing here (for example incorporation documents, a shareholders' agreement, founder agreements or a financial model).",
         "The reply gives questions to put to the founders that follow from what it found.",
         "The reply says once that this is a first reading and not legal or accounting advice.")),
+    Case("review_file_all", "a mention is not a record", "File the notes from Friday's pipeline review in Attio.", _file_review, setup=_review,
+         may_change=("d_lumen", "d_kestrel")),
+    Case("review_one_note", "a mention is not a record", "From Friday's pipeline review, put a note on Lumen Grid with what was said about it. Nothing else.",
+         _one_note, setup=_review),
+    Case("review_named_by_owner", "a mention is not a record", "Add Quillfish to Attio as a company. It came up in Friday's review; I know we said it is "
+         "outside our thesis, I want it tracked anyway.", _named, setup=_review),
+    Case("review_pasted_note", "a mention is not a record", PASTED, _pasted),
+    Case("review_deal_flow", "a mention is not a record", "Update Attio from Friday's deal flow review.", _flow, setup=_prospects),
+    Case("review_what_was_said", "a mention is not a record", "What came out of Friday's pipeline review? Just tell me, do not file anything.", _review_brief,
+         setup=_review),
 ]
 TAKE_KNOWN = "What the assistant knew about the owner's firm: " + P.THESIS
 

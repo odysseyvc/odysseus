@@ -31,6 +31,7 @@ from .gate import ALLOW, ASK, Gate
 
 ATTIO_PLAN, ATTIO_FILE = "mcp__odysseus__attio_plan", "mcp__odysseus__attio_file"
 PLAN_KEEPS_S = 20 * 60
+SAID_MOST = 400          # characters of the words that give a new company its part
 NOTE_MOST = 4000         # characters of one note; the owner is shown every character that is filed
 MATCH_BY = {"companies": ("domains", "name"), "people": ("email_addresses", "linkedin", "name"), "deals": ("name",)}
 MAX_STEPS = 24
@@ -249,6 +250,11 @@ class Intake:
             raise AppError("Give every record a different `ref`, like c1, p1, d1.")
         steps, lines, checked, labels = [], [f"From: {source}", ""], [], {}
         doubt = False       # a record added beside a similarly named one: the owner should see both names before it exists
+        # New companies the owner did not name: they come from the source alone. One is the ordinary case of a deck or a
+        # forwarded message about a company, whose name is in the material and not in the owner's "file this"; it is filed
+        # and reported as before. Two or more in one filing is a source that names several companies, a review or a long
+        # thread, and which of them the firm tracks is for the owner to say with the words in front of them.
+        untyped = 0
         for r in records:
             obj, ref = str(r.get("object", "")), str(r["ref"])
             attrs = self._attrs("objects", obj)
@@ -259,8 +265,8 @@ class Intake:
                 raise AppError(f"record {ref}: give at least one of {', '.join(MATCH_BY.get(obj, ('name',)))}, so it can be looked up first.")
             noun = {"companies": "the company", "people": "the person", "deals": "the deal"}.get(obj, obj)
             labels[ref] = f"{noun} {_show(values.get('name') or next(iter(match.values())))}"
-            checked.append((ref, obj, attrs, values, match, changes, r.get("new") is True))
-        for ref, obj, attrs, values, match, changes, said_new in checked:
+            checked.append((ref, obj, attrs, values, match, changes, r.get("new") is True, " ".join(str(r.get("said") or "").split())))
+        for ref, obj, attrs, values, match, changes, said_new, part in checked:
             found, by = await self._existing(obj, match)
             near = await self._similar(obj, _show(values.get("name"))) if not found and obj in ("companies", "people", "deals") and values.get("name") else []
             if near and not said_new:
@@ -288,7 +294,12 @@ class Intake:
             if not found:
                 values = {**values, **changes}         # a record that does not exist yet is simply created with everything said about it
                 also = f" (Attio already has the similarly named {', '.join(near)}; this is a separate record.)" if near else ""
-                lines.append(f"- {label}: NEW. {self._said(attrs, values, labels)}{also}")
+                why = ""
+                if obj == "companies":
+                    part, by_owner = self._part(ref, _show(values.get("name") or next(iter(match.values()))), values, part)
+                    untyped += 0 if by_owner else 1
+                    why = f"\n    Why it is a record: \"{part}\"" + ("" if by_owner else "\n    You did not name this company yourself; it comes from the source.")
+                lines.append(f"- {label}: NEW. {self._said(attrs, values, labels)}{also}{why}")
             steps.append({"do": "record", "ref": ref, "object": obj, "values": values, "match": match, "found": found, "label": label,
                           "updates": updates, "before": before})
         for e in entries:
@@ -314,7 +325,7 @@ class Intake:
         plan_id = secrets.token_hex(3)
         summary = "\n".join(lines)
         self._plans = {k: v for k, v in self._plans.items() if self.clock() - v["at"] < PLAN_KEEPS_S}
-        self._plans[plan_id] = {"at": self.clock(), "steps": steps, "summary": summary, "doubt": doubt, "source": source}
+        self._plans[plan_id] = {"at": self.clock(), "steps": steps, "summary": summary, "doubt": doubt, "unnamed": untyped > 1, "source": source}
         self._journal.write("tool", name="attio_plan", ok=True, plan=plan_id, steps=len(steps), new=sum(1 for s in steps if s["do"] == "record" and not s["found"]))
         return (f"Plan {plan_id}. Nothing has been changed. This is the plan as the owner would be shown it, word for word:\n\n{summary}\n\n"
                 f"If this is what the owner wants filed, call attio_file with plan \"{plan_id}\". To change anything, make a new plan.")
@@ -327,6 +338,37 @@ class Intake:
             raise AppError("There is no such plan, or it is more than twenty minutes old. Make it again with attio_plan.")
         return plan
 
+    def _part(self, ref: str, name: str, values: dict[str, Any], said: str) -> tuple[str, bool]:
+        """Check the words given for why a company that is not in Attio should become a record, and say whether the owner
+        named it.
+
+        A meeting or a long email names many companies: the one being discussed, and others as comparisons, competitors,
+        customers, investors, or in passing. Told to file "everything the source supports", a model made a record of each,
+        and a plan that only adds ran without a question, so the firm's list of companies filled with names nobody meant to
+        track. Two things by code now stand in the way. A new company must come with the words that give it a part, and
+        those words must name it: there is then something on the page for the owner to judge, and a model that cannot
+        find such words has its answer. And a filing that makes records of two or more companies the owner did not type the
+        names of is never run unasked."""
+        if not said:
+            raise AppError(f"record {ref}: {name} is not in Attio, and a new company needs `said`: the exact words, from the source or from "
+                           "the owner, that make it something the firm is dealing with (a company being considered, one a founder runs, "
+                           "one the firm holds). A company named only as a comparison, a competitor, a customer, an investor or in passing "
+                           "is not a record: leave it out of `records`, and keep the mention in a note's text if it matters. Tell the "
+                           "owner which names you left out.")
+        if len(said) > SAID_MOST:
+            raise AppError(f"record {ref}: `said` is the one or two sentences that give {name} its part, at most {SAID_MOST} characters.")
+        low = said.casefold()
+        words = [w for w in re.findall(r"[^\W_]+", name.casefold()) if len(w) > 2]
+        domain = str((values.get("domains") or [""])[0] if isinstance(values.get("domains"), list) else values.get("domains") or "").casefold()
+        if not ((words and words[0] in low) or (domain and domain.split(".")[0] in low)):
+            raise AppError(f"record {ref}: the words in `said` do not name {name}. Give the sentence that is about this company; if there is "
+                           "none, it is a mention and not a record.")
+        taint = getattr(self._attio, "taint", None)
+        typed = taint.owner_typed(name) if taint is not None else None
+        if typed is None and taint is not None and domain:
+            typed = taint.owner_typed(domain.split(".")[0])
+        return said, bool(typed) or bool(taint is not None and domain and taint.owner_typed(domain.split(".")[0]))
+
     def describe(self, a: dict[str, Any]) -> str:
         return ("File this in Attio?\n\n" + self._get(a)["summary"] + "\n\nA record already in Attio is changed only where a line above says "
                 "CHANGES. This cannot be undone from here.")
@@ -337,10 +379,13 @@ class Intake:
         A plan that only adds (new records, notes, list entries, links to what is there) runs unasked when the owner
         has switched that on, and is reported line by line afterwards. A plan that would overwrite a value already in
         Attio is always the owner's decision, shown before and after: what was there is lost from view once changed.
-        So is a plan that adds a record beside a similarly named one, and a plan the program does not have.
+        So is a plan that adds a record beside a similarly named one, and a plan the program does not have. So, too, is a
+        plan that makes records of two or more companies the owner did not name: a record in the firm's database is seen by
+        everyone at the firm and cannot be deleted from here, and whether a company named in somebody's notes is one the
+        firm tracks is the owner's call, made with the words that name it in front of them.
         """
         plan = self._plans.get(str(a.get("plan", "")).strip())
-        if not getattr(self._attio, "auto", False) or plan is None or plan.get("doubt"):
+        if not getattr(self._attio, "auto", False) or plan is None or plan.get("doubt") or plan.get("unnamed"):
             return ASK
         return ASK if any(s.get("updates") for s in plan["steps"]) else ALLOW
 
@@ -452,6 +497,10 @@ SCHEMAS = {
                            "object": {"type": "string", "description": "companies, people or deals."},
                            "new": {"type": "boolean", "description": "Only when attio_plan has told you a similarly named record exists and "
                                    "this one is nevertheless a different company or person."},
+                           "said": {"type": "string", "description": "For a company that may not be in Attio yet: the exact one or two "
+                                    "sentences, from the source or from the owner, that give it its part (being considered, run by a founder "
+                                    "the firm met, held by the firm). The owner is shown them. A company with no such sentence is a mention, "
+                                    "not a record."},
                            "changes": {"type": "object", "description": "Only for something the source says that should be set on this record "
                                        "even if it is already in Attio: a new stage, a next step, a date. Field slug to new value. The owner is "
                                        "shown each as before → after. A choice from several is added to those already there, never removed."},
@@ -470,4 +519,4 @@ SCHEMAS = {
 
 PROMPT = """
 
-Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan with everything the source supports, then attio_file with the plan's id. The program decides whether the owner is asked: a plan that only adds is usually filed at once and the owner is told each thing that was added; a plan that changes a value already in Attio, or adds a record beside a similarly named one, is put to the owner whole, for one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio. To change one of those, put only what the source newly says in that record's `changes` (a stage the deal has moved to, the next step, a date); the owner is shown each change as before and after. Never use `changes` to tidy, to fill a gap from a guess, or to empty a field. Use a plan for any change to a record that is already in Attio, including a single correction the owner dictates ("our cheque was 750,000, not 500,000"): give the owner's own words as the source, name the record in `records`, and put the new value in `changes`. That way the owner approves a line that names the record and shows before and after; run through attio_run they would be shown an id and no before. After a meeting about a company already in Attio, the usual plan is: the company and the deal as they are, the deal's stage and next step in `changes` if the meeting moved them, and a note of what was said. After filing, tell the owner what was created, what was already there, and what in the source you left out and why."""
+Filing from a source. When the owner sends or forwards something that names companies, founders or deals and wants it in Attio (an email, a deck, a note of a meeting, a voice note, "file this", "add these"), do not create the records one at a time. Call attio_find once, then attio_plan, then attio_file with the plan's id. A plan holds the companies, people and deals the source is about, and no others. A source names many companies that it is not about: comparisons, competitors, customers, investors, companies someone else is looking at, names dropped in passing. Those are mentions, not records. Keep them, where they matter, inside a note's text on the record they were said about, and never make a company record for one. The test for a company is whether you can quote the sentence that gives it a part in the firm's work: being considered, run by a founder the firm met, held by the firm. A review of the pipeline or a partner meeting is mostly about companies already in Attio: look each one up, note what was said on those, and expect to create few records or none. When the owner asked for one company to be filed, file that one. When in doubt leave a company out and say so; the owner can ask for it in a word, and a record cannot be deleted from here. The program decides whether the owner is asked: a plan that only adds, about companies the owner named, is usually filed at once and the owner is told each thing that was added; a plan that changes a value already in Attio, adds a record beside a similarly named one, or makes records of several companies the owner did not name themselves, is put to the owner whole, for one tap. Put in a record only what the source says about that record, in the firm's own fields. Where the source gives a view or a fact worth keeping that has no field (why a colleague liked a founder, the terms as described that day), put it in a note in the source's own words, with who said it and when. A source is evidence of what someone wrote on a day, not of what is true now: if it is old, or says something is still to be decided, say so to the owner before filing and do not record the undecided thing as settled. Leave out anything you would have to guess. The plan tells you which records are already in Attio. To change one of those, put only what the source newly says in that record's `changes` (a stage the deal has moved to, the next step, a date); the owner is shown each change as before and after. Never use `changes` to tidy, to fill a gap from a guess, or to empty a field. Use a plan for any change to a record that is already in Attio, including a single correction the owner dictates ("our cheque was 750,000, not 500,000"): give the owner's own words as the source, name the record in `records`, and put the new value in `changes`. That way the owner approves a line that names the record and shows before and after; run through attio_run they would be shown an id and no before. After a meeting about a company already in Attio, the usual plan is: the company and the deal as they are, the deal's stage and next step in `changes` if the meeting moved them, and a note of what was said. After filing, tell the owner what was created, what was already there, and what in the source you left out and why, naming the companies you treated as mentions."""

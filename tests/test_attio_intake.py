@@ -29,7 +29,7 @@ SHAPE = {
 PLAN = {
     "source": "Forwarded email from Sam, 3 Nov",
     "records": [
-        {"ref": "c1", "object": "companies", "values": {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}},
+        {"ref": "c1", "object": "companies", "said": "Orbit Labs is the company this is about.", "values": {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}},
         {"ref": "p1", "object": "people", "values": {"name": {"first_name": "Jo", "last_name": "Rao", "full_name": "Jo Rao"},
                                                      "email_addresses": ["jo@orbitlabs.example"], "company": "@c1", "role": ["founder"]}},
         {"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs", "stage": "sourced", "associated_company": "@c1", "associated_people": ["@p1"]}},
@@ -154,8 +154,8 @@ async def test_a_plan_that_does_not_fit_the_workspace_is_refused_with_the_reason
     bad = [
         ({**PLAN, "source": ""}, "Say in `source`"),
         ({**PLAN, "records": [{"ref": "c1", "object": "investors", "values": {"name": "X"}}]}, "no object called 'investors'"),
-        ({**PLAN, "records": [{"ref": "c1", "object": "companies", "values": {"name": "X", "sector": "AI"}}], "list_entries": [], "notes": []}, "no field 'sector'"),
-        ({**PLAN, "records": [{"ref": "c1", "object": "companies", "values": {"name": "X", "record_id": "1"}}], "list_entries": [], "notes": []}, "no field 'record_id'"),
+        ({**PLAN, "records": [{"ref": "c1", "object": "companies", "said": "X is the company this is about.", "values": {"name": "X", "sector": "AI"}}], "list_entries": [], "notes": []}, "no field 'sector'"),
+        ({**PLAN, "records": [{"ref": "c1", "object": "companies", "said": "X is the company this is about.", "values": {"name": "X", "record_id": "1"}}], "list_entries": [], "notes": []}, "no field 'record_id'"),
         ({**PLAN, "records": [{"ref": "d1", "object": "deals", "values": {"name": "X", "stage": "Won"}}], "list_entries": [], "notes": []}, "'Won' is not a choice for stage"),
         ({**PLAN, "records": [{"ref": "d1", "object": "deals", "values": {"name": "X", "associated_company": "@zz"}}], "list_entries": [], "notes": []}, "points at @zz"),
         ({**PLAN, "records": [{"ref": "p1", "object": "people", "values": {"role": ["Founder"]}}], "list_entries": [], "notes": []}, "give at least one of"),
@@ -273,7 +273,7 @@ async def test_the_line_added_to_the_reply_counts_what_was_done_not_what_was_pla
     existing = [("companies", {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}), ("deals", {"name": "Orbit Labs", "stage": "Sourced"})]
     backend, attio, _, h = rig(tmp_path, existing=existing)
     with_deal_fields(attio)
-    plan = {"source": "x", "records": [{"ref": "c1", "object": "companies", "values": {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}},
+    plan = {"source": "x", "records": [{"ref": "c1", "object": "companies", "said": "Orbit Labs is the company this is about.", "values": {"name": "Orbit Labs", "domains": ["orbitlabs.example"]}},
                                        {"ref": "d1", "object": "deals", "values": {"name": "Orbit Labs"}, "changes": {"next_step": "Call"}}],
             "notes": [{"on": "@d1", "title": "t", "content": "said"}]}
     pid, _ = await plan_id(h, plan)
@@ -283,16 +283,16 @@ async def test_the_line_added_to_the_reply_counts_what_was_done_not_what_was_pla
 
 async def test_a_name_close_to_one_already_there_is_not_quietly_added_as_new(tmp_path):
     backend, _, _, h = rig(tmp_path, existing=[("companies", {"name": "Northwind Robotics", "domains": ["northwind.example"]})])
-    short = {"source": "an email that says 'Asha at Northwind'", "records": [{"ref": "c1", "object": "companies", "values": {"name": "Northwind"}}]}
+    short = {"source": "an email that says 'Asha at Northwind'", "records": [{"ref": "c1", "object": "companies", "said": "Northwind is the company this is about.", "values": {"name": "Northwind"}}]}
     out = await h["attio_plan"](short)
     assert out.get("is_error") and "nothing called exactly 'Northwind', but it has 'Northwind Robotics'" in text(out)
-    exact = {**short, "records": [{"ref": "c1", "object": "companies", "values": {"name": "Northwind Robotics"}}]}
+    exact = {**short, "records": [{"ref": "c1", "object": "companies", "said": "Northwind Robotics is the company this is about.", "values": {"name": "Northwind Robotics"}}]}
     pid, shown = await plan_id(h, exact)
     assert "- Company Northwind Robotics: ALREADY IN ATTIO" in shown
-    other = {**short, "records": [{"ref": "c1", "object": "companies", "new": True, "values": {"name": "Northwind"}}]}
+    other = {**short, "records": [{"ref": "c1", "object": "companies", "new": True, "said": "Northwind is the company this is about.", "values": {"name": "Northwind"}}]}
     pid, shown = await plan_id(h, other)
     assert "- Company Northwind: NEW. Name: Northwind (Attio already has the similarly named Northwind Robotics; this is a separate record.)" in shown
-    unrelated = {**short, "records": [{"ref": "c1", "object": "companies", "values": {"name": "Southwind"}}]}
+    unrelated = {**short, "records": [{"ref": "c1", "object": "companies", "said": "Southwind is the company this is about.", "values": {"name": "Southwind"}}]}
     assert "- Company Southwind: NEW. Name: Southwind" in (await plan_id(h, unrelated))[1]
 
 
@@ -303,6 +303,7 @@ def auto_rig(tmp_path, **kw):
     attio = Attio(backend, Journal(tmp_path / "j.jsonl"))
     attio.shape = SHAPE
     gate = make_gate(Journal(tmp_path / "g.jsonl"), attio=attio, auto_small=True)
+    gate.taint.owner_said("File Orbit Labs, Northwind and Lumen Grid from what I forwarded.")     # the owner named the companies
     return backend, attio, gate, attio.handlers()
 
 
@@ -330,7 +331,7 @@ async def test_with_less_asking_a_plan_that_overwrites_a_value_is_still_the_owne
 
 async def test_with_less_asking_a_record_beside_a_similarly_named_one_is_still_asked_about(tmp_path):
     backend, attio, gate, h = auto_rig(tmp_path, existing=[("companies", {"name": "Northwind Robotics"})])
-    plan = {"source": "Email from Meera", "records": [{"ref": "c1", "object": "companies", "new": True, "values": {"name": "Northwind"}}]}
+    plan = {"source": "Email from Meera", "records": [{"ref": "c1", "object": "companies", "new": True, "said": "Northwind is the company this is about.", "values": {"name": "Northwind"}}]}
     pid, shown = await plan_id(h, plan)
     assert "similarly named Northwind Robotics" in shown and gate.decide(ATTIO_FILE, {"plan": pid}) == "ask"
 
@@ -346,7 +347,7 @@ async def test_a_second_deal_for_a_company_that_has_one_is_never_added_quietly(t
     await attio.layout()
     h = attio.handlers()
     plan = {"source": "Lumen Grid seed deck.pdf", "records": [
-        {"ref": "c1", "object": "companies", "values": {"name": "Lumen Grid", "domains": ["lumengrid.example"]}},
+        {"ref": "c1", "object": "companies", "said": "Lumen Grid is the company this is about.", "values": {"name": "Lumen Grid", "domains": ["lumengrid.example"]}},
         {"ref": "d1", "object": "deals", "values": {"name": "Lumen Grid - Seed", "stage": "Sourced", "owner": "pat@acme-capital.example", "associated_company": "@c1"}}]}
     out = await h["attio_plan"](plan)
     assert out.get("is_error") and "it has 'Lumen Grid'" in text(out), "a deal beside a deal of nearly the same name is stopped at the plan"

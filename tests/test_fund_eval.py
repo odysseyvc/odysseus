@@ -61,7 +61,7 @@ def test_every_case_has_one_id_and_a_group_and_the_judged_ones_say_what_was_visi
 
 def test_the_split_is_by_group_at_random_and_never_by_score():
     train, test = climb.draw_split(11)
-    assert not set(train) & set(test) and len(train) + len(test) == len(fund.case_ids()) and abs(len(train) - len(test)) <= 4
+    assert not set(train) & set(test) and len(train) + len(test) == len(fund.case_ids()) and abs(len(train) - len(test)) <= 6       # each odd-sized group puts one more on one side
     groups = dict(fund.case_ids())
     for g in set(groups.values()):
         size = sum(1 for i in groups if groups[i] == g)

@@ -175,6 +175,14 @@ class Taint:
         self._owner |= {_h("t", t) for t in _tokens(text)} | {_h("s", s) for s in _shingles(text)}
         self._said |= {_h("w", w) for w in _ANY_WORD.findall(text.lower())}
 
+    def owner_typed(self, text: str) -> bool | None:
+        """Whether the owner has typed every word of `text`, ordinary words aside. None when nothing the owner typed is on
+        record, so that a caller can tell "the owner did not name this" from "there is no telling"."""
+        if not self._said:
+            return None
+        words = [w for w in _ANY_WORD.findall(text.lower()) if w not in ORDINARY and len(w) > 1]
+        return bool(words) and all(_h("w", w) in self._said for w in words)
+
     # --- what would leave, counted ------------------------------------------------------
     def new_words(self, text: str) -> list[str]:
         """The words in `text` that the owner did not type and that are not ordinary search vocabulary, each once."""
