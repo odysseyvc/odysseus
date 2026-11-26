@@ -128,6 +128,17 @@ The same address with GET lists the apps the account is subscribed to; yours sho
 <li>Send the test number a message from your own WhatsApp. If nothing answers, read the journal: a delivery that arrived and was refused leaves a line, and one that never arrived leaves none.</li>
 </ol>
 <div class="callout"><p><b>WhatsApp's 24-hour rule.</b> The bot can write to you freely only for 24 hours after you last wrote to it. A reminder that falls outside that window is refused by WhatsApp. Reminders and routines are therefore sent on Telegram unless you set <code>ODYSSEUS_NOTIFY_ON=whatsapp</code>.</p></div>
+<h3>Optional: the group's assistant in a WhatsApp group</h3>
+<p>This needs the direct WhatsApp route above, and it needs Meta to have given the number Official Business Account status: a verified business, thirty days on the platform, two-step verification, an approved display name, and Meta's agreement. Without that standing Meta refuses every call (error 131215) and these steps do nothing. They are written from Meta's documentation and have not been run.</p>
+<ol>
+<li>Put the number's id in <code>.env</code> as <code>WHATSAPP_GROUP_PHONE_ID</code>. It may be the direct route's own number or another number of yours. If it is on another WhatsApp account, run <code>python scripts/whatsapp_group.py subscribe ACCOUNT_ID</code> so that Meta delivers that account to your app.</li>
+<li>Where you registered the <code>/whatsapp</code> address, add the four group fields to the app's subscription: <code>group_lifecycle_update</code>, <code>group_participants_update</code>, <code>group_settings_update</code>, <code>group_status_update</code>.</li>
+<li>For each colleague who should be heard, write their WhatsApp number against their id on this copy: <code>WHATSAPP_GROUP_MEMBERS=919800000000=123456789</code>, separated by commas. You need no entry. Restart.</li>
+<li>Run <code>python scripts/whatsapp_group.py create "Deal room"</code>. Meta reports the new group to the running program, which sends you its invite link on Telegram. Up to eight people can join.</li>
+<li>Join the group yourself and send <code>/firm on</code> in it. From then on a message that begins with the assistant's name (<code>ODYSSEUS_GROUP_NAME</code>, "odysseus" unless you change it) is answered in the group.</li>
+</ol>
+<p>The assistant cannot be added to a group you already have, there is one group assistant across Telegram and WhatsApp, and an approval question in the group is answered by typing YES or NO. <code>ODYSSEUS_WHATSAPP_GROUP=off</code> switches it off.</p>
+
 <h3>Optional: iMessage as a third channel</h3>
 <p>iMessage is bought from Linq (linqapp.com), which runs the lines. It uses the same door, at <code>/linq</code>. These steps are written from Linq's documentation and have not been run.</p>
 <ol>

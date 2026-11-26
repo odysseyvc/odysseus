@@ -88,6 +88,8 @@ class Vobiz(WhatsApp):
     async def _handle(self, m: dict[str, Any]) -> None:
         # One exact word from the owner, while a question asked here is waiting, answers it (typed.py). The checks the
         # direct route makes for every message are made here first for this one: once, the owner, and not late.
+        if m.get("group_id"):
+            return          # said in a group, not to the number: never an answer to a question asked of the owner alone
         body = (m.get("text") or {}).get("body", "") if m.get("type") == "text" else ""
         if body and m.get("id") not in self._seen and self._is_owner(m) and not self._late(m):
             found = self._typed.answer(body)

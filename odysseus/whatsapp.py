@@ -109,8 +109,9 @@ class WhatsApp:
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, phone_id: str, owner_number: str,
                  app_secret: str, verify_token: str, owner_id: int, clock: Callable[[], float] = time.time,
-                 ids_file: Any = None):
+                 ids_file: Any = None, groups: Callable[[], Any] | None = None):
         self._conv, self._journal, self._http = conversation, journal, http
+        self._groups = groups       # what serves a WhatsApp group, if anything does yet (whatsapp_group.py); asked for at each delivery
         self._clock = clock
         self._unsigned, self._unsigned_logged = 0, 0.0      # unsigned posts since the last log line, and when that was
         self._late_told = 0.0
@@ -166,6 +167,9 @@ class WhatsApp:
         for entry in payload.get("entry") or []:
             for change in entry.get("changes") or []:
                 value = change.get("value") or {}
+                groups = self._groups() if self._groups is not None else None
+                if groups is not None and groups.take(change):
+                    continue        # about a group: dealt with there, and never as something the owner said to the number
                 line = str((value.get("metadata") or {}).get("phone_number_id") or "")
                 if line and self._phone_id and line != self._phone_id:
                     continue        # for another number of the same account, which another route may be serving (vobiz.py)
@@ -180,7 +184,9 @@ class WhatsApp:
 
     async def _handle(self, m: dict[str, Any]) -> None:
         try:
-            if m.get("id") in self._seen:
+            if m.get("id") in self._seen or m.get("group_id"):
+                # Seen before, or said in a group. What the owner says in a group is said to everyone there; it is never
+                # taken as an instruction to their own assistant, whether or not anything serves that group.
                 return
             self._seen.append(m.get("id"))
             if not self._is_owner(m):

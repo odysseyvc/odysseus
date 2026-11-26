@@ -26,6 +26,7 @@ and answered one real message. The book's closing chapter
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Langfuse (a readable record of every task) | optional |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `OWNER_WHATSAPP` | Meta's WhatsApp Cloud API (a second channel; needs a public HTTPS address) | optional |
 | `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`, `VOBIZ_CHANNEL_ID`, `VOBIZ_NUMBER`, `VOBIZ_WEBHOOK_SECRET` (with `OWNER_WHATSAPP`) | Vobiz (WhatsApp on a number rented from it, beside or in place of the direct route). `ODYSSEUS_VOBIZ=off` switches it off | optional |
+| `WHATSAPP_GROUP_PHONE_ID`, `WHATSAPP_GROUP_MEMBERS` (with the direct WhatsApp settings) | The group's assistant in one WhatsApp group, through Meta's Groups API. Meta opens that API only to numbers with Official Business Account status. `ODYSSEUS_WHATSAPP_GROUP=off` switches it off | optional |
 | `LINQ_API_TOKEN`, `LINQ_NUMBER`, `LINQ_WEBHOOK_SECRET`, `OWNER_IMESSAGE` | Linq (iMessage as a third channel; needs the same public HTTPS address). `ODYSSEUS_IMESSAGE=off` switches it off | optional |
 | `ODYSSEUS_DATA_DIR` | where the journal, memory and conversation are kept (default `var`). They hold mail text in the clear: do not put this inside a folder that syncs to a cloud drive | optional |
 
@@ -140,6 +141,11 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
   answered in the same chat by one exact word, YES or NO, read by code and not by the model, within ten minutes.
   Anything else you type approves nothing. This is weaker than a tap: a one-word reply meant for something else would
   answer the question that is waiting. Telegram and the direct WhatsApp route keep buttons.
+- A WhatsApp group works only through Meta's Groups API, and Meta opens that only to a number with Official Business
+  Account status (a verified business, thirty days on the platform, and Meta's agreement). Without it every call is
+  refused and the code here does nothing. With it, the number makes the group, at most eight people join by a link,
+  and the assistant cannot be added to a group you already have. The adapter is written from Meta's documentation and
+  has never run against Meta. People other than you are heard there only if you list their numbers.
 - The Vobiz route has carried one text each way and nothing else: files, voice notes and a typed approval have not
   been tried on it. The Linq route has not run against its vendor at all; it is built from documentation.
 - Your messages, mail and files pass through the vendors whose keys you supply.

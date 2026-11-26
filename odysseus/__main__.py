@@ -64,7 +64,7 @@ from .linq import make_fetch
 from dataclasses import replace
 from types import SimpleNamespace
 
-from .config import ConfigError, Settings, imessage_on, load, make_clock, vobiz_on
+from .config import ConfigError, Settings, imessage_on, load, make_clock, vobiz_on, whatsapp_group_on
 from .conversation import Conversation
 from .history import History
 from .journal import Journal, Ledger
@@ -394,7 +394,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         http, close_http = make_http(settings.whatsapp_token)
         whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
                             app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id,
-                            ids_file=settings.data_dir / "whatsapp.json")
+                            ids_file=settings.data_dir / "whatsapp.json", groups=lambda: getattr(shared, "groups", None))
     # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
     telegram = TelegramChat(bot, settings.owner_id)
     # Optional: WhatsApp by a second route, through Vobiz and a number rented from it (vobiz.py). It cannot send
@@ -650,6 +650,17 @@ async def main() -> int:
         host.journal.write("people", serving=len(people.ids()) + 1)
     if await house.start_firm():
         host.journal.write("firm", outcome="started")
+    close_groups = None
+    if whatsapp_group_on(settings):
+        # The group's assistant in a WhatsApp group (whatsapp_group.py). It is reached through the direct route's door,
+        # which asks `shared.groups` at each delivery, so it is there whichever copy of the host's assistant is running.
+        from .whatsapp_group import WhatsAppGroups, members_from
+        group_http, close_groups = make_http(settings.whatsapp_token)
+        shared.groups = WhatsAppGroups(house, host.journal, group_http, phone_id=settings.whatsapp_group_phone_id,
+                                       owner_number=settings.owner_whatsapp, owner_id=settings.owner_id,
+                                       members=members_from(settings.whatsapp_group_members), name=settings.group_name,
+                                       tell=TelegramChat(bot, settings.owner_id).send, state_file=settings.data_dir / "whatsapp_group.json")
+        host.journal.write("whatsapp_group", outcome="on", serving=bool(shared.groups.group_id))
     waiting = board.resume()        # drafts that were waiting for a colleague's tap when the program last stopped
     if waiting:
         host.journal.write("exchange", resumed=waiting)
@@ -668,6 +679,8 @@ async def main() -> int:
         await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         parking.cancel()
+        if close_groups is not None:
+            await close_groups()
         await house.close()
         await door.close()
         await bot.session.close()

@@ -65,6 +65,12 @@ class Settings:
     vobiz_number: str = ""            # the WhatsApp number rented from Vobiz, with country code
     vobiz_secret: str = ""            # a secret of your own choosing, given to Vobiz when the address is registered; it signs every delivery
     vobiz: bool = True                # ODYSSEUS_VOBIZ=off switches this route off and leaves its settings in place
+    # Optional: the group's assistant in a WhatsApp group (whatsapp_group.py). It needs the direct route above, because
+    # Meta delivers to that address, and Meta's leave to use its Groups API on the number named here.
+    whatsapp_group_phone_id: str = "" # Meta's id of the number that makes and serves the group; may be the direct route's own
+    whatsapp_group_members: str = ""  # "number=id, number=id": whose WhatsApp number is which person's assistant here; the host needs no entry
+    group_name: str = "odysseus"      # a group message that begins with this word, or has @word in it, is said to the assistant
+    whatsapp_group: bool = True       # ODYSSEUS_WHATSAPP_GROUP=off switches it off and leaves its settings in place
     langfuse_public_key: str = ""   # optional: with both Langfuse keys, every task is also recorded as a trace (tracing.py)
     langfuse_secret_key: str = ""
     langfuse_base_url: str = ""     # the Langfuse region or your own server; empty means Langfuse's default
@@ -103,6 +109,12 @@ def imessage_on(s: Settings) -> bool:
 def vobiz_on(s: Settings) -> bool:
     """Whether WhatsApp through Vobiz is switched on: every one of its settings is present and it has not been turned off."""
     return bool(s.vobiz and s.vobiz_auth_id and s.vobiz_auth_token and s.vobiz_channel_id and s.vobiz_number and s.vobiz_secret
+                and s.owner_whatsapp)
+
+
+def whatsapp_group_on(s: Settings) -> bool:
+    """Whether a WhatsApp group is served: its number is named, the direct route it arrives by is set up, and it is not off."""
+    return bool(s.whatsapp_group and s.whatsapp_group_phone_id and s.whatsapp_token and s.whatsapp_phone_id and s.whatsapp_app_secret
                 and s.owner_whatsapp)
 
 
@@ -182,6 +194,10 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         vobiz_number=merged.get("VOBIZ_NUMBER", "").strip(),
         vobiz_secret=merged.get("VOBIZ_WEBHOOK_SECRET", "").strip(),
         vobiz=merged.get("ODYSSEUS_VOBIZ", "").strip().lower() not in ("0", "false", "no", "off"),
+        whatsapp_group_phone_id=merged.get("WHATSAPP_GROUP_PHONE_ID", "").strip(),
+        whatsapp_group_members=merged.get("WHATSAPP_GROUP_MEMBERS", "").strip(),
+        group_name=(merged.get("ODYSSEUS_GROUP_NAME", "").strip().lstrip("@") or "odysseus"),
+        whatsapp_group=merged.get("ODYSSEUS_WHATSAPP_GROUP", "").strip().lower() not in ("0", "false", "no", "off"),
         langfuse_public_key=merged.get("LANGFUSE_PUBLIC_KEY", ""),
         langfuse_secret_key=merged.get("LANGFUSE_SECRET_KEY", ""),
         langfuse_base_url=merged.get("LANGFUSE_BASE_URL", "") or merged.get("LANGFUSE_HOST", ""),
