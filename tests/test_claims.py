@@ -57,3 +57,13 @@ def test_something_sent_to_the_owner_in_the_chat_is_not_a_claim_about_an_account
     from odysseus import claims
     assert not claims.says("sent", "I've sent you a link to connect Google Sheets.")
     assert claims.says("sent", "I've sent the note to the founder.")
+
+
+def test_only_a_sentence_in_the_first_person_is_a_claim_and_reporting_what_a_record_says_is_not():
+    from odysseus import claims
+    for ordinary in ("We haven't got back to him: the 22 Nov note says no reply has been sent.", "The note says no reply was sent.",
+                     "Your 8% is the ownership recorded in Attio, against your initial cheque.", "No round size is recorded in Attio.",
+                     "The email was sent by Priya on Tuesday."):
+        assert claims.unbacked(ordinary, [], 0.0) == [], ordinary
+    assert claims.unbacked("I've sent the note to Priya.", [], 0.0) == ["sent"]
+    assert claims.unbacked("I have recorded the round in Attio.", [], 0.0) == ["filed"]

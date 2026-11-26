@@ -175,3 +175,19 @@ def test_a_contact_lookup_ending_does_not_hide_a_task_that_was_cut_off_and_two_b
     assert unfinished(j)["background"] == "second job", "one of two ended; the other is still owed"
     j.write("task_end", status="done", background=True)
     assert unfinished(j) is None
+
+
+# --- a length the owner set ------------------------------------------------------------------------------------------
+
+def test_a_stated_limit_is_found_counted_and_restated_as_a_lower_target():
+    from odysseus import limits
+    assert limits.stated("Where do we stand, in at most 150 words?") == (150, "word")
+    assert limits.stated("Keep it under 80 words.") == (79, "word") and limits.stated("Two lines at most.") == (2, "line")
+    assert limits.stated("No more than three sentences please") == (3, "sentence") and limits.stated("in 60 words or fewer") == (60, "word")
+    assert limits.stated("Keep it short.") is None and limits.stated("Tell me about the 150 words project") is None
+    assert limits.stated("x " * 600 + "in at most 10 words") is None, "a limit is looked for in the request, not far down a pasted text"
+    note = limits.note("Summarise it in at most 150 words.")
+    assert "limit of 150 words" in note and "no more than 120 words" in note and note.startswith("\n\n[Added by the program, not by the owner")
+    assert limits.note("Two lines at most.").count("2 lines") == 2 and limits.note("What is the stage?") == ""
+    assert limits.count("One two three. Four-five, six!", "word") == 5 and limits.count("a\n\nb\nc", "line") == 3 and limits.count("A. B! C?", "sentence") == 3
+    assert limits.over("at most 5 words", "one two three four five six") == "6 words against a limit of 5" and limits.over("at most 5 words", "one two") == ""

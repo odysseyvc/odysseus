@@ -21,6 +21,7 @@ from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
 from .offers import Offers
 from . import deckview as deckview_mod
+from . import limits
 from . import progress as progress_mod
 from . import shortlink
 from .reading import Reader
@@ -1137,6 +1138,7 @@ class Conversation:
                 pass  # a failed preview must never end the task
 
         stamp = f"\n\n[{self._now().strftime('%A %d %B %Y, %H:%M')}]"
+        stamp += limits.note(prompt)        # a length the owner set, restated by code as a target the model can hit (limits.py)
         if self._gate is not None and getattr(self._gate, "taint", None) is not None:
             # The record of what other people wrote is cleared when the model's own context is: at the start of a new
             # conversation, and not at each message. It used to be cleared with every message, while the model still had the
@@ -1249,6 +1251,9 @@ class Conversation:
             "error": "Something went wrong and I could not finish. The details are in the log.",
         }
         body = outcome.text.strip()
+        too_long = limits.over(prompt, body) if outcome.status == "done" else ""
+        if too_long:
+            self._journal.write("over_limit", detail=too_long)       # counted; the reply is sent as it is
         # A claim in the model's own words that something was sent, booked, deleted or filed, with nothing in the log behind
         # it, gets a line under the reply written by code (claims.py), and is counted.
         try:

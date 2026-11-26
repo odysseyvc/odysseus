@@ -14,6 +14,12 @@ act, and the mismatch is written to the log so that it is counted.
 
 What this cannot do: it reads a short list of phrasings in English, so a claim worded another way passes unread, and it
 knows nothing of acts outside those four kinds. It is a net with wide holes under the commonest way of falling.
+
+Only a sentence in the first person counts: "I've sent it", "I have filed it in the database". The passive was read too at
+first ("the reply was sent", "recorded in Attio"), and it gave false warnings on ordinary reporting: "the note says no
+reply has been sent" is about somebody else's reply, and "the ownership recorded in Attio" is a description, not a claim.
+A warning that is wrong teaches the owner to ignore the line, which is worse than a claim that slips through, so the
+passive is no longer read.
 """
 from __future__ import annotations
 
@@ -25,14 +31,13 @@ _NEGATED = re.compile(r"(?:\bnot|n't|\bnever|\bwithout|\bbefore|\bcannot|\bunabl
 _NOTHING = r"(?!\s+(?:no|nothing|none|neither|nobody|no one|zero|you)\b)"
 _I = r"\bi(?:'ve| have)?\s+(?:just\s+|now\s+|already\s+)?"
 KINDS: dict[str, tuple[re.Pattern, str]] = {
-    "sent": (re.compile(_I + r"(?:sent|emailed|replied to|forwarded)\b" + _NOTHING + r"|\b(?:email|reply|message|invitation) (?:has been|was|is) sent\b"),
-             "that something was sent"),
+    "sent": (re.compile(_I + r"(?:sent|emailed|replied to|forwarded)\b" + _NOTHING), "that something was sent"),
     "event": (re.compile(r"\bi(?:'ve| have)\s+(?:just\s+|now\s+)?(?:created|booked|added|scheduled|moved|rescheduled)\b[^.\n]{0,60}\b(?:event|meeting|calendar|invite|invitation|appointment|call)\b"),
               "that a calendar event was made or changed"),
     "deleted": (re.compile(r"\bi(?:'ve| have)\s+(?:just\s+|now\s+)?(?:deleted|cancelled|canceled|removed)\b[^.\n]{0,60}\b(?:event|meeting|appointment|invite|invitation)\b"),
                 "that a calendar event was deleted"),
     "filed": (re.compile(r"\bi(?:'ve| have)\s+(?:just\s+|now\s+)?(?:filed|recorded|logged|added|updated|created)\b[^.\n]{0,80}\b(?:attio|the database|the crm|the deal|the record)\b"
-                         r"|\b(?:filed|recorded) in attio\b"),
+                         ),
               "that something was filed or changed in the firm's database"),
 }
 # The tools whose successful call is the act, by the name each is logged under.
