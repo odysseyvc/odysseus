@@ -457,8 +457,7 @@ def _pasted(c: Any) -> list[str]:
 
 
 # A review as reviews are: a run of names, each with a line, most of them not for the firm. Tern has a next step. Corvid was
-# looked at and passed on, which some firms record and some do not, so it is not marked either way. Nobody at the firm has
-# spoken to the other three.
+# looked at and passed on, and the owner's rule is that a pass is recorded. Nobody at the firm has spoken to the other three.
 PROSPECTS = ("Deal flow this week. Tern Systems: Sam met the founder, Mara Voss, on Tuesday; we agreed to look at the deck and come back by "
              "Friday. Corvid Freight: looked at it, too late a stage for us, pass. Brindle Health: heard from two people that they are raising; "
              "nobody here has spoken to them and nobody is going to for now. Emberline: Asha likes the space and wants to map it some time; "
@@ -470,10 +469,25 @@ def _prospects(c: Any) -> None:
     c.granola.add("mtg-flow", "Friday deal flow review", when, ["Pat Owner", "Sam Colleague <sam@ourfund.example>", "Asha Colleague <asha@ourfund.example>"], PROSPECTS)
 
 
+def _passed(c: Any, word: str) -> bool:
+    """Whether the database says, on a deal's stage or in a note, that the firm passed on the company whose name holds `word`."""
+    ids = {rid for rid, v in c.crm.of("companies") + c.crm.of("deals") if word in str(v.get("name") or "").lower()}
+    stages = [str(v.get("stage") or "").lower() for rid, v in c.crm.of("deals") if rid in ids]
+    notes = " ".join(n["content"].lower() for n in c.crm.notes if n["parent_record_id"] in ids)
+    return any("pass" in s for s in stages) or "pass" in notes or "too late" in notes
+
+
 def _flow(c: Any) -> list[str]:
     have = _companies(c)
     made = [m for m in ("Brindle Health", "Emberline", "Larkspur") if any(m.lower() in n for n in have)]
-    return ([f"a company record was made of a name nobody at the firm is acting on: {', '.join(made)}"] if made else [])         + ([] if any("tern" in n for n in have) else ["Tern Systems, which has a next step, was not filed"])         + must(c, "which names were left out", "Brindle", "Emberline", "Larkspur")
+    out = [f"a company record was made of a name nobody at the firm is acting on: {', '.join(made)}"] if made else []
+    if not any("tern" in n for n in have):
+        out.append("Tern Systems, which has a next step, was not filed")
+    if not any("corvid" in n for n in have):
+        out.append("Corvid Freight, which the firm looked at and passed on, was not recorded")
+    elif not _passed(c, "corvid"):
+        out.append("nothing on Corvid Freight says the firm passed")
+    return out + must(c, "which names were left out", "Brindle", "Emberline", "Larkspur")
 
 
 def _review_brief(c: Any) -> list[str]:
