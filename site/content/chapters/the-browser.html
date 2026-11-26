@@ -90,11 +90,16 @@
     def leak(a: dict[str, Any]) -> list[str]:
         return taint.leaked(str(a.get("task", ""))) if taint is not None else []
 
+    def spill(a: dict[str, Any]) -> str:
+        # Recognising misses a detail put in other words. So the task is also counted, as a search is (taint.spill).
+        return taint.spill(str(a.get("task", "")), most=TASK_NEW_WORDS) if taint is not None else ""
+
     def decide(a: dict[str, Any]) -> str:
-        return ASK if (ask_signed_in and a.get("signed_in")) or leak(a) else ALLOW
+        return ASK if (ask_signed_in and a.get("signed_in")) or leak(a) or spill(a) else ALLOW
 
     def describe(a: dict[str, Any]) -> str:
         found = leak(a)
+        ...
         if not found:
             return describe_browse(a)
         ...
@@ -102,13 +107,14 @@
                 f"browser may type them into websites.\n\nDetails recognised: {', '.join(found)}\n\nTask it will be given:\n{task}")
 
     gate.rule(BROWSE_TOOL, decide, describe)</code></pre>
-<p>Two things make a run ask. The first is whether the browser is signed in as the owner, the one fact that most changes what a run can do. A fresh browser is signed in to nothing and can do only what a stranger could do on the public web. A signed-in browser can do anything the owner could do on every site they have signed in to. The second is whether the task carries details the program recognises from the owner's mail, calendar or apps (the fingerprinting of {{ch:untrusted-content}}), because the task is handed to another company and may be typed into websites.</p>
+<p>Three things make a run ask. The first is whether the browser is signed in as the owner, the one fact that most changes what a run can do. A fresh browser is signed in to nothing and can do only what a stranger could do on the public web. A signed-in browser can do anything the owner could do on every site they have signed in to. The second is whether the task carries details the program recognises from the owner's mail, calendar or apps (the fingerprinting of {{ch:untrusted-content}}), because the task is handed to another company and may be typed into websites. The third catches a detail put in other words, which recognising misses: once anything has been read from the owner's accounts, a task that carries a long number the owner did not type, or more than forty words that are neither the owner's nor ordinary, is put to the owner too.</p>
 <div class="tablewrap"><table>
 <caption>The rule for starting a browser run.</caption>
 <thead><tr><th>Kind of run</th><th>What it can do</th><th>Decision</th></tr></thead>
 <tbody>
 <tr><th>Fresh browser, task with no private details</th><td>What a stranger could do on the public web</td><td>Allow, then report in one line</td></tr>
 <tr><th>Task carrying recognised private details</th><td>Hand those details to another company and type them into sites</td><td>Ask, naming the details</td></tr>
+<tr><th>After a read of the owner's accounts, a task with a long number they did not type or over forty words not theirs</th><td>The same, with the details reworded</td><td>Ask, saying what was counted</td></tr>
 <tr><th>Signed in as the owner</th><td>Anything the owner could do on those sites</td><td><strong>Ask</strong>, with the task word for word (a setting can turn this off); report afterwards either way</td></tr>
 </tbody>
 </table></div>
@@ -265,7 +271,7 @@ return None</code></pre>
 <p>For every other tool in the book, a call's effect can be read, more or less well, from its name and inputs. For a browser run it cannot. This section says what <a href="notation.html#gate">Properties 1 and 2</a> still give for such a tool.</p>
 <p><strong>A run is one call whose effect is chosen elsewhere.</strong> From the program's side, <code>browse</code> is a tool <span class="math">τ<sub>b</sub>(σ, x) → (σ′, r)</span> with <span class="math">x</span> = (task, signed_in). Inside it, another company's model <span class="math">M′</span> draws clicks and keystrokes, each conditioned on the task and the pages read so far. By <a href="notation.html#runs">Definition 1</a> these are actions of <span class="math">M′</span>, not tool calls proposed by <span class="math">M</span>, and none passes <span class="math">G</span>. The run's effect is the composite of all of them, so its class (<a href="notation.html#runs">Definition 2</a>) depends on <span class="math">M′</span>, on the pages and on the task, and is not a function of <span class="math">x</span>. The task limits the run only as far as <span class="math">M′</span> obeys it. So the gate can only decide whether a run starts.</p>
 <p><strong>What Property 1 gives.</strong> Its hypothesis holds at the door. <code>browse</code> is guarded by both locks, and an approval is bound to the exact task and the signed_in flag, so the one-call property of {{ch:the-gate}} applies unchanged: one yes starts at most one run, of exactly the text shown. Inside the run it gives nothing, because no click lies on a code path of the program.</p>
-<p><strong>What Property 2 gives.</strong> In the code, the gate asks if the run is signed in and the setting is on, if its task carries a detail recognised from the owner's accounts, or, once any such detail is held, if the task carries a long number the owner did not type or over forty words neither the owner's nor ordinary. (The chapter's excerpt of <code>add_rules</code> omits the count.) None of the tests asks which kinds of outside material were read, so <span class="math">A(T)</span> holds every fresh-browser task that passes them, whatever the model read before proposing it. By Property 2 the effects that can occur unasked are those of such runs, and since they cannot be read from the task, a useful bound must be stated over authority.</p>
+<p><strong>What Property 2 gives.</strong> In the code, the gate asks if the run is signed in and the setting is on, if its task carries a detail recognised from the owner's accounts, or, once any such detail is held, if the task carries a long number the owner did not type or over forty words neither the owner's nor ordinary. None of the tests asks which kinds of outside material were read, so <span class="math">A(T)</span> holds every fresh-browser task that passes them, whatever the model read before proposing it. By Property 2 the effects that can occur unasked are those of such runs, and since they cannot be read from the task, a useful bound must be stated over authority.</p>
 <div class="box theory"><div class="label">Property: a run's effects are bounded by what its browser holds</div>
 <p>Let <span class="math">Reach(π)</span> be the set of effects that some sequence of clicks and keystrokes can cause from a browser holding the profile <span class="math">π</span>, starting from public pages. Every run with signed_in false has its effects in <span class="math">Reach(∅)</span>, whatever <span class="math">M′</span> does, and every signed-in run in <span class="math">Reach(π<sub>owner</sub>)</span>. With the setting on, the effects that can occur after an outside read without a question therefore lie in <span class="math">Reach(∅)</span>, and since the task is free text, any of them may.</p>
 <p><em>Argument.</em> <span class="math">M′</span> acts only through the browser it is given, and <code>BrowserUseBackend.run</code> passes the owner's profile only when signed_in is true. The hypothesis lies outside the program: that the vendor gives a fresh run no cookies, and the profile only the owner's own sign-ins. And <span class="math">Reach(∅)</span> includes send, a form on a public site or a message to a stranger, so the gate is not sound for send over <code>browse</code>, a gap {{ch:the-gate}} lists.</p></div>

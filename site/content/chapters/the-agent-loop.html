@@ -11,7 +11,7 @@
 <div class="box unit"><div class="label">This unit</div>
 <dl>
 <dt>Week</dt><dd>1 of 14</dd>
-<dt>Before it</dt><dd>{{ch:what-a-personal-agent-is}}; Definitions 1 to 3 and 6, Property 1 and the section on cost of <a href="notation.html">the model</a>. Definitions 1 to 3 are first used here.</dd>
+<dt>Before it</dt><dd>{{ch:what-a-personal-agent-is}}; Definitions 1 to 3 and 6, Property 1 and the section on cost of <a href="notation.html">the model</a>. Definitions 1 to 3 are first met in code here.</dd>
 <dt>Read first</dt><dd>{{cite:yao2023react}}; {{cite:anthropic2025contexteng}}.</dd>
 <dt>Laboratory</dt><dd><a href="labs.html#lab1">1: the loop, the journal and a conversation that can be stopped</a></dd>
 <dt>Problem set</dt><dd><a href="problem-sets.html#ps1">1</a></dd>
@@ -60,7 +60,7 @@ PRICES = {
 </dl></div>
 <p>A turn, everything between one message from the owner and the agent's reply, is therefore one pass of the agent loop from start to finish.</p>
 <figure>
-<svg viewBox="0 0 720 380" width="100%" role="img" aria-label="Flow of the agent loop: the owner's message goes to a model call; a tool request goes to the policy, which allows or refuses; an allowed tool runs and its result returns to the next model call; a text-only reply ends the turn. Limits, stop and errors can end the loop at any step.">
+<svg viewBox="0 0 720 380" width="100%" role="img" aria-label="Flow of the agent loop: the owner's message goes to a model call; a tool request goes to the policy, which allows or refuses; an allowed tool runs and its result returns to the next model call; a text-only reply ends the turn. Limits, a lack of progress, stop and errors can end the loop at any step.">
 <defs><marker id="al-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>
 <g font-family="var(--sans)" font-size="13" text-anchor="middle" fill="var(--ink)">
 <rect x="20" y="40" width="140" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="90" y="62">Owner's message</text><text x="90" y="80" font-size="12" fill="var(--ink-2)">+ time stamp</text>
@@ -69,7 +69,7 @@ PRICES = {
 <rect x="440" y="170" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--ok)"/><text x="520" y="192">Policy (code)</text><text x="520" y="210" font-size="12" fill="var(--ink-2)">allow, ask or refuse</text>
 <rect x="220" y="170" width="160" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="300" y="192">Tool runs</text><text x="300" y="210" font-size="12" fill="var(--ink-2)">result appended</text>
 <rect x="560" y="290" width="140" height="50" rx="6" fill="var(--paper-2)" stroke="var(--rule)"/><text x="630" y="312">Reply delivered</text><text x="630" y="330" font-size="12" fill="var(--ink-2)">turn ends</text>
-<rect x="20" y="270" width="380" height="80" rx="6" fill="var(--paper-2)" stroke="var(--warn)"/><text x="210" y="296">Checked by code at every step</text><text x="210" y="318" font-size="12" fill="var(--ink-2)">step limit · money limit · owner's stop · errors</text><text x="210" y="336" font-size="12" fill="var(--ink-2)">any of these ends the turn and the owner is told why</text>
+<rect x="20" y="270" width="380" height="80" rx="6" fill="var(--paper-2)" stroke="var(--warn)"/><text x="210" y="296">Checked by code at every step</text><text x="210" y="318" font-size="12" fill="var(--ink-2)">step and money limits · no progress · owner's stop · errors</text><text x="210" y="336" font-size="12" fill="var(--ink-2)">any of these ends the turn and the owner is told why</text>
 </g>
 <g stroke="var(--ink-2)" fill="none" marker-end="url(#al-arrow)">
 <path d="M160 65H218"/><path d="M380 65H438"/><path d="M520 90V168"/><path d="M440 195H382"/><path d="M300 170V92"/><path d="M600 65H660V288"/>
@@ -124,7 +124,7 @@ PRICES = {
 <tr><th>Which tools exist</th><td>Request any tool name</td><td>Offers only the system's own tools; refuses any name without a rule</td></tr>
 <tr><th>Consequential actions</th><td>Request a send, a deletion, a share</td><td>Holds the request, shows the owner its real inputs, waits ({{ch:the-gate}})</td></tr>
 <tr><th>Stopping</th><td>Nothing; it is not consulted</td><td>Ends the task when the owner says stop</td></tr>
-<tr><th>Spending</th><td>Keep working</td><td>Counts steps and estimated cost, ends the task at the limit</td></tr>
+<tr><th>Spending</th><td>Keep working</td><td>Counts steps and estimated cost, ends the task at the ceiling</td></tr>
 <tr><th>Who may speak</th><td>Read what the shell passes it</td><td>Drops messages from anyone but the owner; labels search results as material to read</td></tr>
 </tbody>
 </table></div>
@@ -228,24 +228,43 @@ async for msg in client.receive_response():
             last = text
         for b in msg.content:
             if isinstance(b, ToolUseBlock):
+                progress.asked(b.name, b.input)
                 self._journal.write("tool_request", name=b.name, input=b.input)
+                ...    # (lines omitted here: the step is shown to the owner as a status line)
         # One model call can arrive as several messages sharing an id; count it once.
         key = msg.message_id or f"n{len(calls)}"
         calls[key] = estimate_usd(self._model, msg.usage or {})
-        ...    # (three lines omitted here: the size of what the model was sent is recorded)
+        ...    # (lines omitted here: the size of what the model was sent is recorded)
         if self._limit is None and not self._stopped:
-            if len(calls) > self._s.max_turns:
+            # The task's budget and its number of steps are marks, not walls (progress.py). A task that passes
+            # one carries on while it is getting somewhere, up to a ceiling `task_stretch` times higher. A task
+            # that is not getting anywhere is ended at once, whatever it has cost. The day's budget is a wall.
+            stretch = max(1.0, float(getattr(self._s, "task_stretch", 1.0) or 1.0))
+            spent = sum(calls.values())
+            self.stuck_why = progress.stuck()
+            if self.stuck_why:
+                self._limit = "stuck"
+            elif len(calls) > self._s.max_turns * stretch:
                 self._limit = "turn_limit"
-            elif sum(calls.values()) >= self._s.task_usd:
+            elif spent >= self._s.task_usd * stretch:
                 self._limit = "budget"
+            elif self.day_room is not None and spent >= self.day_room():
+                self._limit = "day_budget"
+            elif not passed and (spent >= self._s.task_usd or len(calls) > self._s.max_turns):
+                passed = True
+                self._journal.write("limit", which="passed", steps=len(calls), estimated_usd=round(spent, 4))
             if self._limit:
-                self._journal.write("limit", which=self._limit, steps=len(calls),
-                                    estimated_usd=round(sum(calls.values()), 4))
+                self._journal.write("limit", which=self._limit, steps=len(calls), estimated_usd=round(spent, 4),
+                                    **({"why": self.stuck_why} if self.stuck_why else {}))
                 await client.interrupt()
+    elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+        for b in msg.content:           # what each tool call came back with: an error, or not
+            if isinstance(b, ToolResultBlock):
+                progress.came_back(bool(b.is_error))
     elif isinstance(msg, ResultMessage):
         result = msg</code></pre>
-<p>Three kinds of message arrive. A <code>StreamEvent</code> carries a fragment of text for the live preview. An <code>AssistantMessage</code> is one finished model message: its tool requests are journalled, and the step is counted and costed from its token counts. A <code>ResultMessage</code> arrives once, at the end, with the library's own cost figure.</p>
-<p>The library runs the tools itself, between messages, once the permission check (the skip list or the policy) has let them through. The runner's job is to watch, count and, when a limit is reached, interrupt. Notice that the setting is called <code>max_turns</code> but counts steps (model calls) within one task; the owner is told "it reached its limit of 25 steps". The names differ because the library uses "turn" for what this book calls a step.</p>
+<p>Four kinds of message arrive. A <code>StreamEvent</code> carries a fragment of text for the live preview. An <code>AssistantMessage</code> is one finished model message: its tool requests are journalled and counted towards the two signs of being stuck, and the step is counted and costed from its token counts. A <code>UserMessage</code> carries the results of the tools that ran, and the runner notes only whether each was an error. A <code>ResultMessage</code> arrives once, at the end, with the library's own cost figure.</p>
+<p>The library runs the tools itself, between messages, once the permission check (the skip list or the policy) has let them through. The runner's job is to watch, count and, when a limit is reached, interrupt. The order of the tests matters: being stuck is tested first, so a task going nowhere ends at once whatever it has cost; the ceilings come next; and passing a mark only writes a line to the journal, once. Notice that the setting is called <code>max_turns</code> but counts steps (model calls) within one task; with the defaults the owner is told "I ended this task after 100 steps, the most one task may take". The names differ because the library uses "turn" for what this book calls a step.</p>
 <p>After the loop, the outcome is decided by code, in order of precedence:</p>
 <pre><code>if self._stopped:
     status = "stopped"
@@ -314,14 +333,14 @@ else:
 <p>Calls per task. If a task ends <code>done</code> after <span class="math">u</span> tool requests, every model call but the last requested at least one tool, so the number of calls is <span class="math">m ≤ u + 1</span>, with equality when each requests exactly one. The museum task has <span class="math">u = 1</span> and <span class="math">m = 2</span>.</p>
 <p>Context growth. Let <span class="math">c₀</span> be the tokens of the fixed part of the first call (system prompt, tools, memory if shown, the message) and <span class="math">δ</span> the tokens each call adds. By the Cost section of the model, <span class="math">m</span> calls send <span class="math">m·c₀ + δ·m(m+1)/2</span> input tokens. The conversation is one long session, so the same holds across turns with <span class="math">m</span> counting every call since the last compaction: input grows with the square of the number of calls. Two habits of the code act on the terms. The cut at 12,000 characters bounds the <span class="math">δ</span> one search can add, and compaction replaces <span class="math">h</span> with a summary, restarting the sum. The cache changes the price of the square term, not its size: if every call after the first reads the earlier prefix from the cache and writes only its own new tokens, the repeated tokens are paid at <span class="math">p<sub>cr</sub></span>, which for the mid-priced model is a twentieth of <span class="math">p<sub>in</sub></span>.</p>
 <div class="box theory"><div class="label">Property: a limit is detected within one call of being crossed</div>
-<p>Let <span class="math">N</span> be the step limit and <span class="math">B</span> the money limit of a task. A task with status <code>done</code> made at most <span class="math">N</span> model calls; unless the owner stops it first, a limit is recorded no later than call <span class="math">N + 1</span>; and when the money limit is recorded, the estimated spend is below <span class="math">B</span> plus the estimate of the call that crossed it.</p>
-<p><em>Argument.</em> The check runs on every finished model message before the next is read, and counts calls by message id, so a call in pieces counts once. Before the crossing call the sum was below <span class="math">B</span>, or the check would have fired. A recorded limit outranks the model's success, so a task of more than <span class="math">N</span> calls cannot end <code>done</code>.</p>
-<p>The property bounds detection, not spending, and a bound on spending fails in three places. What the library does between the request to interrupt and stopping is outside this code. The estimate uses a price table that can be out of date. And the check sums model calls only, so the search service's own charge, which the daily ledger counts, does not count towards <span class="math">B</span>.</p></div>
+<p>Let <span class="math">N</span> be the step mark and <span class="math">B</span> the money mark of a task, and <span class="math">s ≥ 1</span> the stretch, so that the ceilings are <span class="math">sN</span> calls and <span class="math">sB</span> dollars (100 and $2.00 by default). A task with status <code>done</code> made at most <span class="math">⌊sN⌋</span> model calls; unless the owner stops it first, a limit is recorded no later than call <span class="math">⌊sN⌋ + 1</span>; and when the money ceiling is recorded, the estimated spend is below <span class="math">sB</span> plus the estimate of the call that crossed it.</p>
+<p><em>Argument.</em> The check runs on every finished model message before the next is read, and counts calls by message id, so a call in pieces counts once. At call <span class="math">⌊sN⌋ + 1</span> the count exceeds <span class="math">sN</span>, so the check records <code>turn_limit</code>, or <code>stuck</code> if a sign of being stuck holds, since that is tested first; either way a limit is recorded. Before the crossing call the sum was below <span class="math">sB</span>, or the check would already have recorded a limit. A recorded limit outranks the model's success, so a task of more than <span class="math">sN</span> calls cannot end <code>done</code>. Passing a mark records nothing that ends the task, which is why the bounds are stated with the ceilings.</p>
+<p>The property bounds detection, not spending, and a bound on spending fails in three places. What the library does between the request to interrupt and stopping is outside this code. The estimate uses a price table that can be out of date. And the check sums model calls only, so the search service's own charge, which the daily ledger counts, does not count towards <span class="math">sB</span>.</p></div>
 <div class="tbl"><table>
 <thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
 <tbody>
 <tr><td>A tool not on the list does not run</td><td>Property</td><td>Argued from <code>options</code> and the policy; tested in <code>tests/test_slice.py</code></td></tr>
-<tr><td>A task that ends <code>done</code> made at most 25 calls</td><td>Property</td><td>Argued from the check and the order of statuses; both limits tested with a stand-in</td></tr>
+<tr><td>A task that ends <code>done</code> made at most 100 calls, four times the mark of 25</td><td>Property</td><td>Argued from the check and the order of statuses; the limits, the marks and both signs of being stuck tested with a stand-in</td></tr>
 <tr><td><code>tools=[]</code> leaves only the program's tools</td><td>Measurement</td><td>One live run: the library listed one tool</td></tr>
 <tr><td>Input grows with the square of the number of calls</td><td>Derivation</td><td>From the Cost section; not measured here</td></tr>
 <tr><td>A question needing one search cost $0.0145</td><td>Measurement</td><td>One sample</td></tr>
@@ -357,7 +376,7 @@ else:
 <ul>
 <li>A model call turns text into text and keeps nothing between calls; everything it needs is sent each time, and paid for by the token.</li>
 <li>A tool call is the model asking, in structured text, for an action. Code decides, runs it, and returns the result.</li>
-<li>The agent loop repeats calls until the model answers in text. A turn is one pass of the loop; it can also end by stop, a step limit, a money limit or an error, all imposed by code.</li>
+<li>The agent loop repeats calls until the model answers in text. A turn is one pass of the loop; it can also end by stop, a lack of progress, a step limit, a money limit, the day's budget or an error, all imposed by code.</li>
 <li>Context grows with every step and is finite. Compaction summarises it, so lasting facts must be kept outside it and shown again.</li>
 <li>The model proposes, code grants: built-in tools are removed, unlisted tools refused, and consequential ones sent to the gate.</li>
 <li>A minimal first version has a channel that answers only its owner, the restricted loop, one read-only tool, stop, limits and a log, and nothing that can change the world.</li>
@@ -366,7 +385,7 @@ else:
 <div class="box exercises"><div class="label">Problems</div>
 <h3>Review</h3>
 <ol>
-<li>A conversation has ten messages. On the eleventh, the model makes two calls. How many times has the first message been sent to the model in total? What does your answer imply for the cost of a long conversation, and how does the cache-read price change it?</li>
+<li>A conversation has ten messages from the owner, each answered in one model call. On the eleventh, the model makes two calls. How many times has the first message been sent to the model in total? What does your answer imply for the cost of a long conversation, and how does the cache-read price change it?</li>
 <li>List the seven statuses a task can end with. For each, say whether the model or code chooses it, and what the owner is told.</li>
 <li>The search tool is on <code>ALLOWED_TOOLS</code>, yet under the full gate it is not on the list of tools that skip the policy. Explain why, and what would go wrong if it were added to the skip list.</li>
 <li>Write a new read-only tool, <code>current_time</code>, that returns the date and time in the owner's zone. Give its description and schema, the handler, where it is registered in <code>make_tool_server</code>, and which lists it belongs on. Then write the test that proves the policy allows it.</li>
@@ -375,8 +394,8 @@ else:
 </ol>
 <h3>Analysis</h3>
 <ol start="7">
-<li>A conversation starts with <span class="math">c₀ = 6,000</span> tokens of fixed context and adds <span class="math">δ = 1,500</span> tokens per call, and call <span class="math">t</span> sends <span class="math">c₀ + tδ</span> input tokens, as in the Cost section of the model. Use the mid-priced model's prices from this chapter and ignore output tokens. (a) Over <span class="math">m = 40</span> calls with no cache, how many input tokens are sent, and what do they cost? (b) Now suppose call 1 writes to the cache everything it sends, and each later call reads from the cache everything the previous call sent and writes the rest. How many tokens are read from the cache and how many written, and what is the total cost? By what factor did the cache reduce it? (c) In a single task with the same <span class="math">c₀</span> and <span class="math">δ</span> and no cache, on which call does the estimated input cost first reach the per-task limit of $0.50? Is the step limit or the money limit reached first?</li>
-<li>Prove the property "a limit is detected within one call of being crossed" from the code in this chapter. Then give the largest number of model calls a task ending <code>turn_limit</code> can show, assuming the library stops at once when asked to interrupt, and say why the property gives no bound if it does not. Finally, construct with invented figures a task that spends more than <span class="math">B</span> in total although the money limit is never recorded, and name the hypothesis your construction breaks.</li>
+<li>A conversation starts with <span class="math">c₀ = 6,000</span> tokens of fixed context and adds <span class="math">δ = 1,500</span> tokens per call, and call <span class="math">t</span> sends <span class="math">c₀ + tδ</span> input tokens, as in the Cost section of the model. Use the mid-priced model's prices from this chapter and ignore output tokens. (a) Over <span class="math">m = 40</span> calls with no cache, how many input tokens are sent, and what do they cost? (b) Now suppose call 1 writes to the cache everything it sends, and each later call reads from the cache everything the previous call sent and writes the rest. How many tokens are read from the cache and how many written, and what is the total cost? By what factor did the cache reduce it? (c) In a single task with the same <span class="math">c₀</span> and <span class="math">δ</span> and no cache, on which call does the estimated input cost first reach the money mark of $0.50, and on which the ceiling of four times that? Is the step mark or the money mark passed first, and which ceiling is reached first, with the defaults of this chapter?</li>
+<li>Prove the property "a limit is detected within one call of being crossed" from the code in this chapter. Then give the largest number of model calls a task ending <code>turn_limit</code> can show, assuming the library stops at once when asked to interrupt, and say why the property gives no bound if it does not. Finally, construct with invented figures a task that spends more than <span class="math">sB</span> in total although the money ceiling is never recorded, and name the hypothesis your construction breaks.</li>
 <li>Show from the code that no output of the model can produce the status <code>stopped</code>. For each of the other statuses the chapter lists, say whether it is chosen by the model, imposed by code on a condition the model can influence, or imposed by code on a condition the model cannot influence, and give for the second kind a sequence of model actions that brings it about.</li>
 <li>Definition 3 says the last action of a run is text. Is a task that ends <code>budget</code> a run in that sense? State precisely what the property of the simple policy (no executed call is off the list) says about a truncated run, and prove that it holds for every prefix of a run if it holds for runs. Then give a hypothesis about the library under which an allowed call requested in the crossing message runs after the limit is recorded, and say whether that breaks the property of the policy or only the bound on spending.</li>
 </ol>
@@ -393,5 +412,5 @@ else:
 <h3>Open</h3>
 <ol start="15">
 <li>(Hard, open) The system keeps one long conversation and relies on compaction. Design an alternative in which each task starts with a fresh context assembled by code from memory and recent history. What would be gained in cost and predictability, what would be lost, and how would you test that nothing the owner said in the last hour is forgotten?</li>
-<li>The step limit of 25 and the money limit of $0.50 are set by hand. Propose a procedure that sets them from the journal of one owner's tasks, so that the share of tasks ended by a limit that would have finished usefully is below a stated rate, while the cost of the tasks that would not have finished is bounded. Nobody knows the distribution of steps or cost for an owner's real errands, or how it shifts as tools are added. Progress would be a procedure whose stated rate holds, with an interval, on tasks held out from the ones used to set the limits.</li>
+<li>The step mark of 25, the money mark of $0.50 and the stretch of four that sets the ceilings are all set by hand. Propose a procedure that sets them from the journal of one owner's tasks, so that the share of tasks ended by a limit that would have finished usefully is below a stated rate, while the cost of the tasks that would not have finished is bounded. Nobody knows the distribution of steps or cost for an owner's real errands, or how it shifts as tools are added. Progress would be a procedure whose stated rate holds, with an interval, on tasks held out from the ones used to set the limits.</li>
 </ol></div>

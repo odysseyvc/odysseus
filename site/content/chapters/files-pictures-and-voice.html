@@ -32,7 +32,7 @@
 <dt>Token</dt><dd>The unit a model provider counts and charges by. A token is a short piece of text, often part of a word; a picture or a page is counted as some number of tokens too.</dd>
 </dl></div>
 <p>The conversation is kept and carried forward: each new message goes to the model with the earlier ones, so that "send it" can be understood ({{ch:the-conversation}}). So whatever is put into the conversation is paid for again with every later message, until it is condensed or started afresh ({{ch:cost}}).</p>
-<p>Code therefore chooses among routes by the file's type and size. <strong>A picture</strong> sent in the chat (JPEG, PNG, WebP or GIF, up to about 3.5 MB) is shown to the conversation's model directly. <strong>A document</strong> (PDF, Word, PowerPoint, or a picture in another format or too large) goes to a text-recognition service, and the text is placed in the owner's message. <strong>A short PDF</strong> (up to 25 pages and 12 MB) is also looked at once by a separate reader, whose notes are added to the text. A voice note goes through speech-to-text and becomes an ordinary message.</p>
+<p>Code therefore chooses among routes by the file's type and size. <strong>A picture</strong> sent in the chat (JPEG, PNG, WebP or GIF, up to about 3.5 MB) is shown to the conversation's model directly. <strong>A document</strong> (PDF, Word, PowerPoint, or a picture in another format or too large) goes to a text-recognition service, and the text is placed in the owner's message. <strong>A short PDF</strong> (up to 25 pages and 12 MB) is also looked at once by a separate reader, whose notes are added to the text; a longer PDF has up to 25 of its pictured pages looked at in the same way. A voice note goes through speech-to-text and becomes an ordinary message.</p>
 <p>Reading a document lives in one place, <code>Reader.read</code> in <code>odysseus/reading.py</code>, whichever way the file arrived: sent in the chat, fetched from a link, or attached to an email. <code>handle_file</code> in <code>odysseus/conversation.py</code> keeps only the decision about pictures and hands everything else to the reader:</p>
 <pre><code>if picture and data is not None and len(data) &lt;= MAX_PICTURE_BYTES:
     ...
@@ -73,7 +73,7 @@ await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent
 <line x1="410" y1="64" x2="350" y2="98" stroke="var(--ink-2)" marker-end="url(#fa)"/>
 <rect x="20" y="200" width="200" height="70" rx="6" fill="var(--paper-2)" stroke="var(--accent)"/>
 <text x="120" y="222" text-anchor="middle" fill="var(--ink)">Page reader</text>
-<text x="120" y="240" text-anchor="middle" fill="var(--ink-2)" font-size="12">short PDF only; no tools;</text>
+<text x="120" y="240" text-anchor="middle" fill="var(--ink-2)" font-size="12">PDFs only; no tools;</text>
 <text x="120" y="256" text-anchor="middle" fill="var(--ink-2)" font-size="12">its run is thrown away</text>
 <line x1="270" y1="156" x2="190" y2="198" stroke="var(--ink-2)" marker-end="url(#fa)"/>
 <text x="150" y="182" fill="var(--ink-2)" font-size="12">file + text</text>
@@ -103,7 +103,8 @@ await self.handle(user_id, f"{block}\n\n{said}", chat, material="a file you sent
     document = {"type": "image_url", "image_url": url} if mime in IMAGE_TYPES else {"type": "document_url", "document_url": url}
     response = self._client.ocr.process(model=self._model, document=document, include_image_base64=False)
     pages = list(response.pages or [])
-    return OcrResult(join_pages([p.markdown or "" for p in pages]), len(pages))
+    return OcrResult(join_pages([p.markdown or "" for p in pages]), len(pages),
+                     pictured_pages([(p.markdown or "", bool(getattr(p, "images", None))) for p in pages]))
 
 
 def join_pages(pages: list[str]) -> str:
@@ -132,7 +133,7 @@ def join_pages(pages: list[str]) -> str:
 <caption>Three ways to handle what is drawn on a page, and what each costs.</caption>
 <thead><tr><th>Approach</th><th>What the conversation's model gets</th><th>Cost</th><th>Used for</th></tr></thead>
 <tbody>
-<tr><th>Text only</th><td>The words. Charts, logos and pictures are lost.</td><td>Text recognition once; the text is carried forward in the conversation.</td><td>Long PDFs, Word and PowerPoint files, large pictures</td></tr>
+<tr><th>Text only</th><td>The words. Charts, logos and pictures are lost.</td><td>Text recognition once; the text is carried forward in the conversation.</td><td>Word and PowerPoint files, large pictures, and the pages of a long PDF that are not looked at</td></tr>
 <tr><th>Put the file itself in the conversation</th><td>The pages, which it can look at again for any later question.</td><td>Roughly two to three thousand tokens a page, paid again with every later message.</td><td>Pictures (one page, small). Tried for PDFs and withdrawn.</td></tr>
 <tr><th>A separate reader, once</th><td>The words, plus written notes on what each page shows beyond them.</td><td>One extra model run per file, paid once; the notes, as text, are carried forward.</td><td>PDFs of up to 25 pages and 12 MB whole; a longer PDF in part</td></tr>
 </tbody></table></div>
@@ -153,24 +154,33 @@ def join_pages(pages: list[str]) -> str:
 
 <h3>The reader</h3>
 <p>Whether the reader is called is decided in <code>Reader.read</code>, after text recognition has returned, from <code>odysseus/reading.py</code>:</p>
-<pre><code>sights = None
-if self._pages is not None and shown_whole(kind, len(data), result.pages) and self._ledger.spent_today() &lt; self._daily_usd:
+<pre><code>sights, chosen = None, ()
+if self._pages is not None and self._ledger.spent_today() &lt; self._daily_usd:
     try:
-        sights, _ = await self._pages(data, result.text[:MAX_CHARS])
+        if shown_whole(kind, len(data), result.pages):
+            sights, _ = await self._pages(data, result.text[:MAX_CHARS])
+        else:
+            chosen = shown_in_part(kind, len(data), result)
+            part = await asyncio.to_thread(pick_pages, data, chosen) if chosen else b""
+            if part and len(part) &lt;= MAX_SEEN_BYTES:
+                notes, _ = await self._pages(part, pages_text(result.text, chosen), numbers=chosen)
+                sights = part_note(chosen, result) + "\n" + (notes or "(Nothing beyond the text on the pages looked at.)")
     except Exception as e:
         self._journal.write("error", where="reading.pages", error=type(e).__name__)
 ...
 return file_block(name, result, sights)</code></pre>
-<p>Only a short PDF, and only while the day's budget lasts; a reader that fails leaves the file as text. The reader itself is built in <code>odysseus/pages.py</code>:</p>
+<p>Only a PDF, whole if it is short and by its pictured pages if it is long, and only while the day's budget lasts; a reader that fails leaves the file as text. The reader itself is built in <code>odysseus/pages.py</code>:</p>
 <pre><code>def make_page_reader(settings: Settings, journal: Journal, server: Any, client_factory: Callable[..., Any] = ClaudeSDKClient,
-                     model: str | None = None):
+                     model: str | None = None, count: Callable[..., Any] | None = None, room: Callable[[], float] | None = None):
     """Returns read(data, text) -> (notes, cost): what the pages of a PDF show besides their text; "" if nothing or on failure."""
-    runner = AgentRunner(settings, journal, server, client_factory, model=model or settings.model, system_prompt=PROMPT, allowed_tools=frozenset())
+    reading_model = model or settings.model
+    runner = AgentRunner(settings, journal, server, client_factory, model=reading_model, system_prompt=PROMPT, allowed_tools=frozenset())
 
-    async def read(data: bytes, text: str) -> tuple[str, float]:
+    async def read(data: bytes, text: str, numbers: tuple[int, ...] = ()) -> tuple[str, float]:
         await runner.forget_session()
+        ...     # for part of a long file, `part` tells the reader which of the file's pages it is shown
         try:
-            outcome = await asyncio.wait_for(runner.run(f"THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT", noop,
+            outcome = await asyncio.wait_for(runner.run(f"{part}THE TEXT ALREADY READ FROM THE FILE\n{text}\nEND OF TEXT", noop,
                                                         images=[("application/pdf", data)]), PAGES_TIMEOUT_S)
         ...
         finally:
@@ -215,6 +225,7 @@ return file_block(name, result, sights)</code></pre>
             words.append(w)
     return words[:MAX_VOCABULARY]</code></pre>
 <p>It is crude on purpose: capitalised words from what the program remembers about the owner ({{ch:memory}}), at most 80. It picks up places as well as people (the test shows "Pune" and "Mehta" both taken), which does no harm. How much this helps is <span class="g u">Not tested</span>; it would need the owner's own recordings with their own names. Recordings over ten minutes or 20 MB are refused in a sentence, with no model called. Every kind of message the program cannot use (a sticker, a video, a location) gets a plain line saying so, because silence looks like a fault ({{ch:channels}}).</p>
+<p><strong>Replying in speech.</strong> When the owner spoke, the reply is spoken too (<code>_speak</code> in <code>odysseus/conversation.py</code>). The written reply is sent first and in full; then the opening of the model's own words, at most 900 characters cut at a sentence and with links left out, goes to the same company's text-to-speech service and comes back as a voice note. The lines code adds beneath a reply are never spoken. It is skipped once the day's budget is spent, and <code>ODYSSEUS_SPEAK=off</code> turns it off, since speaking sends the reply's words to that service.</p>
 
 <h2 id="links">Fetching a file from a link the owner typed</h2>
 <p>Many documents never arrive as files. They arrive as a link: to a PDF on a company's site, or to a deck in Google Drive, Slides or Docs, or in Dropbox. Where such a link has an address that returns the file, code fetches it and hands it to <code>handle_file</code> as if it had been sent, and so to the same reader. No model decides whether to fetch, or what. From <code>odysseus/links.py</code>:</p>
@@ -253,7 +264,7 @@ return file_block(name, result, sights)</code></pre>
 
 <h2 id="recorded">What is recorded, and who sees the file</h2>
 <p>The journal records a file's name, type, size, pages, characters returned and the length of the reader's notes; for a voice note, its seconds, size and characters heard. Never a file's contents or a recording's words: the tests check that the bill's journal line does not contain "Amount" and the voice note's does not contain the name spoken. The file is held in memory and sent to the service. A recording is then let go. A file is kept, as the next section describes.</p>
-<p>The text lives on in the conversation until it is condensed or started afresh, and in memory if the model saves something from it ({{ch:memory}}). And the file is seen outside the program: the text-recognition service receives every document in full and the speech service every recording; the model's provider receives the text of every file and every transcription, and the pages of short PDFs and pictures themselves. Each is one more party holding something of the owner's.</p>
+<p>The text lives on in the conversation until it is condensed or started afresh, and in memory if the model saves something from it ({{ch:memory}}). And the file is seen outside the program: the text-recognition service receives every document in full and the speech service every recording, and the opening of each reply to one; the model's provider receives the text of every file and every transcription, and the pages of short PDFs, the chosen pages of long ones, and pictures themselves. Each is one more party holding something of the owner's.</p>
 
 <h2 id="kept">Handing a file back</h2>
 <p>The first version read a file and let it go. The text went into the conversation and the file was gone, so "send me that deck again" had no answer. A partner asks for exactly that: the deck from last month, to forward or to open before a call.</p>
@@ -468,7 +479,7 @@ return file_block(name, result, sights)</code></pre>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
 <p><span class="g v">Verified</span>, each once, on invented material unless stated: the bill read by the real service as a picture and a PDF, and its planted line reported and ignored; a picture with no writing seen; the deck's chart and planted line reported by the reader with two models; one real deck through the reader at 20 cents against 34; a synthesised voice note heard, shown back and acted on; a public PDF fetched from a real site and three dead links refused. Of the attachment path, only the fetch of one attachment's bytes through the guarded fetcher has been checked live.</p>
-<p><span class="g u">Not tested</span>: the planted bill sent as a picture; an email attachment read end to end by the model; real photographs, handwriting, other scripts and languages; long documents and the cut; the reader's cost over several decks in one conversation; a dense table or a slide of thirty logos; a real voice on a real phone; whether supplied names help; a real Google Drive, Slides or Dropbox link. Replying in speech is not built.</p></div>
+<p><span class="g u">Not tested</span>: the planted bill sent as a picture; an email attachment read end to end by the model; real photographs, handwriting, other scripts and languages; long documents and the cut; the reader's cost over several decks in one conversation; a dense table or a slide of thirty logos; a real voice on a real phone; whether supplied names help; a real Google Drive, Slides or Dropbox link. No run of the spoken reply is reported in this chapter.</p></div>
 
 <h2 id="literature">Where this sits in the literature</h2>
 <p>The choice at the centre of this chapter, whether to recognise a page's text or to show the page to a model, is an open question in document understanding. One line of work extracts the words with OCR and models them together with their place on the page: {{cite:huang2022layoutlmv3}} pre-train jointly on text, layout and image patches, taking OCR-derived words as input. Another reads the image directly: {{cite:kim2022donut}} produce structured text from a document image with no separate OCR stage, and {{cite:blecher2023nougat}} convert page images, mathematics and tables included, into markup. The service used here returns Markdown for each page, the kind of output Nougat produces, and the program adds a general model that looks at the pages once. Its own code does neither kind of reading. The papers evaluate on benchmark sets of documents. The program has one invented bill, one invented deck and one real deck, and this is the clearest place where the published work is stronger: it can say how often a reading is wrong, and this chapter cannot. Which approach reads a personal assistant's documents best (bills, decks, photographs of letters) is not settled by these readings, which compare models on their own tasks and not on errands.</p>
@@ -478,7 +489,7 @@ return file_block(name, result, sights)</code></pre>
 
 <div class="box summary"><div class="label">Summary</div>
 <ul>
-<li>Code chooses the route by type and size: pictures are shown, documents are read as text, short PDFs are also looked at by a separate reader.</li>
+<li>Code chooses the route by type and size: pictures are shown, documents are read as text, PDFs are also looked at by a separate reader, whole if short and by their pictured pages if long.</li>
 <li>Recognised text is numbered by page and fenced, with the owner's words after the fence.</li>
 <li>Text recognition drops what is drawn. A file in a kept conversation is paid for with every later message; a separate reader is paid for once.</li>
 <li>The page reader has no tools, by two locks (an empty list and an empty server), so a hostile page can at most make it describe the page wrongly.</li>
@@ -503,7 +514,7 @@ return file_block(name, result, sights)</code></pre>
 <ol start="6">
 <li>Prove the property "a reader with no tools can only describe" from Definitions 1 to 3 and the two locks in <code>odysseus/pages.py</code> and <code>odysseus/__main__.py</code>. Then change the program in three ways and say, for each, whether the property still holds and which sentence of your proof carries it or fails: (a) the reader keeps its empty list of allowed tools but is handed the program's usual server, with search and memory; (b) the server is empty but the allowed list names a memory tool; (c) a version of the agent library runs a built-in tool of its own without consulting either list. Finally, describe a file, in a simulated world, for which the property holds and the owner is still misled, and name the part of the program that then has to protect them.</li>
 <li>Assume, for the arithmetic only, that one page shown to a model costs 2,500 tokens. A twelve-page deck arrives, and the conversation then makes <span class="math">k</span> model calls that would carry it, counting the call on which it arrives. The page reader costs $0.08 for the file and leaves 2,000 tokens of notes, which those <span class="math">k</span> calls carry instead. Input costs $2.00 a million tokens, a cache write $2.50 and a cache read $0.10. (a) With no cache, find the least <span class="math">k</span> for which the reader is cheaper than keeping the pages in the conversation. (b) With a warm cache, where the first of the <span class="math">k</span> calls writes the pages (or the notes) and every later call reads them, find the least <span class="math">k</span>. (c) With a cache that has expired before every call, so that each call writes the pages (or the notes) again, find the least <span class="math">k</span>. (d) Explain from the break-even condition in the theory section why the warm cache moves the answer as it does, and say which assumed figure you would measure first.</li>
-<li>A speech service gets 3% of ordinary words wrong and 20% of names wrong, each word independently. A voice note has 15 ordinary words and 2 names; the errand depends on the 2 names and on 3 of the ordinary words (a day, a time and a verb). (a) What is the expected share of words heard correctly? (b) What is the probability that all five words the errand depends on are heard correctly? (c) Suppose the owner, reading the "Heard" line, catches a wrong word with probability 0.6, and, for a send, the approval question catches it with probability 0.6 independently. Find the probability that a wrong word reaches an executed send, and the probability that it reaches a reminder, which is set without a question. (d) Name the independence assumption in (c) you believe least, and say which way its failure moves your answers.</li>
+<li>A speech service gets 3% of ordinary words wrong and 20% of names wrong, each word independently. A voice note has 15 ordinary words and 2 names; the errand depends on the 2 names and on 3 of the ordinary words (a day, a time and a verb). (a) What is the expected share of words heard correctly? (b) What is the probability that all five words the errand depends on are heard correctly? (c) Suppose the owner, reading the "Heard" line, notices that the errand's words are wrong (however many are wrong) with probability 0.6, and, for a send, the approval question lets them notice with probability 0.6 independently. Find the probability that a wrong word reaches an executed send, and the probability that it reaches a reminder, which is set without a question. (d) Name the independence assumption in (c) you believe least, and say which way its failure moves your answers.</li>
 <li>The program fetches a link only if it appears in the owner's own message, typed or spoken. State this rule in terms of Definition 5, and say which effect class of Definition 2 a fetch belongs to. Then construct a case, in a simulated world, in which the link has provenance <span class="math">O</span> and was nonetheless chosen by an outsider. Say whether Definition 7 is violated, and what is left to protect the owner.</li>
 </ol>
 <h3>Design</h3>

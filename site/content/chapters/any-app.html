@@ -61,7 +61,7 @@ for slug in wanted:
 <ul>
 <li>An extra step. Every job in a new app begins with a search: a round trip and a model turn.</li>
 <li>The finder belongs to the connector. If the connector's search returns the wrong actions, the model works with them. How good it is across thousands of apps is not known.</li>
-<li>Plainer questions. No code in this program knows what an arbitrary action's fields mean, so the owner sees the action's name and raw inputs.</li>
+<li>Plainer questions. No code in this program knows what an arbitrary action's fields mean, so the owner sees the action's name read as words, never the vendor's own sentence about it, and every input laid out by its shape (rows as rows, fields by name, identifiers last), not explained.</li>
 <li>Memory of tools. A model may call an action remembered from earlier without looking it up. The program then sorts it by its name alone, without the vendor's labels, which are learned only in <code>app_find</code>.</li>
 </ul>
 
@@ -141,8 +141,8 @@ def classify(slug: str, labels: frozenset[str] | set[str] = frozenset()) -> str:
 <ul>
 <li>A name that reads, labelled as creating, updating or destroying, is not a read.</li>
 <li>A label never excuses a hard word. <code>ATTIO_DELETE_NOTE</code> labelled read-only is still a reach.</li>
-<li>A label alone never makes a read. <code>ATTIO_POST_V2_NOTES</code> labelled read-only is still a change, because nothing in its name reads.</li>
-<li>One exception: a name that reads except for the word <code>POST</code>, labelled read-only, is a read. Some services are named after the web request behind them, and many search by POST.</li>
+<li>A label alone never makes a read. <code>ATTIO_POST_V2_NOTES</code> labelled read-only is still a reach, because nothing in its name reads and so the label is not listened to.</li>
+<li>One exception: a name that reads except for the word <code>POST</code>, and has no changing word, labelled read-only, is a read. Some services are named after the web request behind them, and many search by POST.</li>
 </ul>
 <p>Labels are learned when <code>app_find</code> shows an action, one request per action, run together. If they cannot be fetched, the name decides alone.</p>
 
@@ -175,7 +175,7 @@ def classify(slug: str, labels: frozenset[str] | set[str] = frozenset()) -> str:
 <text x="400" y="246" text-anchor="middle" font-size="12" fill="var(--warn)">no: ask</text>
 <text x="565" y="200" text-anchor="middle" font-size="12" fill="var(--bad)">always ask,</text>
 <text x="565" y="216" text-anchor="middle" font-size="12" fill="var(--bad)">every time</text>
-<text x="340" y="280" text-anchor="middle" font-size="12" fill="var(--ink-2)">Every question shows the action's name and its inputs whole.</text>
+<text x="340" y="280" text-anchor="middle" font-size="12" fill="var(--ink-2)">Every question shows what the action does and its inputs whole.</text>
 </g>
 </svg>
 <figcaption>How the gate answers for an action it has no rule for. The only paths to running without a question are a positively recognised read, and a positively recognised edit in the owner's own files. Anything unrecognised lands in the middle and is asked about.</figcaption>
@@ -196,7 +196,7 @@ self._links.append((name, link))
 self._journal.write("tool", name="app_connect", ok=True, app=slug, already=False)
 return (f"{name} is not connected yet. A link to connect it is being sent to the owner with your reply. Tell them to open "
         "it, approve, and then tell you. Do not invent or repeat a link yourself. When they say it is done, carry on.")</code></pre>
-<p>The link is put in <code>self._links</code>, not in the text returned to the model. When the reply is sent, code appends it: "To connect Google Sheets, open this link and approve, then tell me it's done:" followed by the link exactly as the connector issued it. A test asserts that the text the model receives contains no "https://".</p>
+<p>The link is put in <code>self._links</code>, not in the text returned to the model. When the reply is sent, code appends it: "To connect Google Sheets, open this link and approve, then tell me it's done:" followed by the link as the connector issued it or, where the program has a public address, a short link under that address that leads to it. A test asserts that the text the model receives contains no "https://".</p>
 <p>A link is the one thing in a reply that must not be altered or invented, so the model is kept away from it. A model can mistype a long address, and a misled model can substitute an attacker's sign-in page; an owner used to approving links from the assistant is exactly the owner a phishing page wants. If the link never passes through the model, the model cannot change it. The owner opens it, approves on the provider's own page, and says so in the chat.</p>
 <p>The instructions also say: "When the owner asks for something in an app, do not say you cannot. Call app_find with the job in plain words". It is an expectation, not a measurement, that without such a sentence a cautious model declines requests in apps it has no tool for.</p>
 
@@ -219,7 +219,7 @@ def decide(self, args: dict[str, Any]) -> str:
         return ASK if self._leak(args) else ALLOW
     return ALLOW if self.small(slug) else ASK</code></pre>
 <p>Four conditions, all positive: the app is one of five Google file apps; the action sorts as a change (so no hard word); its name carries a word from the changing list (so it is not merely unrecognised); and the vendor has not labelled it destructive. These apps were chosen because Google's files keep a history of versions, so an edit can be put back, and an edit in the owner's own file reaches nobody else. The same edit in a chat app or an issue tracker might notify a team, so it still asks.</p>
-<p>An unasked change needs a better report than an approved one, because nobody saw it. It is reported by code in the same reply, with the words "without asking" and the first 140 characters of its inputs: for example "ran GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND in Googlesheets without asking ({"spreadsheetId": "s1", ...})".</p>
+<p>An unasked change needs a better report than an approved one, because nobody saw it. It is reported by code in the same reply, with the words "without asking" and the first 140 characters of its inputs as laid out for a question: for example, under "Done on your accounts", "spreadsheets values append in Google Sheets without asking (Spreadsheet id: s1; Values (1 row):; 1. a)".</p>
 <p>This choice has a cost. Before it, a planted instruction that the model obeyed could do nothing in a spreadsheet without the owner's tap. Now it could add a row or edit a cell in the owner's own file, and the owner would learn of it from the reply. It still could not share, delete, clear or replace.</p>
 
 <h2 id="results">What comes back from an app</h2>
@@ -232,9 +232,9 @@ def decide(self, args: dict[str, Any]) -> str:
 <li>The model calls <code>app_connect</code> with "Google Sheets". The lookup matches exactly. A link is made and held by code. The model is told a link is on its way and not to write one.</li>
 <li>The reply reaches the owner as the model's sentence, then "To connect Google Sheets, open this link and approve, then tell me it's done:" and the link. The owner approves at Google and says "done".</li>
 <li>The model calls <code>app_run</code> with the append action and <code>{"spreadsheetId": "s1", "values": [["a"]]}</code>. <code>classify</code> finds APPEND, a changing word, and no hard word: change.</li>
-<li>With the owner's choice to be asked less, <code>small</code> is true (a Google file app, a changing word, no destructive label), so the gate allows it. Without that choice, the owner is shown "Do this in Google Sheets? Action: GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND With:" and the inputs, whole.</li>
+<li>With the owner's choice to be asked less, <code>small</code> is true (a Google file app, a changing word, no destructive label), so the gate allows it. Without that choice, the owner is shown "Do this in Google Sheets?", then the action in words (the vendor's first sentence, or "Spreadsheets values append" when it gave none) and the inputs whole: "Spreadsheet id: s1", "Values (1 row):", "1. a".</li>
 <li>The connector runs it. The stand-in's result includes a note reading "Your verification code is 482913"; that line is hidden. The model sees the labelled result.</li>
-<li>Code adds the change to the reply's "Done" lines, marked "without asking" when no question was put.</li>
+<li>Code adds the change to the reply's "Done" lines, marked "without asking" when the small-edit rule covers it.</li>
 </ol>
 <p>Had the model asked to share the sheet with <code>stranger@example.net</code>, the action's name contains SHARING, a hard word. It is a reach, it is asked about whatever the owner's setting, and the address appears in the question. Approving it once does not cover the same share a second time.</p>
 
@@ -312,10 +312,10 @@ def decide(self, args: dict[str, Any]) -> str:
 </ol>
 <h3>Analysis</h3>
 <ol start="7">
-<li>Prove from the code of <code>classify</code>, <code>small</code> and <code>decide</code> the property stated in the theory section, that an unrecognised name never runs unasked. Then decide, with a proof or a counterexample, whether this is true: "adding the label <code>readOnlyHint</code> to an action can change the gate's answer from ask to allow only by making the action a read". Answer separately with "ask less" on and off.</li>
+<li>Prove from the code of <code>classify</code>, <code>small</code> and <code>decide</code> the property stated in the theory section, that an unrecognised name never runs unasked. Then decide, with a proof or a counterexample, whether this is true: "adding the label <code>readOnlyHint</code> to an action can change the gate's answer from ask to allow only by making the action a read". Answer separately with "ask less" on and off, and then give the counterexample that the earlier version described in the theory section admitted, and show from the code as it stands why it no longer works.</li>
 <li>Treat <code>classify</code> as a classifier of effects. (a) Using only words on the lists shown in this chapter, construct a name that <code>classify</code> sorts as read, without labels, for an action whose effect by Definition 2 would plausibly include send or add, and say which word misleads it. (b) State the hypothesis about vendors' names and labels under which the gate is sound for send over <code>app_run</code>. (c) Of the eighteen real actions whose names and labels were compared, none had a name that reads and a label that changes. Taking the label as the truth for the moment, find the largest rate <span class="math">q</span> of such cases for which seeing none in eighteen independent actions still has probability at least 0.05. Then say why taking the label as the truth is the weakest step in (c).</li>
 <li>A conversation needs <span class="math">m = 4</span> model calls if every tool is shown. Its fixed context without tools is <span class="math">c₀ = 10,000</span> tokens and it grows by <span class="math">δ = 500</span> tokens a call, so that call <span class="math">t</span> carries the fixed part and <span class="math">t·δ</span> of history, as in the cost formula. Each tool definition is 800 tokens (the database's 58 came to about 46,000). With the two-tool pattern the two general definitions take 1,000 tokens, one extra find call comes first, and its result of <span class="math">r = 3,000</span> tokens is carried by each of the four later calls. (a) With no cache, find the smallest catalogue size <span class="math">N</span> for which the pattern sends fewer input tokens. (b) Now suppose the fixed part of every call after the first is read from cache at a tenth of the fresh price, history and find result at the full price, and ignore the price of writing the cache. Repeat (a), counting in units of one fresh token. (c) Which term of the cost formula did the cache change, and what would you measure to replace the assumption in (b)?</li>
-<li>The theory section notes that what <code>app_find</code> returns is not added to <span class="math">T</span>. Under "ask less", describe in outline a simulated task in which the only outside text the model reads is a vendor's description, and say which defences of {{ch:the-gate}} that apply after reading would and would not apply to a small edit in the owner's sheet. Then argue from Definitions 4 and 5 whether descriptions should enter <span class="math">T</span>, and say in words what doing so would cost in questions, given that every job in a new app begins with a find.</li>
+<li>The theory section records that what <code>app_find</code> returned was once not added to <span class="math">T</span>. Under "ask less", describe in outline a simulated task in which the only outside text the model reads is a vendor's description, and say which defences of {{ch:the-gate}} that apply after reading did not apply, under that earlier version, to a save to memory or a small edit in the owner's sheet. Then argue from Definitions 4 and 5 why descriptions belong in <span class="math">T</span>, find the line in <code>app_find</code> that now records them, and say in words what this costs in questions, given that every job in a new app begins with a find.</li>
 </ol>
 <h3>Design</h3>
 <ol start="11">

@@ -124,7 +124,6 @@ class AnyApp:
         self._names: dict[str, str] = {}        # toolkit slug -> display name, as learned
         self._changes: list[str] = []
         self._links: list[tuple[str, str]] = []
-        self._said: dict[str, str] = {}         # tool slug -> the catalogue's own sentence on what it does, learned in app_find
         self.taint = None                       # set by make_gate; remembers what was read from the apps
         self._labels: dict[str, frozenset[str]] = {}    # tool slug -> the connector's labels, learned in app_find
         self.own_apps: frozenset[str] = frozenset()     # set by make_gate: apps where a small change runs unasked. Empty: every change asks
@@ -194,7 +193,10 @@ class AnyApp:
         if not isinstance(inputs, dict):
             raise AppError("`arguments` must be an object.")
         app = self.name(toolkit_of(slug))
-        what = plain.action(slug, self._said.get(slug, ""))
+        # The action is named by its own name read as words, the same name the rules above sorted it by. Not by the
+        # catalogue's sentence about it: that sentence is written by whoever published the action, and a question whose
+        # first line they wrote could call a deletion a tidy-up. The owner must be asked in the program's words only.
+        what = plain.action(slug)
         if self.kind(slug) == "read":
             return (f"Send these details to {app}? They came from your mail, calendar or apps.\n\nDetails recognised: "
                     f"{', '.join(self._leak(args))}\n\n{what}\n{plain.inputs(inputs)}")
@@ -246,7 +248,6 @@ class AnyApp:
             lines = []
             for slug in wanted:
                 info = schemas.get(slug) or {}
-                self._said[slug] = " ".join(str(info.get("description", "")).split())
                 kit = toolkit_of(slug)
                 state = statuses.get(kit, {})
                 connected = state.get("has_active_connection", state.get("is_connected"))
@@ -306,7 +307,7 @@ class AnyApp:
             if kind != "read":
                 brief = plain.inputs(inputs).replace("\n", "; ")
                 unasked = f" without asking ({brief[:140]}{'…' if len(brief) > 140 else ''})" if self.small(slug) else ""
-                self._changes.append(f"{plain.action(slug, self._said.get(slug, '')).lower()} in {self.name(toolkit_of(slug))}{unasked}")
+                self._changes.append(f"{plain.action(slug).lower()} in {self.name(toolkit_of(slug))}{unasked}")
             # One field per line, so that hiding a line that looks like a sign-in code hides that field and not the whole result.
             text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False, default=str, indent=1)
             cut = "" if len(text) <= 8000 else f"\n[Cut: {len(text)} characters in all. Ask for less, or a narrower range.]"

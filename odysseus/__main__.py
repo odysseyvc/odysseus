@@ -95,20 +95,27 @@ def synced_folder(path) -> str | None:
     return next((name for name in SYNCED if name in full), None)
 
 
+# Work that ends with a "task_end" line of its own and is not the conversation's task: a scheduled routine, a meeting brief,
+# a lookup of contacts. Each marks its line with one of these. A line so marked must not be taken for the end of the task
+# the owner started. The lookup was once missing from this list, so a task cut off after one was never reported.
+SIDE_WORK = ("routine", "brief", "leads")
+
+
 def unfinished(journal: Journal) -> dict | None:
     """What was lost when the program last stopped, if anything: a task that had started and not ended, and any
     messages that were waiting behind it."""
-    open_task, waiting, behind = None, {}, None
+    open_task, waiting, behind = None, {}, []
     for r in journal.read():
         if r["kind"] == "start":
-            open_task, waiting, behind = None, {}, None       # an earlier restart: whatever was lost then has been reported already
+            open_task, waiting, behind = None, {}, []       # an earlier restart: whatever was lost then has been reported already
         elif r["kind"] == "task_start" and r.get("background"):
-            behind = r.get("preview", "")           # a job in the background has its own beginning and end
+            behind.append(r.get("preview", ""))     # a job in the background has its own beginning and end; there can be several
         elif r["kind"] == "task_end" and r.get("background"):
-            behind = None
+            if behind:
+                behind.pop(0)                       # the lines carry no name for the job, so the one begun first is taken to have ended
         elif r["kind"] == "task_start":
             open_task = {"preview": r.get("preview", ""), "asked": False}
-        elif r["kind"] == "task_end" and "routine" not in r and "brief" not in r:
+        elif r["kind"] == "task_end" and not any(k in r for k in SIDE_WORK):
             open_task = None
         elif r["kind"] == "queued" and "q" in r:
             waiting[r["q"]] = r.get("preview", "")
@@ -120,9 +127,9 @@ def unfinished(journal: Journal) -> dict | None:
             open_task["asked"] = True
         elif r["kind"] == "gate" and r.get("verdict") in ("approved", "declined", "expired", "cancelled", "unasked") and open_task is not None:
             open_task["asked"] = False
-    if open_task is None and not waiting and behind is None:
+    if open_task is None and not waiting and not behind:
         return None
-    return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values()), **({"background": behind} if behind is not None else {})}
+    return {**(open_task or {"preview": None, "asked": False}), "waiting": list(waiting.values()), **({"background": behind[-1]} if behind else {})}
 
 
 LOST_CONVERSATION = ("I was restarted and could not pick up our earlier conversation, so this is a new one. "

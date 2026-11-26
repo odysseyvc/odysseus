@@ -90,7 +90,7 @@
 <p>The model is the expensive, slow and persuadable part of an agent. Wherever code can decide (is it time? is anyone watching for this? is this meeting with an outsider?), code decides, and the model is called only for judgement or writing.</p>
 
 <h2 id="reminders">Reminders and routines: the list and the tick</h2>
-<p>Reminders and routines share one small SQLite table, one row per job: an id, the kind, the text (the reminder's words or the routine's instructions), the next run time, and how it repeats (once, hourly, daily, weekdays or weekly). The model creates rows with a tool called <code>schedule</code>.</p>
+<p>Reminders and routines share one small SQLite table, one row per job: an id, the kind, the text (the reminder's words or the routine's instructions), the next run time, and how it repeats (once, half-hourly, hourly, daily, weekdays or weekly). The model creates rows with a tool called <code>schedule</code>.</p>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms">
 <dt>Tick</dt><dd>One wake-up of the scheduling loop. Every twenty seconds the loop asks for the rows whose time has come, runs each, and sleeps again.</dd>
@@ -105,7 +105,7 @@ def next_occurrence(after: datetime, repeat: str, now: datetime) -&gt; datetime 
     """The first time later than `now` on this job's rhythm, or None for a one-off."""
     if repeat == "once":
         return None
-    step = {"hourly": timedelta(hours=1), "daily": timedelta(days=1), "weekdays": timedelta(days=1),
+    step = {"half-hourly": timedelta(minutes=30), "hourly": timedelta(hours=1), "daily": timedelta(days=1), "weekdays": timedelta(days=1),
             "weekly": timedelta(days=7)}[repeat]
     t = after + step
     while t &lt;= now or (repeat == "weekdays" and t.weekday() &gt;= 5):
@@ -120,7 +120,7 @@ def next_occurrence(after: datetime, repeat: str, now: datetime) -&gt; datetime 
 <caption>The conversation's agent and the routine's agent.</caption>
 <thead><tr><th></th><th>In conversation</th><th>Running a routine</th></tr></thead>
 <tbody>
-<tr><th>Tools</th><td>Search; save, change and search memory; set and cancel jobs and watches; act on accounts through the gate</td><td>Search; search memory; read mail and calendar; reading tools of connected services. Nothing that writes.</td></tr>
+<tr><th>Tools</th><td>Search; save, change and search memory; set and cancel jobs and watches; act on accounts through the gate</td><td>Search; search memory; read mail and calendar; reading tools of connected services; where a routine is given them, code's own reading tools, such as the pipeline review. Nothing that writes.</td></tr>
 <tr><th>Model</th><td>The mid-priced one</td><td>The small one</td></tr>
 <tr><th>Starts with</th><td>The whole conversation</td><td>Its instructions, the owner's profile, the time, and the last three messages this routine sent</td></tr>
 <tr><th>Time limit</th><td>Until stopped or out of budget</td><td>300 seconds, then recorded as failed</td></tr>
@@ -131,10 +131,10 @@ def next_occurrence(after: datetime, repeat: str, now: datetime) -&gt; datetime 
 <pre><code># odysseus/tools.py
 ROUTINE_TOOLS = frozenset({SEARCH_TOOL, _name("recall")})
 
-def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -&gt; frozenset[str]:
+def routine_tools(with_apps: bool, services: Any = (), attio: Any = None, extra: Any = ()) -&gt; frozenset[str]:
     """What an unattended routine may use: reading only, including the owner's mail and calendar once connected, and the
     reading tools of any other connected service."""
-    extra = {f"mcp__odysseus__{s.slug}_{t}" for s in services for t in ("find", "run")}
+    extra = {f"mcp__odysseus__{s.slug}_{t}" for s in services for t in ("find", "run")} | {_name(n) for n in extra}
     if attio is not None:
         extra |= {attio_mod.ATTIO_FIND, attio_mod.ATTIO_RUN}
     return ROUTINE_TOOLS | (frozenset(apps_mod.READ_TOOLS) if with_apps else frozenset()) | frozenset(extra)</code></pre>
@@ -157,11 +157,18 @@ def routine_tools(with_apps: bool, services: Any = (), attio: Any = None) -&gt; 
 <pre><code># odysseus/tools.py (make_tool_server, the unattended branch)
 async def search_handler(args: dict[str, Any]) -&gt; dict[str, Any]:
     taint = next((r.taint for r in readers if getattr(r, "taint", None) is not None), None)
-    if taint is not None and taint.leaked(f"{args.get('query', '')} {args.get('objective', '')}"):
+    if taint is not None and taint.leaked(_sent(args)):
         journal.write("tool", name="web_search", ok=False, error="carries details from the accounts")
         return _err("Not searched: the query contains details from the owner's mail, calendar or other accounts, and nobody is here "
                     "to approve sending them.")
+    if taint is not None and taint.spill(_sent(args)):
+        journal.write("tool", name="web_search", ok=False, error="over the allowance for unasked searches")
+        return _err("Not searched: this search, or the searches of the last hour, carry more than may be sent without the owner "
+                    "seeing it, and nobody is here to approve it. Search with fewer words, or leave it for the owner.")
+    if taint is not None:
+        taint.spent(_sent(args))
     return await plain(args)</code></pre>
+<p>The second check counts instead of recognising: once anything has been read from the accounts, a search may carry only so many words the owner did not type, per search and per hour, and no long number or long string they did not type. It is described in {{ch:untrusted-content}}.</p>
 <p>For other services, all four rules are one wrapper around each service's <code>run</code> tool:</p>
 <pre><code># odysseus/mcpapp.py (unattended)
 # Not app.decide: that answers "would this run unasked in a conversation?", and a small addition would.
@@ -174,7 +181,7 @@ if seen is None:
     seen = app.unattended_seen = []
 if not own_store and taint is not None and taint.leaked(_foreign(args.get("arguments") or {}, seen)):
     return no(f"Not sent to {title}: the request contains details from the owner's mail, calendar or database, and nobody is here to "
-              "approve sending them.")
+              "approve sending them. Do not send it again in this run: say in your result that this could not be looked up.")
 left = getattr(app, "unattended_left", None)
 if left is not None:
     if left &lt;= 0:
@@ -202,7 +209,8 @@ status, text, cost = await (self._run_routine(job.text, self._sent_before(job.id
 self._journal.write("task_end", status=status, cost_usd=cost, routine=job.id)      # the ledger counts this line
 text = (text or "").strip()
 if status != "done":
-    return "failed", f"the routine ended as '{status}'", cost
+    took_too_long = status == "error" and getattr(self._run_routine, "runner", None) is not None and getattr(self._run_routine.runner, "timed_out", False)
+    return "failed", f"the routine ended as '{status}'" + (": it timed out waiting for a service" if took_too_long else ""), cost
 if not text:
     return "failed", "the routine produced nothing", cost
 if text.strip(" .\"'`").upper() == NO_REPLY:
@@ -354,31 +362,31 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 <tr><th>Cost when nothing happened</th><td>A model run, 48 times a day</td><td>Nothing: reminders and ignored events call no model</td></tr>
 <tr><th>Timeliness</th><td>Up to 30 minutes late</td><td>A reminder at its minute; a watch within the connector's interval</td></tr>
 <tr><th>Compares against</th><td>Its own guess at what matters</td><td>Something the owner asked for, with an id</td></tr>
-<tr><th>Repetition</th><td>Must remember what it said, or repeat it</td><td>Watches fire once; routines see their last three messages; briefs are keyed per meeting</td></tr>
+<tr><th>Repetition</th><td>Must remember what it said, or repeat it</td><td>A watch tells once per event; routines see their last three messages; briefs are keyed per meeting</td></tr>
 <tr><th>If misled</th><td>Whatever tools it was given, unwatched</td><td>Read-only; the watch agent has three tools</td></tr>
 </tbody>
 </table></div>
 <p>The decisive reason is that, looking only at the public web and its own memory, it would pay forty-eight times a day to find nothing. As arithmetic, not a measurement: at the roughly $0.0015 each of two measured small-model routine runs cost, that is about seven cents a day for nothing.</p>
-<p>Its parts all exist: a repeating routine is the timer, <code>NO_REPLY</code> is "speak only if it matters", and mail and calendar give it something to read. A routine of that kind was run once on the real mailbox and stayed quiet; it is not on by default. What it would add to the four mechanisms is a model's open-ended, unwatched judgement of what deserves attention, which is the hardest thing here to test.</p>
+<p>Its parts all exist: a routine repeating half-hourly is the timer, <code>NO_REPLY</code> is "speak only if it matters", and mail and calendar give it something to read. A routine of that kind was run once on the real mailbox and stayed quiet; it is not on by default. What it would add to the four mechanisms is a model's open-ended, unwatched judgement of what deserves attention, which is the hardest thing here to test.</p>
 
 <h2 id="theory">The theory</h2>
 <p>This section states the chapter's claims in the terms of <a href="notation.html">the model</a>, and separates what the program guarantees from what was observed.</p>
 <p><strong>An unattended run has nobody to answer.</strong> <a href="notation.html">Definition 3</a> calls a run unattended when the owner cannot be asked during it, so the decision <span class="math">d</span> of <a href="notation.html">Definition 6</a> does not exist. For <em>ask</em> a gate then has two honest choices, refuse or defer, and this program refuses. For a routine, a brief or a watch's check the gate is</p>
 <p class="eq">G<sub>u</sub>(τ, x, T) = allow if τ ∈ R and the checks pass; refuse otherwise</p>
-<p>where <span class="math">R</span> is the list of reading tools the run was built with, and the checks are rules 1 to 3 above, with rule 4's exception: the service tool only reads, nothing recognised from the accounts goes to a service that is somebody else's, and the run's allowance for that service is not spent. <span class="math">G<sub>u</sub></span> has no <em>ask</em> in its range, so <a href="notation.html">Property 2</a> applies with no gap for approvals: a misled unattended run can cause exactly the effects of calls in <span class="math">A<sub>u</sub>(T)</span>. <span class="math">R</span> holds no tool with an add, change, persist or destroy effect, and the restriction is held twice, by the tool server and the permission policy, so <span class="math">G<sub>u</sub></span> is sound for those four classes. It is not sound for send. A web search and a read from somebody else's service are sends (Definition 2), and they stay in <span class="math">A<sub>u</sub>(T)</span> when they carry nothing recognised; for send the guarantee is the weaker confinement of <a href="notation.html">Definition 7</a>, on copies. The brief takes its one necessary send out of the model's hands: <code>search_for</code> is a function of two calendar fields, computed before the model reads the invitation.</p>
+<p>where <span class="math">R</span> is the list of reading tools the run was built with, and the checks are rules 1 to 3 above, with rule 4's exception: the service tool only reads, nothing recognised from the accounts goes to a service that is somebody else's, and the run's allowance for that service is not spent. <span class="math">G<sub>u</sub></span> has no <em>ask</em> in its range, so <a href="notation.html">Property 2</a> applies with no gap for approvals: a misled unattended run can cause exactly the effects of calls in <span class="math">A<sub>u</sub>(T)</span>. <span class="math">R</span> holds no tool with an add, change, persist or destroy effect, and the restriction is held twice, by the tool server and the permission policy, so <span class="math">G<sub>u</sub></span> is sound for those four classes. It is not sound for send. A web search and a read from somebody else's service are sends (Definition 2), and they stay in <span class="math">A<sub>u</sub>(T)</span> when they carry nothing recognised; for send the guarantee is the weaker confinement of <a href="notation.html">Definition 7</a>, on copies, with a web search also held to a count of words the owner did not type. The brief takes its one necessary send out of the model's hands: <code>search_for</code> is a function of two calendar fields, computed before the model reads the invitation.</p>
 <p><strong>Firing.</strong> A job can fail between doing its work and recording it, and the order of the two decides which failure is possible. Recording after doing gives <em>at least once</em>: a crash in between repeats the work. Recording before doing gives <em>at most once</em>: a crash in between loses it. Exactly once would need the receiver to recognise a second copy, and no send here carries such a key, so each mechanism chooses which failure is worse.</p>
 <div class="box theory"><div class="label">Property: a reminder is never lost in silence, and a brief is never sent twice</div>
 <p>(a) Let a reminder fall due while the program runs, and let the process keep running until its retries end, 51 minutes later (ignoring the up to twenty seconds a tick adds each time). Then either its text was handed to a channel at least once, or a failed run was recorded and a notice carrying the start of its text was queued for the owner. (b) Each meeting, identified by its id and start time, produces at most one brief across any number of restarts, provided the briefer's file can be written.</p>
 <p><em>Argument.</em> (a) A job's row leaves the table, or moves to its next time, only in <code>finish</code>, which is called after a send returns or after the fourth retry has failed. A crash before <code>finish</code> leaves the row due, so the next process sends the reminder again: at least once, and twice if the crash fell between the send and <code>finish</code>. (b) The key is written to the file before any work, and every tick skips the keys in the file, so after a crash the key is still there.</p>
-<p><em>Where it fails.</em> The count of retries and the notice of a failure were once held in the process alone: a restart during the retries started the count again, and a notice not yet delivered was lost with the process. Both are now written to a small file as they change and read back at the start, so (a) holds across restarts too. What still fails: a crash after a brief's key is written and before its message is sent loses the brief without a word, because the notice given at a restart covers only work started from the conversation; and if the file cannot be written, the key lives only in the process.</p></div>
-<p>Watches are at most once within one process: the ids of events seen are kept in the process, and a once-only watch is cancelled before its message is sent. A message that could not be sent is kept in the watch store's own file and retried each minute, so a restart no longer loses it. Events arriving while the program is off are never seen, which remains a place where silence can mean failure.</p>
+<p><em>Where it fails.</em> The count of retries and the notice of a failure were once held in the process alone: a restart during the retries started the count again, and a notice not yet delivered was lost with the process. Both are now written to a small file as they change and read back at the start, so (a) holds across restarts too, with two exceptions: if that file cannot be written, and if the process dies in the moment after a failed run is recorded and before the file is written, when the notice is lost while the record stays. What still fails: a crash after a brief's key is written and before its message is sent loses the brief without a word, because the notice given at a restart covers only work started from the conversation; and if the file cannot be written, the key lives only in the process.</p></div>
+<p>Watches are at most once within one process: the ids of events seen are kept in the process, and a once-only watch is cancelled before its message is sent. A message that could not be sent is kept in the watch store's own file and retried each minute, so a restart after it is kept no longer loses it. A restart during the send itself, which tries three times over several seconds, still can: the once-only watch is already cancelled and the message not yet kept. Events arriving while the program is off are never seen, which remains a place where silence can mean failure.</p>
 <p><strong>What was measured.</strong> One routine set by the real model delivered for $0.0018 and one stayed quiet for $0.0013. The seven cents a day for a half-hourly check is arithmetic on those runs, 48 × $0.0015, and not a measurement of such a check.</p>
 <div class="tbl"><table>
 <thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
 <tbody>
 <tr><td>An unattended run cannot remember, schedule or change anything</td><td>Property</td><td>Two locks; a test asks the policy about four tools</td></tr>
 <tr><td>An unattended search carrying a recognised detail is refused</td><td>Property, for copies only</td><td>Argued; tests in both directions; a paraphrase passes</td></tr>
-<tr><td>A reminder is sent at least once or its failure recorded</td><td>Property, within one process</td><td>Argued from <code>odysseus/schedule.py</code></td></tr>
+<tr><td>A reminder is sent at least once or its failure recorded</td><td>Property, within one process; across restarts while its small file can be written</td><td>Argued from <code>odysseus/schedule.py</code></td></tr>
 <tr><td>A meeting is briefed at most once</td><td>Property, if the file can be written</td><td>Argued; a test with a restarted briefer</td></tr>
 <tr><td>The watch agent ignores a forged reply</td><td>Measurement</td><td>Four runs, one forgery written by the defenders</td></tr>
 <tr><td>A half-hourly check would cost about seven cents a day for nothing</td><td>Arithmetic on a measurement</td><td>Two measured routine runs</td></tr>
@@ -399,7 +407,7 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 
 <h2 id="testing">How to test it</h2>
 <p>Every component takes "now" as a parameter, so in a test "four days later" is one assignment. A test of this part must check: one recorded outcome per run; an announcement for every failure path; time arithmetic after downtime and over weekends; each unattended agent's tool list, by name; that an unwatched event costs nothing; and that adversarial replies (an unknown id, a link, a planted instruction) are contained by code whatever the model returns.</p>
-<p><code>tests/test_schedule.py</code>, <code>tests/test_watch.py</code> and <code>tests/test_brief.py</code> do all of these with stand-ins; all 52 pass <span class="g v">Verified</span>. They show what the code does with a given reply, not what a real model replies. The live runs cover that.</p>
+<p><code>tests/test_schedule.py</code>, <code>tests/test_watch.py</code> and <code>tests/test_brief.py</code> do all of these with stand-ins; all pass <span class="g v">Verified</span>. They show what the code does with a given reply, not what a real model replies. The live runs cover that.</p>
 <div class="tablewrap"><table>
 <caption>Live runs with real models.</caption>
 <thead><tr><th>Run</th><th>What it showed</th><th>Limits</th></tr></thead>
@@ -412,11 +420,11 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 </table></div>
 
 <div class="box caution"><div class="label">What is proven and what is not</div>
-<p><span class="g v">Verified</span>: the 52 tests and the live runs in the table above, plus the real connection to the connector's event stream opening and closing (no events arrived in the eight seconds it was open).</p>
+<p><span class="g v">Verified</span>: the tests in those three files and the live runs in the table above, plus the real connection to the connector's event stream opening and closing (no events arrived in the eight seconds it was open).</p>
 <p><span class="g u">Not tested</span>: any job firing at its real time on a machine left running; the scheduler sending through Telegram; awkward times ("next Friday", "the last day of the month"); a routine reading a hostile page; a real email producing a trigger, a check and a message, and how long that takes; calendar watches beyond unit tests; three consecutive days of a digest; a brief from a real meeting, or with a planted instruction, against a real model; and whether the owner finds briefs worth reading. Events arriving while the program is off are missed, and a scheduler runs only while its machine is awake ({{ch:staying-up}}).</p></div>
 
 <h2 id="literature">Where this sits in the literature</h2>
-<p>The question of when an assistant should act on its own was framed by {{cite:horvitz1999mixed}}, who set out principles for combining automated services with direct user control, using a meeting-scheduling assistant as the example, and argued that the assistant should reason about the costs and benefits of acting given its uncertainty about what the user wants. The four mechanisms here decide differently. Code decides whether a model is involved at all, by fixed conditions (a time, an event of a watched kind, an outside guest within half an hour), and the weighing of cost against benefit is done once, by the owner, when a job or watch is set. That gives up the adaptiveness Horvitz argued for. What it gains is a decision that text from outside cannot steer, a concern his setting did not have. {{cite:horvitz1999attention}} cast alerting as a decision weighing the value of information against the cost of interrupting, and {{cite:mark2008interrupted}} found that interrupted workers finished faster but with more stress and effort. The program weighs nothing per message: it has a routine's option of silence and fixed rates for notices of failure. Whether an owner would choose differently message by message is not measured here. In the terms of {{cite:parasuraman2000levels}}, who describe automation as varying in level across acquiring information, analysing it, deciding and acting, these mechanisms automate the first two fully and stop before acting: an unattended run decides what to tell the owner and does nothing else.</p>
+<p>The question of when an assistant should act on its own was framed by {{cite:horvitz1999mixed}}, who set out principles for combining automated services with direct user control, using a meeting-scheduling assistant as the example, and argued that the assistant should reason about the costs and benefits of acting given its uncertainty about what the user wants. The four mechanisms here decide differently. Code decides whether a model is involved at all, by fixed conditions (a time, an event of a watched kind, an outside guest within half an hour), and the weighing of cost against benefit is done once, by the owner, when a job or watch is set. That gives up the adaptiveness Horvitz argued for. What it gains is a decision that text from outside cannot steer, a concern his setting did not have. {{cite:horvitz1999attention}} cast alerting as a decision weighing the value of information against the cost of interrupting, and {{cite:mark2008interrupted}} found that interrupted workers finished faster but with more stress and effort. The program weighs nothing per message: it has a routine's option of silence and fixed rates for notices of failure. Whether an owner would choose differently message by message is not measured here. In the terms of {{cite:parasuraman2000levels}}, who describe automation as varying in level across acquiring information, analysing it, deciding and acting, these mechanisms automate the first two fully, the third only as far as what to tell the owner, and stop before acting: an unattended run decides what to tell the owner and does nothing else.</p>
 <p>The firing rules are a standard result. {{cite:helland2012idempotence}} explains why messages are delivered at least once in practice and why the receiver must tolerate duplicates by processing them idempotently; {{cite:kleppmann2017ddia}} treats what an exactly-once effect requires of the parts involved. A reminder here is at least once and a brief at most once, each chosen by asking whether a duplicate or a gap is worse. The published remedy is stronger than either: a key chosen by the client lets a request be retried without repeating its effect {{cite:stripe-idempotency}}. The program gives the chat service no such key, so it can only choose which failure to have.</p>
 <p>{{cite:sre-monitoring}} argues that alerts should be actionable and based on symptoms. The three outcomes follow that: a quiet run is logged and not sent, and a failure is sent with what the owner should do, look this once. The limit is plain: a program cannot announce its own death, and a watch whose events arrived while it was off has nothing to report.</p>
 <p>A watch means a model reads mail from strangers, the setting in which {{cite:greshake2023indirect}} showed indirect prompt injection against real applications. The triage agent's design follows the rule of {{cite:meta2025ruleoftwo}}: it holds untrusted input and private data and has no way to communicate outward or change anything, so it has two of the three properties and not the third. Code that discards unknown ids and removes links is what keeps the third from returning through its output.</p>
@@ -438,7 +446,7 @@ Who: Priya Nair, founder of Lumen Grid.</code></pre>
 <h3>Review</h3>
 <ol>
 <li>Classify each and say who decides: (a) "At 5pm tell me to leave for the airport." (b) "Each morning tell me whether it will rain." (c) "Tell me if my 3pm is moved." (d) "Before any call with an investor, remind me what we last discussed."</li>
-<li>The program was off from Monday morning to Friday noon. A weekday routine is due at 08:00. How many times does it run at start-up, what does its message say, and when is it next due? Trace <code>next_occurrence</code> to check.</li>
+<li>The program was off from 07:00 on Monday to noon on Friday. A weekday routine is due at 08:00. How many times does it run at start-up, what does its message say, and when is it next due? Trace <code>next_occurrence</code> to check.</li>
 <li>A routine reports "only if the train is delayed". For a week the owner hears nothing. List the possible explanations under this design and the record that tells them apart.</li>
 <li><code>Watcher._on_event</code> tells the owner of a failed check at most once an hour. Change it to say how many checks failed since the last notice, and to send a second notice when checks start succeeding again. Write the test first, using <code>tests/test_found_by_reading.py</code> as a model.</li>
 <li>The brief runs on <code>make_routine_runner</code>. Without care, its task, invitation text included, would sit under the heading "ROUTINE INSTRUCTIONS (written earlier, at the owner's request)", the same fault that was corrected in the watch agent. So the runner takes <code>program_tasks=True</code>, which changes the heading and one sentence of the standing instructions to say the task is the program's. Read the test for it in <code>tests/test_found_by_reading.py</code>. What would a live test of this have to plant, and how would you know it had been obeyed?</li>

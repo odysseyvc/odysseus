@@ -27,7 +27,7 @@
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Control layer</dt><dd>The code that receives every incoming message and decides what happens to it before, during and after any model call. Here it is <code>odysseus/conversation.py</code>.</dd></dl></div>
 <div class="box definition"><div class="label">Definition</div>
-<dl class="terms"><dt>Task</dt><dd>One run of the agent loop, started by one message from the owner and ending with one reply. A task has a status when it ends: done, stopped, ended by a budget, ended by a step limit, or failed.</dd></dl></div>
+<dl class="terms"><dt>Task</dt><dd>One run of the agent loop, started by one message from the owner and ending with one reply. A task has a status when it ends: done, stopped, stuck, ended by its own budget or the day's, ended by a step limit, or failed.</dd></dl></div>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Owner check</dt><dd>A comparison of the sender's identity, as the chat service reports it, against the one identity the program was configured to serve. On Telegram the identity is a numeric user ID that the service supplies and the sender cannot choose.</dd></dl></div>
 <div class="box definition"><div class="label">Definition</div>
@@ -37,7 +37,7 @@
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Interrupt and cancellation</dt><dd>An <em>interrupt</em> asks the agent library to end the current run; the library decides how and when. A <em>cancellation</em> is the program ending the task itself through its own concurrency machinery (here Python's <code>asyncio</code>), whether or not the library cooperates.</dd></dl></div>
 <div class="box definition"><div class="label">Definition</div>
-<dl class="terms"><dt>Journal</dt><dd>An append-only file with one line of JSON per step the program takes. Lines are added and never edited or removed.</dd></dl></div>
+<dl class="terms"><dt>Journal</dt><dd>An append-only file with one line of JSON per step the program takes. Lines are added and never edited; old ones are only moved, unchanged, into an archive.</dd></dl></div>
 <div class="box definition"><div class="label">Definition</div>
 <dl class="terms"><dt>Command</dt><dd>A message that the control layer recognises by its exact text (such as <code>stop</code>, <code>/status</code> or <code>/memory</code>) and answers itself, without calling a model.</dd></dl></div>
 
@@ -70,7 +70,7 @@
 <ul>
 <li>The owner check is first. Nothing a stranger sends reaches any later code: not the command parser, not the file reader, not the model. Every later check can therefore assume it is talking to the owner.</li>
 <li>Commands and "stop" come before the busy check. A queue that could hold "stop" behind a long task would make the most important command the slowest one.</li>
-<li>The budget check is last, just before the model. Everything above it is answered by code, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone. (Two steps not drawn run before the commands, and only when nothing is running: fetching a PDF the owner linked to, and reading a DocSend link in a browser, which is paid for and checks the budget itself; see {{ch:decks-and-data-rooms}}.)</li>
+<li>The budget check is last, just before the model. Everything above it is answered by code, so a task refused for budget costs nothing, and a command such as <code>/status</code> works even when the money for the day is gone. (Steps not drawn also run before the commands: a pasted sign-in address and a reading note are handled by code at once; a PDF the owner linked to is fetched when nothing is running; and a DocSend link is read in a browser, which is paid for and checks the budget itself; see {{ch:decks-and-data-rooms}}.)</li>
 </ul>
 
 <h3>Why these choices and not the obvious ones</h3>
@@ -87,7 +87,7 @@
 </tbody></table></div>
 
 <h3>Keeping the rules apart from the chat service</h3>
-<p>The chat service's wiring lives in another file (<code>odysseus/telegram.py</code>) and only carries messages. The control layer sees the chat through three methods: <code>send</code>, <code>draft</code> for a growing preview, and <code>ask</code> for a question with Approve and Decline buttons. Tests can therefore drive the rules with a pretend chat and no network, and a second channel needs no change to any rule ({{ch:channels}}).</p>
+<p>The chat service's wiring lives in another file (<code>odysseus/telegram.py</code>) and only carries messages. The control layer sees the chat chiefly through three methods: <code>send</code>, <code>draft</code> for a growing preview, and <code>ask</code> for a question with Approve and Decline buttons. Tests can therefore drive the rules with a pretend chat and no network, and a second channel needs no change to any rule ({{ch:channels}}).</p>
 
 <h2 id="mechanism">The mechanism</h2>
 <h3>Who may speak</h3>
@@ -100,11 +100,12 @@
 <pre><code>    # Private chats only: a bot added to a group would otherwise hear other people.
     @dp.message(F.chat.type == "private", F.text)
     async def on_text(message: Message) -> None:
-        if await late(message):
-            return
         user_id = message.from_user.id if message.from_user else 0
-        await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id))</code></pre>
-<p>Without the private-chat filter, anyone who added the bot to a group would have it read that group's messages, and the owner check would be the only thing between those messages and the model. The <code>late</code> check reports a message that was sent more than ten minutes before it arrived instead of acting on it; why that matters belongs to {{ch:staying-up}}.</p>
+        async with in_turn(user_id):
+            if await late(message):
+                return
+            await conversation.handle(user_id, message.text or "", TelegramChat(bot, message.chat.id, ...))</code></pre>
+<p>Without the private-chat filter, anyone who added the bot to a group would have it read that group's messages, and the owner check would be the only thing between those messages and the model. <code>in_turn</code> lets one person's messages into <code>handle</code> one at a time, in the order they were received. The <code>late</code> check reports a message that was sent more than ten minutes before it arrived instead of acting on it; why that matters belongs to {{ch:staying-up}}.</p>
 
 <h3>One task at a time, and a queue</h3>
 <p>When a message passes the command checks and a task is already running, this is what happens (<code>odysseus/conversation.py</code>):</p>
@@ -122,10 +123,15 @@
                 await chat.send(f"I already have {MAX_WAITING} messages waiting behind the current task. Send stop to drop them all.")
                 return
             self._queue_seq += 1
+            first = not self._waiting
             self._waiting.append((text, chat, images, material, self._queue_seq))
             # Written down, so that after a restart the owner can be told which messages were lost while waiting.
             self._journal.write("queued", waiting=len(self._waiting), q=self._queue_seq, preview=" ".join(text.split())[:80])
-            await chat.send("Noted. I'll do this as soon as the current task is finished. Send stop to end everything.")
+            # Said once for a run of waiting messages, not after each: five identical lines told the owner nothing more.
+            if first:
+                await chat.send("Noted. I'll do this, and anything else you send meanwhile, in order, as soon as the current task is finished. "
+                                "Send stop to end everything.")
+            ...    # (lines omitted here: its answer will be sent as a reply to this message)
             return</code></pre>
 <p>The first branch closes the few seconds between "stop" and the task really ending, when a queued message would run later, out of turn. The second stops a typed "yes" during an approval question from becoming a task; only the button approves ({{ch:the-gate}}). The third bounds the queue at <code>MAX_WAITING = 5</code>. The journal line, with a sequence number, lets a restarted program tell the owner which waiting messages were lost.</p>
 <p>The task itself runs the queue when it finishes:</p>
@@ -194,29 +200,41 @@
                 self._journal.write("task_end", status="stopped", forced=True, cost_usd=round(spent, 4), estimated=True)
                 await chat.send("Stopped.")</code></pre>
 <p>Even the first layer is wrapped, so an exception from the library cannot prevent the second. After the grace period (<code>stop_grace_s</code>, five seconds by default) the task is cancelled and the connection thrown away, because its state is now unknown; the next message opens a new one that resumes the same conversation. The journal line is marked <code>forced</code>, and its cost <code>estimated</code> from token counts, because the library never reported a figure ({{ch:cost}}).</p>
-<p>Before either layer, <code>_stop</code> empties the queue and says how many messages were dropped, cancels any open approval question (which counts as a decline), and cancels any browser run at the vendor. An owner who types "stop" wants everything to stop, not the next task to begin.</p>
+<p>Before either layer, <code>_stop</code> stops any jobs in the background the same way, giving them the same grace period; then it empties the queue and says how many messages were dropped, cancels any open approval question (which counts as a decline), ends any approval widened to a thread, and cancels any browser run at the vendor. An owner who types "stop" wants everything to stop, not the next task to begin.</p>
 
 <h3>Limits per task and per day</h3>
 <div class="tablewrap"><table>
-<caption>The three limits, their defaults (from <code>odysseus/config.py</code>) and where each is enforced.</caption>
+<caption>The three limits, their defaults (from <code>odysseus/config.py</code>) and where each is enforced. The first two are marks with a ceiling four times higher (<code>task_stretch</code>), as the section on marks below explains.</caption>
 <thead><tr><th>Limit</th><th>Default</th><th>Checked</th><th>What the owner is told</th></tr></thead>
 <tbody>
-<tr><th>Steps in one task</th><td>25 model calls</td><td>As each model call arrives</td><td>"I ended this task because it reached its limit of 25 steps."</td></tr>
-<tr><th>Money in one task</th><td>$0.50</td><td>As each model call arrives, from an estimate</td><td>"I ended this task because it reached its budget of $0.50."</td></tr>
-<tr><th>Money in one day</th><td>$3.00</td><td>Before a task starts, and before each queued message</td><td>"Today's budget of $3.00 is used up, so I have not started this."</td></tr>
+<tr><th>Steps in one task</th><td>A mark of 25 model calls; a ceiling of 100</td><td>As each model call arrives</td><td>"I ended this task after 100 steps, the most one task may take."</td></tr>
+<tr><th>Money in one task</th><td>A mark of $0.50; a ceiling of $2.00</td><td>As each model call arrives, from an estimate</td><td>"I ended this task because it reached $2.00, the most one task may cost."</td></tr>
+<tr><th>Money in one day</th><td>$3.00</td><td>Before a task starts, before each queued message, and as each model call arrives</td><td>"Today's budget of $3.00 is used up, so I have not started this." Or, during a task: "I ended this task because today's budget of $3.00 is used up."</td></tr>
 </tbody></table></div>
 <p>The per-task count lives inside the loop in <code>odysseus/agent.py</code>:</p>
 <pre><code>                    # One model call can arrive as several messages sharing an id; count it once.
                     key = msg.message_id or f"n{len(calls)}"
                     calls[key] = estimate_usd(self._model, msg.usage or {})
+                    ...    # (lines omitted here: the size of what the model was sent is recorded)
                     if self._limit is None and not self._stopped:
-                        if len(calls) > self._s.max_turns:
+                        ...    # (a comment omitted here)
+                        stretch = max(1.0, float(getattr(self._s, "task_stretch", 1.0) or 1.0))
+                        spent = sum(calls.values())
+                        self.stuck_why = progress.stuck()
+                        if self.stuck_why:
+                            self._limit = "stuck"
+                        elif len(calls) > self._s.max_turns * stretch:
                             self._limit = "turn_limit"
-                        elif sum(calls.values()) >= self._s.task_usd:
+                        elif spent >= self._s.task_usd * stretch:
                             self._limit = "budget"
+                        elif self.day_room is not None and spent >= self.day_room():
+                            self._limit = "day_budget"
+                        elif not passed and (spent >= self._s.task_usd or len(calls) > self._s.max_turns):
+                            passed = True
+                            self._journal.write("limit", which="passed", steps=len(calls), estimated_usd=round(spent, 4))
                         if self._limit:
-                            self._journal.write("limit", which=self._limit, steps=len(calls),
-                                                estimated_usd=round(sum(calls.values()), 4))
+                            self._journal.write("limit", which=self._limit, steps=len(calls), estimated_usd=round(spent, 4),
+                                                **({"why": self.stuck_why} if self.stuck_why else {}))
                             await client.interrupt()</code></pre>
 <p>Keying by message id counts a model call once even when it arrives in pieces. A limit uses the same interrupt as layer one of stop, and whatever the model had written is delivered with the explanation appended. The owner is always told why a task ended early: a task that ends silently looks like one still running. How the estimate works is the subject of {{ch:cost}}.</p>
 
@@ -231,7 +249,7 @@
         if self._echo:
             shown = " ".join(f"{k}={fields[k]}" for k in self.ECHO_FIELDS if k in fields)
             print(f"odysseus {kind} {shown}".rstrip(), flush=True)</code></pre>
-<p>Three decisions sit in these lines. The file is opened in append mode, so nothing written is changed later. Listeners hear of each record as it is written; the spending ledger is one, which is how spending stays current without a second file. And on a hosting service whose log shows in a dashboard, only <code>ECHO_FIELDS</code> (statuses and numbers) are copied there, never queries or message contents. <code>Journal.read</code> skips a line that does not parse, which is what a crash in the middle of a write leaves.</p>
+<p>Three decisions sit in these lines. The file is opened in append mode, so nothing written is changed later; it is closed after each line but not forced to the disk, so a line survives a crash of the program and not necessarily a loss of power. Listeners hear of each record as it is written; the spending ledger is one, which is how spending stays current without a second file. And on a hosting service whose log shows in a dashboard, only <code>ECHO_FIELDS</code> (statuses and numbers) are copied there, never queries or message contents. <code>Journal.read</code> skips a line that does not parse, which is what a crash in the middle of a write leaves.</p>
 <p>From this one file the program derives several things it would otherwise have to store separately:</p>
 <ul>
 <li>Spending. The <code>Ledger</code> sums a cost per day from every line, and <code>/status</code> answers from it: <code>"Idle. Spent today: $0.42 of $3.00."</code></li>
@@ -243,6 +261,7 @@
 <p>Some things the owner asks have exact answers that the program already holds. Asking a model would add cost, delay and a chance of being wrong. These are commands, handled in <code>handle</code> before any task starts:</p>
 <pre><code>        if command == "/status":
             state = "working on a task" if self.busy else "idle"
+            ...    # (lines omitted here: any jobs in the background, and how many wait behind them, are added to the state)
             await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f} of ${self._s.daily_usd:.2f}.")
             return</code></pre>
 <p>The same pattern serves <code>/memory</code> and <code>/forget</code>, <code>/schedule</code> and <code>/cancel</code> with an id, <code>/watches</code> and <code>/unwatch</code>, <code>/apps</code>, <code>/browser</code>, <code>/new</code> (a fresh conversation, refused while a task runs) and <code>/help</code>. Matched before the busy check, they are answered at once even during a long task. They also let the owner inspect and correct the assistant's state without its cooperation: <code>/memory</code> shows the stored entries, not the model's account of them.</p>
@@ -253,15 +272,17 @@
         changes = self._memory.pop_changes() if self._memory is not None else []
         if changes:
             body += "\n\nMemory: " + "; ".join(changes) + "."
+        ...    # (lines omitted here: skills saved and figures recorded are listed the same way)
         acted = (self._apps.pop_changes() if self._apps is not None else []) + (self._anyapp.pop_changes() if self._anyapp is not None else []) \
-            + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()]
+            + (self._attio.pop_changes() if self._attio is not None else []) + [c for s in self._services for c in s.pop_changes()] \
+            + (self._inbox.pop_changes() if self._inbox is not None and hasattr(self._inbox, "pop_changes") else [])
         # A connection link is added by code, exactly as the connector gave it. The model never handles it.
         for app_name, link in (self._anyapp.pop_links() if self._anyapp is not None else []):
-            body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{link}"
+            body += f"\n\nTo connect {app_name}, open this link and approve, then tell me it's done:\n{shortlink.LINKS.wrap(link)}"
         if acted:
             body += "\n\nDone on your accounts: " + "; ".join(acted) + "."</code></pre>
-<p>Each tool that changes something records a line as it makes the change. Every such list is emptied at the start of a task, so only this task's changes are reported, and at the end they are appended under fixed headings: "Memory:", "Done on your accounts:", "Browser:", "Schedule:", "Watching:".</p>
-<p>The model's summary of what it did is a claim, and can be wrong: "I've sent it" after a declined send, or silence about a change that happened. A model misled by a planted instruction might be steered to hide what it did. The program's lines come from the tools themselves, and where they disagree with the model's words, they are the ones to believe. The connection link is handled the same way for a related reason: opening it grants access to one of the owner's accounts, so it is passed through exactly as the connector produced it, and the model never holds a copy it could alter ({{ch:secrets-and-sign-ins}}).</p>
+<p>Each tool that changes something records a line as it makes the change. Every such list is emptied at the start of a task when no other task is running, so only this task's changes are reported, and at the end they are appended under fixed headings: "Memory:", "Done on your accounts:", "Browser:", "Schedule:", "Watching:", "Keeping in touch:", and a line for replies sent without being shown first under an approval the owner widened to a thread.</p>
+<p>The model's summary of what it did is a claim, and can be wrong: "I've sent it" after a declined send, or silence about a change that happened. A model misled by a planted instruction might be steered to hide what it did. The program's lines come from the tools themselves, and where they disagree with the model's words, they are the ones to believe. The connection link is handled the same way for a related reason: opening it grants access to one of the owner's accounts, so it is added by code, as the connector produced it or under a short address of the program's own that leads to it, and the model never holds a copy it could alter ({{ch:secrets-and-sign-ins}}).</p>
 
 <h3>Beginning again after a pause</h3>
 <p>One conversation kept for ever is the simplest design and the dearest. Every message is charged for everything said before it, and the cache that makes that tolerable lapses after a few idle minutes ({{ch:cost}}). So before a task runs, code asks whether to carry on or begin again:</p>
@@ -270,7 +291,7 @@
         idle_s = (self._now() - self._last_end).total_seconds()
         if idle_s &gt;= self._s.fresh_after_min * 60:
             return "pause"
-        if idle_s &gt;= CACHE_COLD_S and self._runner.context_tokens &gt; self._s.fresh_above_tokens:
+        if idle_s &gt;= self._cold_s and self._runner.context_tokens &gt; self._s.fresh_above_tokens:
             return "size"
         return ""</code></pre>
 <p class="src"><code>odysseus/conversation.py</code>, <code>_fresh_reason</code></p>
@@ -288,7 +309,7 @@
 The owner's phone shows a draft that grows every 0.8 seconds or so.</li>
 <li>A stranger sends "hello, who are you?". The owner check fails at the first line of <code>handle</code>. Nothing is sent; no model is called.
 <pre><code>{"ts": 1795000004.5, "kind": "dropped", "user_id": 555000111}</code></pre></li>
-<li>The owner adds "and the first one tomorrow". A task is running, nothing is being stopped, no approval is pending, and the queue is empty, so the message is queued and the owner gets "Noted. I'll do this as soon as the current task is finished. Send stop to end everything."
+<li>The owner adds "and the first one tomorrow". A task is running, nothing is being stopped, no approval is pending, and the queue is empty, so the message is queued and the owner gets "Noted. I'll do this, and anything else you send meanwhile, in order, as soon as the current task is finished. Send stop to end everything."
 <pre><code>{"ts": 1795000006.0, "kind": "queued", "waiting": 1, "q": 1, "preview": "and the first one tomorrow"}</code></pre></li>
 <li>The owner sends <code>/status</code>. It is a command, matched before the busy check, and answered at once from the ledger: "Working on a task. Spent today: $0.22 of $3.00." The ledger already includes the search's 0.7 cents, because the ledger listened to the <code>tool</code> line as it was written.</li>
 <li>The task ends. The reply is sent, and the queued message runs next.
@@ -328,7 +349,7 @@ publish Poor Charlie</code></pre>
 <div class="box definition"><div class="label">Definition</div><p>A <strong>write contract</strong> is the written agreement between a program and a store it writes into that it does not own: the file layout, which fields it may change, which it must never change, and what must be true before it commits. Here the contract is a section of the site's own README, and the schema is the site's own.</p></div>
 <p>Three rules of the contract shape the code. Notes are only ever appended: the new note is inserted as text at the end of the <code>notes</code> list, and before each commit code checks that every earlier note is byte for byte what it was and parses to the same values. The whole file must parse and match the site's schema, checked in Python against a copy of the site's rules, because a push that fails the site's build would break the site for everyone. And a book starts private: a new book is written with <code>public: false</code>, and only "publish" changes that.</p>
 <p>The rules for asking follow from what can go wrong ({{ch:the-gate}}). A note is the owner's own words going into the owner's own store, and it stays private, so it is filed without a question and reported in one line. Publishing changes what anyone can read, so it goes through the gate: code builds the question from the file itself (every note that will appear, how many private notes stay off the site, and the address the book will have), the owner taps Approve, and the commit happens only if the file is still the one the owner was shown. If a note arrived in between, the owner is told and asked to send "publish" again.</p>
-<p>Writing goes through GitHub's contents API with a token that can change files in that one repository and nothing else. Each change is one commit named <code>reading: &lt;title&gt;</code>, and the site rebuilds on every push. Two writers can race (the owner editing a file on a laptop while a note comes in from the phone); the API refuses a write made against an old version, and the code reads the file again and retries once.</p>
+<p>Writing goes through GitHub's contents API with a token that can change files in that one repository and nothing else. Each change is one commit named <code>reading: &lt;title&gt;</code>, and the site rebuilds on every push. Two writers can race (the owner editing a file on a laptop while a note comes in from the phone); the API refuses a write made against an old version, and the code reads the file again and retries.</p>
 <h3>A queue, a shelf and a list of open problems</h3>
 <p>The same grammar grew in a second step, when the site grew three things: a To read list, a Must read shelf with a line on why everyone should read each book, and a list of open problems, each with dated ideas, questions, progress and resources under it. Each is a message:</p>
 <pre><code>save https://example.com/essays/why-cities-grow
@@ -344,7 +365,7 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 <p>One detail is worth knowing for anyone copying the idea. A common shortcut shuffles by sorting with a comparison that returns a random sign. Its result depends on which sorting algorithm the language runtime happens to use and in what order it compares, so two programs with the same generator and the same seed still disagree. Fisher-Yates calls the generator a known number of times in a known order, so the result is fixed by the seed alone.</p>
 <p>The message uses Telegram's HTML for the quote in italics and a link from each note to its book or problem in the editor. Everything taken from the notes is escaped first, so a note containing <code>&lt;</code> or <code>&amp;</code> is shown as written and cannot become markup. The day is recorded before the message is sent, so a crash cannot send it twice. A failed send removes the record again so that the next look, five minutes later, tries again. A repository that cannot be reached records nothing, for the same reason. A day with nothing to send sends nothing.</p>
 
-<div class="box example"><div class="label">What is tested and what is not</div><p>Tested with a stand-in repository (<code>tests/test_booknotes.py</code> and <code>tests/test_reading_queue.py</code>, 87 tests). The queue, the shelf and the problems: saving a title or a link, a second save making no second file, the first note starting a queued book, a file from the site's editor with no notes yet, "must read" shown field by field and held until the tap, problem entries appended byte for byte, the 600-character limit on quotes, and a file moved twice by another writer before the note still going in. The first step's tests: parsing of each kind, place and command; appending nine awkward notes in a row without changing a byte of the earlier ones; "keep that private" touching only the note just filed, and refusing when a newer note has arrived; finished and why; the schema check refusing what the site would refuse; publishing held until the tap, left private on Decline, and refused when the book changed after the question; and that anything else still reaches the model. Run once live, from the deployed assistant on 24 November 2026: two notes and "keep that private" sent from Telegram created a new private book in the site's repository in three commits, each answered within a few seconds; the file read back from GitHub matched the contract field for field, the second note marked private and the first unchanged; and the site's own build of the last of those commits passed. The test book was then deleted. Not yet run live: publishing, finished and why, a published book on the site, and token expiry. The second step was also run once live, the same day: a saved title and a saved link (the page's own title was used, and the link was filed as an article), a first note moving the queued book to Reading, "must read" asked field by field and declined with nothing changed, and a new problem with one resource entry marked private. All read back matching the site's schema, the site's build of the last commit passed, and the test files were deleted. A must-read approved for real has not been run, so as not to put a test book on the live shelf. The run showed one thing to change: a field added to an existing file went in just before <code>notes</code>, where the site's own editor puts it after <code>added</code>; new fields now follow the editor's order. The daily review is tested in <code>tests/test_resurface.py</code> (17 tests): the generator against the editor's numbers, the pool and its fallback, the same three all day and different ones across days, open questions newest first, escaping, India time, once a day, nothing sent when there is nothing, and a failed send or an unreachable repository tried again. It was run once against the real repository without sending: the files were read and, since none of them held a note yet, the message was empty, as it should be. Not yet seen: a review arriving in Telegram, and how it looks there.</p></div>
+<div class="box example"><div class="label">What is tested and what is not</div><p>Tested with a stand-in repository (<code>tests/test_booknotes.py</code> and <code>tests/test_reading_queue.py</code>, 87 tests). The queue, the shelf and the problems: saving a title or a link, a second save making no second file, the first note starting a queued book, a file from the site's editor with no notes yet, "must read" shown field by field and held until the tap, problem entries appended byte for byte, the 600-character limit on quotes, and a file moved twice by another writer before the note still going in. The first step's tests: parsing of each kind, place and command; appending nine awkward notes in a row without changing a byte of the earlier ones; "keep that private" touching only the note just filed, and refusing when a newer note has arrived; finished and why; the schema check refusing what the site would refuse; publishing held until the tap, left private on Decline, and refused when the book changed after the question; and that anything else still reaches the model. Run once live, from the deployed assistant: two notes and "keep that private" sent from Telegram created a new private book in the site's repository in three commits, each answered within a few seconds; the file read back from GitHub matched the contract field for field, the second note marked private and the first unchanged; and the site's own build of the last of those commits passed. The test book was then deleted. Not yet run live: publishing, finished and why, a published book on the site, and token expiry. The second step was also run once live, the same day: a saved title and a saved link (the page's own title was used, and the link was filed as an article), a first note moving the queued book to Reading, "must read" asked field by field and declined with nothing changed, and a new problem with one resource entry marked private. All read back matching the site's schema, the site's build of the last commit passed, and the test files were deleted. A must-read approved for real has not been run, so as not to put a test book on the live shelf. The run showed one thing to change: a field added to an existing file went in just before <code>notes</code>, where the site's own editor puts it after <code>added</code>; new fields now follow the editor's order. The daily review is tested in <code>tests/test_resurface.py</code> (17 tests): the generator against the editor's numbers, the pool and its fallback, the same three all day and different ones across days, open questions newest first, escaping, India time, once a day, nothing sent when there is nothing, and a failed send or an unreachable repository tried again. It was run once against the real repository without sending: the files were read and, since none of them held a note yet, the message was empty, as it should be. Not yet seen: a review arriving in Telegram, and how it looks there.</p></div>
 
 <h2 id="theory">The theory</h2>
 <p>This section states the chapter's claims in the terms of <a href="notation.html">the model</a>, and sorts them into what the program guarantees and what was only observed.</p>
@@ -352,8 +373,8 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 <p class="eq">D(m, q) ∈ {drop, answer, stop, wait, refuse, start}</p>
 <p>by tests in a fixed order; the first test that claims the message decides. Three properties follow from the order alone. If <span class="math">u ≠ O</span> then <span class="math">D = drop</span> and nothing reaches a model, because the same test opens every handler. A command or a stop word never enters <span class="math">W</span>, because its test precedes the busy test. A refusal for budget calls no model. The owner check is also what gives a message provenance <span class="math">O</span> (<a href="notation.html">Definition 5</a>): the path admits only an identity the service supplies and the sender cannot choose. The queue is first in, first out, holds at most five and is emptied by stop, so waiting messages run in arrival order or not at all.</p>
 <div class="box theory"><div class="label">Property: stop ends a task within a bound</div>
-<p>Let <span class="math">g</span> be the grace period (five seconds by default). Suppose the running task's code does not swallow a cancellation and does not run for long without yielding to the event loop. Then from the moment a stop word is matched, the task ends within <span class="math">g</span> plus the time it takes to unwind once cancelled, whatever the agent library or the network does, and the owner is sent "Stopped.".</p>
-<p><em>Argument.</em> The stop word is tested before the busy test, so it is handled while the task runs. Layer one is wrapped, so an exception from the library falls through. The wait returns after at most <span class="math">g</span>. If the task has not ended it is cancelled: in Python's <code>asyncio</code> the cancellation is raised inside the task at its next point of waiting, and the program waits for it to unwind, records a forced end and replaces the connection. The hypothesis is the weak point. Cancellation in <code>asyncio</code> is cooperative: code that catches it and carries on holds the stop open, and code that never yields holds the whole program, so the stop word itself is not read.</p></div>
+<p>Let <span class="math">g</span> be the grace period (five seconds by default). Suppose the running task's code does not swallow a cancellation and does not run for long without yielding to the event loop. Then from the moment a stop word is matched, the task ends within <span class="math">g</span> plus the time it takes to unwind once cancelled, or within <span class="math">2g</span> plus the time to unwind when jobs in the background are being stopped too, whatever the agent library or the network does, and the owner is sent "Stopped.".</p>
+<p><em>Argument.</em> The stop word is tested before the busy test, so it is handled while the task runs. Any jobs in the background are stopped first, with a wait of at most <span class="math">g</span> for them. Layer one is wrapped, so an exception from the library falls through. The wait returns after at most <span class="math">g</span>. If the task has not ended it is cancelled: in Python's <code>asyncio</code> the cancellation is raised inside the task at its next point of waiting, and the program waits for it to unwind, records a forced end and replaces the connection. The hypothesis is the weak point. Cancellation in <code>asyncio</code> is cooperative: code that catches it and carries on holds the stop open, and code that never yields holds the whole program, so the stop word itself is not read.</p></div>
 <p><strong>The journal and Property 3.</strong> Spending, what was interrupted, which waiting messages were lost and whether a reply left are derived state (<a href="notation.html">Definition 8</a>): each is a fold over the journal's lines, and the ledger is defined by one function that prices a single line. So <a href="notation.html">Property 3</a> applies: <code>/status</code> and the budget check read the same total, a restart recomputes it from the file, and a forced stop's cost is appended marked as an estimate, so a later function can treat it differently. The hypothesis holds less widely than the summary suggests. The figure the budget checks read also adds running estimates of tasks still in progress, which live in the process and not in <span class="math">J</span>. Memory, the schedule and the conversation are kept in other stores, so "one source" is true of these figures and not of the program. And a line survives a restart only if it reached the disk: lines are appended and the file closed, not forced to the disk, and a half-written line is skipped when read.</p>
 <p><strong>Several tasks.</strong> The rule that shared gate state is merged "in the stricter direction" has a short proof. If every rule is monotone in what has been read, so that reading more can turn allow into ask or refuse and never the reverse, and the merged record <span class="math">T</span> contains each task's own record <span class="math">T<sub>i</sub></span>, then <span class="math">A(T) ⊆ A(T<sub>i</sub>)</span> for every <span class="math">i</span>: nothing runs unasked with several tasks that would not have run unasked with one. Monotonicity is a property of each rule, and has to be checked rule by rule.</p>
 <p><strong>What was measured.</strong> Layer one ended a real task in 1.1 seconds with a new connection per message and in 0.13 seconds with one kept open; layer two has never been needed live. These are observations of one library, and can change with it.</p>
@@ -361,7 +382,7 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 <thead><tr><th>Claim in this chapter</th><th>Kind</th><th>How it is known</th></tr></thead>
 <tbody>
 <tr><td>A stranger's message reaches no model and gets no reply</td><td>Property</td><td>Argued from the order of tests; unit tests</td></tr>
-<tr><td>"Stop" ends a task within the grace period even when the library ignores it</td><td>Property, under the hypothesis on cancellation</td><td>Argued; tested against a stand-in that ignores interrupts</td></tr>
+<tr><td>"Stop" ends a task within the grace period (twice it with jobs in the background) even when the library ignores it</td><td>Property, under the hypothesis on cancellation</td><td>Argued; tested against a stand-in that ignores interrupts</td></tr>
 <tr><td>Spending, what was interrupted and what was lost are derived from the journal</td><td>Property 3, with the exceptions above</td><td>Argued from the code; unit tests</td></tr>
 <tr><td>Layer one stops a real task in about a second or less</td><td>Measurement</td><td>Two live runs, 1.1 s and 0.13 s</td></tr>
 <tr><td>The writing rules reduced replies that show the machinery</td><td>Measurement</td><td>One run of 19 and one of 38; a count of patterns, not a judgement of tone</td></tr>
@@ -394,7 +415,7 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 <p>It was then built as a change of its own. The owner's conversation is one agent. A small number of others, two by default, each take one job at a time in the background. Which jobs go there is decided by code, and the rule is narrow: a job the owner attached no words to, and which is therefore complete in itself. A deck sent with no message. A document read from a link with no message. A filing the owner approved from a question. Anything the owner said something about stays in the conversation, where the answer belongs.</p>
 <p>The gate was not given a separate copy of its state for each task. It was given a rule: whatever is kept for the current task is kept for all the running tasks together, and always in the stricter direction.</p>
 <div class="tablewrap"><table><thead><tr><th>Kept for a task</th><th>With one task</th><th>With several</th></tr></thead><tbody>
-<tr><th>What it has read that others wrote</th><td>Cleared when the task begins</td><td>Not cleared while another is running: each sees everything any of them has read</td></tr>
+<tr><th>What it has read that others wrote</th><td>Cleared only when a new conversation begins</td><td>Not cleared while another is running, even then: each sees everything any of them has read</td></tr>
 <tr><th>Changes waiting to be reported</th><td>Discarded when a task begins, as left over</td><td>Not discarded: they are the other task's, and are reported by whichever reply comes first</td></tr>
 <tr><th>The count of unasked changes</th><td>Starts at nought</td><td>Goes on counting across all of them</td></tr>
 <tr><th>What the owner asked</th><td>This task's request</td><td>Every running request, for the second reader</td></tr>
@@ -436,7 +457,7 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 <li>Around the agent loop sits a control layer that decides who may speak, when work starts and stops, what it may cost and what is reported. None of those decisions is the model's.</li>
 <li>Every message passes the same checks in a fixed order. The owner check is first; commands and "stop" come before the busy check; the budget check is the last thing before a model is called.</li>
 <li>Strangers get silence, and are dropped before any model call so they cost nothing.</li>
-<li>One task runs at a time. Up to five messages wait their turn; "stop" drops them and says how many.</li>
+<li>The conversation runs one task at a time. Up to five messages wait their turn; "stop" drops them and says how many.</li>
 <li>"Stop" has two layers: an interrupt, then cancellation after a five-second grace period that depends on nothing outside the program.</li>
 <li>The journal is append-only. Spending, status, what was interrupted and whether a reply left are all derived from it.</li>
 <li>What was done on the owner's accounts is reported in lines written by the program from what the tools did, not in the model's words.</li>
@@ -453,7 +474,7 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 </ol>
 <h3>Analysis</h3>
 <ol start="6">
-<li>The daily budget is $3.00 and the per-task budget $0.50, and both are compared with the program's estimate after each model call. Assume that one task runs at a time, that no model call costs more than $0.04, and that a task ends at once when a limit is reached. Under rule A, the daily budget is checked only before a task starts. Under rule B, a task is also ended after any model call that brings its cost to what was left of the day when it began. (a) Compute the largest total that can be recorded for one day under each rule. (b) Name one assumption that the chapter tells you does not hold in practice, and say in which direction it moves your answers.</li>
+<li>The daily budget is $3.00 and the per-task ceiling $2.00 (four times the mark of $0.50), and both are compared with the program's estimate after each model call. Assume that one task runs at a time, that no model call costs more than $0.04, that the estimate is exact, and that a task ends at once when a limit is reached. Under rule A, the daily budget is checked only before a task starts. Under rule B, a task is also ended after any model call that brings its cost to what was left of the day when it began. (a) For each rule, find the least upper bound on the total that can be recorded for one day, and say whether it can be reached. (b) Name one assumption that the chapter tells you does not hold in practice, and say in which direction it moves your answers.</li>
 <li>The chapter claims that with several tasks running, nothing is allowed that would not have been allowed with one. State the property of the gate <span class="math">G</span> of Definition 6, as a function of <span class="math">T</span>, on which the claim rests, and prove the claim from it. Then write a plausible rule that lacks the property, and give two tasks whose merged record lets a call run unasked that either task alone would have put to the owner.</li>
 <li>Definition 8 calls a value derived state if it is a pure function of a prefix of the journal. For each of these, decide from the code in this chapter and <code>odysseus/journal.py</code> whether it is derived state: the spending shown by <code>/status</code>; the word "working" or "idle" shown by <code>/status</code>; what was interrupted, as computed at start-up; the cost of a task ended by force. For each that is not, describe an execution in which it differs from a figure computed from the journal alone, and say which of the consequences of Property 3 is lost.</li>
 <li>The property "stop ends a task within a bound" has a hypothesis about cancellation. Describe, as the behaviour of code and not as a program, two tasks for which the bound fails: one that swallows the cancellation, one that never yields. For each, say whether the owner's "stop" is even read, what the owner sees, and what the journal shows afterwards.</li>
@@ -470,6 +491,6 @@ problem Cheaper glucose monitors idea: pool orders across clinics</code></pre>
 </ol>
 <h3>Open</h3>
 <ol start="14">
-<li>Hard, open: the design runs one task at a time. Sketch a version that lets a slow, read-only task (such as a long browser run) continue in the background while the owner starts another task. What happens to the single conversation the model sees, to "stop", to the queue, and to the per-task budget? Which of this chapter's guarantees would you have to give up, and which could you keep?</li>
+<li>Hard, open: the conversation runs one task at a time, and only jobs the owner attached no words to go to the background. Sketch a version that lets a slow task the owner did ask for in words (such as a long browser run) continue in the background while the owner starts another task. What happens to the single conversation the model sees, to "stop", to the queue, and to the per-task budget? Which of this chapter's guarantees would you have to give up, and which could you keep?</li>
 <li>When should an assistant close a conversation and begin again? State the choice as a trade between the cost of carrying the old context and a loss you can measure, such as how often the owner must repeat something the assistant should have known. Design a study on invented conversations that would compare the two rules in this chapter (a pause of two hours, and size above 40,000 tokens after the cache has lapsed) with a rule of your own. Progress would be a rule shown to do better on both measures on conversations held out from its design.</li>
 </ol></div>

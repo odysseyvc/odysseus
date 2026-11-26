@@ -147,7 +147,7 @@ class Conversation:
         self._closed_early: tuple[Any, tuple[str, list[str]]] | None = None      # (the end it was made after, (summary, facts))
         # After a restart the saved conversation is picked up again, so the pause must be measured from before the
         # restart too: the time of the last task the journal holds. Without this the rule never fires after a restart.
-        last = next((r.get("ts") for r in reversed(journal.read()) if r.get("kind") == "task_end" and "routine" not in r and "brief" not in r), None)
+        last = next((r.get("ts") for r in reversed(journal.read()) if r.get("kind") == "task_end" and not any(k in r for k in ("routine", "brief", "leads"))), None)
         if last:
             self._last_end = self._now() - timedelta(seconds=max(0.0, time.time() - float(last)))
         self._carry = ""

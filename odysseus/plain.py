@@ -11,7 +11,7 @@ spreadsheet by scrolling through sixty lines of brackets, cut across three messa
 nobody can read is approved without being read, which is the failure the question exists to prevent.
 
 This module turns the same action and the same inputs into lines a person reads: what will be done, in words; rows as rows;
-fields by name; and the identifiers a person cannot use (a sheet's id, a range) last, on one line. Nothing is left out and
+fields by name; and the identifiers a person cannot use (a sheet's id) last, on one line. Nothing is left out and
 nothing is summarised: the rule that the owner sees everything they approve is kept, and the gate still refuses a question
 too long to show whole. It knows no service. It works from the shape of the inputs alone: a list of lists is a table, a
 list of things with fields is a list, a long opaque string is an identifier.
@@ -31,11 +31,12 @@ def words(name: str) -> str:
     return " ".join(name.split()).lower()
 
 
-def action(slug: str, description: str = "") -> str:
-    """What the action does, in a few words: the service's own first sentence if it gave one, else its name read as words."""
-    first = re.split(r"(?<=[.!?])\s", " ".join(str(description).split()), maxsplit=1)[0].rstrip(".")
-    if 8 <= len(first) <= 120:
-        return first[0].upper() + first[1:]
+def action(slug: str) -> str:
+    """What the action is called, read as words: GOOGLESHEETS_VALUES_APPEND -> Values append.
+
+    Only the name is used, never the service's own description of the action. The name is what the gate sorted the
+    action by, so what the owner reads and what the rule judged are the same thing. A description is prose by whoever
+    published the action, and letting it open the question would let them choose the words the owner is asked in."""
     parts = [p for p in str(slug).split("_")[1:] if p] or [str(slug)]
     return " ".join(parts).capitalize()
 

@@ -5,7 +5,7 @@ searches the web, remembers, sends reminders, tells you when something you are w
 other apps, browses, looks at photos, reads PDFs and listens to voice notes you send. Anything that reaches another
 person or cannot be undone is shown to you first and needs a button press.
 
-**Status: in development, used by one person.** It has 850 automated tests. Reading, filing into a customer database,
+**Status: in development, used by one person.** It has 853 automated tests. Reading, filing into a customer database,
 reading pitch decks and connecting services from the chat have run for real in its owner's chat. Much else has run
 once, often on an invented example. Sending mail has run only in tests. It runs on a small server, moved there from
 a laptop with its data, and has not yet been there a week; nothing has been proven over weeks. WhatsApp has received

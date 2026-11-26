@@ -23,7 +23,7 @@ summary: What the final examination asks, with a full specimen paper. It is thre
 <h3>Section A (15 marks). Answer all.</h3>
 <ol>
 <li><span class="pts">[3]</span> State Property 1 (complete mediation) and name its hypothesis. Give one way a program can break the hypothesis without anyone changing the gate.</li>
-<li><span class="pts">[3]</span> Define the record of reading. Say exactly when it must be emptied, and what goes wrong if it is emptied earlier.</li>
+<li><span class="pts">[3]</span> Define the record of reading. Say exactly when it may be emptied, and what goes wrong if it is emptied earlier.</li>
 <li><span class="pts">[3]</span> A call creates a calendar event. Give inputs for which its effect class is <em>add</em>, and the smallest change that makes it <em>send</em>.</li>
 <li><span class="pts">[3]</span> Distinguish a property from a measurement. Classify each: (i) "no mail leaves without a question"; (ii) "the assistant follows 2% of planted instructions"; (iii) "every reported cost is derived from the journal".</li>
 <li><span class="pts">[3]</span> Define the noise floor of an evaluation and say how it is estimated from one version's runs.</li>
@@ -33,7 +33,7 @@ summary: What the final examination asks, with a full specimen paper. It is thre
 <ol>
 <li><span class="pts">[10]</span> A conversation starts with 12,000 tokens of fixed context and each call adds 1,500. Input costs 3 units per million tokens, a cache read 0.3, a cache write 3.75; ignore output.
 <ol type="a">
-<li>Derive the total input tokens sent over 20 calls with no cache.</li>
+<li>Derive the total input tokens sent over 20 calls with no cache, and their cost.</li>
 <li>With a cache in which each call reads everything sent before and writes only what is new, derive the cost of the same 20 calls, and the ratio to (a).</li>
 <li>The cache lasts five minutes. The owner pauses for an hour after call 10. What does call 11 cost under each of: carry on; begin a new conversation with a 2,000-token summary? State the assumption that decides between them.</li>
 </ol></li>
@@ -43,8 +43,8 @@ summary: What the final examination asks, with a full specimen paper. It is thre
 <li>A colleague computes a 95% interval treating all 120 runs as independent. Is their interval too wide or too narrow, and why? What is the unit of resampling that fixes it?</li>
 <li>A change raises the 10 hard cases to 0.7 and leaves the rest alone. Explain why a paired comparison detects this with fewer runs than comparing two suite scores, and estimate the size of the paired difference.</li>
 </ol></li>
-<li><span class="pts">[10]</span> Prove or refute: "If a gate asks before every call with a send effect, then no detail read from an outsider's mail can reach a third party without the owner's approval." If you refute it, give the counterexample as a sequence of calls and say which definition must be strengthened.</li>
-<li><span class="pts">[10]</span> A team tries 30 variations of an instruction on a development half of their cases and reports the best one's score on that same half. Then, embarrassed, they report the best one's score on the held-out half, and try 9 more variations against the held-out half before choosing.
+<li><span class="pts">[10]</span> Prove or refute: "If a gate asks before every call with a send effect, then no detail read from an outsider's mail can reach a third party without the owner knowingly approving it." If you refute it, give the counterexample as a sequence of calls and say which definition must be strengthened.</li>
+<li><span class="pts">[10]</span> A team tries 30 variations of an instruction on a development half of their cases and reports the best one's score on that same half. Then, embarrassed, they report the best one's score on the held-out half, and try 9 more variations against the held-out half before choosing one and reporting its held-out score.
 <ol type="a">
 <li>Say what each of the three reported numbers estimates.</li>
 <li>Using Property 4, bound the chance that the final choice shows a gain on the held-out half at the 5% level when no variation has any true effect.</li>

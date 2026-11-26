@@ -91,13 +91,21 @@ def test_rows_are_shown_as_rows_fields_by_name_and_ids_last_with_nothing_left_ou
 
 def test_an_action_is_named_in_words_and_an_app_by_the_name_a_person_knows():
     assert plain.action("GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND") == "Spreadsheets values append"
-    assert plain.action("GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND", "Appends rows to the end of a sheet. Uses the API.") == "Appends rows to the end of a sheet"
     assert plain.app("googlesheets") == "Google Sheets" and plain.app("notion") == "Notion" and plain.app("microsoft_teams") == "Microsoft Teams"
 
 
 def test_a_message_of_nothing_is_never_sent():
     assert split_message("") == [] and split_message("   \n \n") == [] and split_message("a") == ["a"]
     assert all(p.strip() for p in split_message("x" * 5000 + "\n\n\n", 4096))
+
+
+async def test_no_word_of_the_question_is_written_by_whoever_published_the_action(tmp_path):
+    import test_anyapp as A
+    x = A.rig(tmp_path, connected=True)
+    await x.h["app_find"]({"task": "add a row to my budget sheet"})          # the catalogue's descriptions have now been read
+    asked = A.approving(x)
+    await x.gate.permission(A.APP_RUN, A.call("GOOGLESHEETS_VALUES_UPDATE", range="A1", values=[["b"]]))
+    assert asked and "Overwrite a range" not in asked[0] and asked[0].startswith("Do this in Google Sheets?\n\nValues update\n")
 
 
 # --- no supplier's name or address in the chat --------------------------------------------------------------------------
@@ -148,3 +156,22 @@ def test_nothing_the_program_itself_says_to_the_owner_names_a_supplier():
                 if not re.search(r"deliveries with a bad signature|from a number that is not|that arrived late|did not return the poll", n.value):   # journal lines, never sent
                     found.append(f"{path}:{n.lineno}")
     assert found == [], "a sentence the program can send names a supplier: " + ", ".join(found)
+
+
+# --- what was cut off is reported, whatever else was going on ----------------------------------------------------------
+
+def test_a_contact_lookup_ending_does_not_hide_a_task_that_was_cut_off_and_two_background_jobs_are_both_counted(tmp_path):
+    from odysseus.__main__ import unfinished
+    from odysseus.journal import Journal
+    j = Journal(tmp_path / "j.jsonl")
+    j.write("task_start", preview="draft the memo")
+    j.write("task_end", status="done", cost_usd=0.01, leads=True)         # a lookup of contacts finished meanwhile
+    assert unfinished(j)["preview"] == "draft the memo", "the owner's task is still open"
+    j.write("task_end", status="done", cost_usd=0.02)
+    assert unfinished(j) is None
+    j.write("task_start", preview="first job", background=True)
+    j.write("task_start", preview="second job", background=True)
+    j.write("task_end", status="done", background=True)
+    assert unfinished(j)["background"] == "second job", "one of two ended; the other is still owed"
+    j.write("task_end", status="done", background=True)
+    assert unfinished(j) is None
