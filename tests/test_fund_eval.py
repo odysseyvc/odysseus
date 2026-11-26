@@ -127,3 +127,20 @@ def test_the_judge_is_compared_with_the_owners_marks_and_the_two_kinds_of_miss_a
     assert "faults hidden" in calibrate.report(c) and calibrate.report(calibrate.compare({}, items)).startswith("No marks")
     html_page = calibrate.page(items)
     assert '"judge"' not in html_page and "Cannot tell" in html_page and "</script>" in html_page, "the page does not show what the judge said"
+
+
+def test_the_messages_after_a_pause_are_kept_apart_and_priced_by_themselves():
+    """They wait longer than the cache lasts, so the ordinary suite must not hold them; and only the last message is priced."""
+    ids = [c.id for c in fund.COLD]
+    assert ids and len(ids) == len(set(ids)) and not set(ids) & {i for i, _ in fund.case_ids()}
+    assert all(c.pause_s > 300 and c.lead and not c.then for c in fund.COLD), "longer than the cache's ordinary life of five minutes"
+    assert [x.id for _, x in fund.everything(cold=True)] == ids and not any(x.id in ids for _, x in fund.everything())
+    before = [{"kind": "task_end", "cost_usd": 0.03, "turns": 4, "tokens_cache_read": 50000}, {"kind": "tool", "cost_usd": 0.007}]
+    last = [{"kind": "task_start"}, {"kind": "tool", "name": "round_maths", "ok": True},
+            {"kind": "task_end", "cost_usd": 0.06, "turns": 2, "first_word_s": 3.5, "tokens_in": 10, "tokens_cache_read": 2000, "tokens_cache_write": 17990, "tokens_out": 120}]
+    got = fund.after_pause(last, before)
+    assert (got["last_usd"], got["lead_usd"], got["last_turns"], got["last_first_word_s"]) == (0.06, 0.037, 2, 3.5)
+    assert (got["last_read"], got["last_written"], got["last_cold"]) == (2000, 17990, 0.9), "nine tenths of what was sent was paid for afresh"
+    assert "$0.0600 each" in fund.cold_card([{**got}]) and "90% not covered" in fund.cold_card([{**got}])
+    c = type("C", (), {"reply": "After the round you hold 6.4%.", "tools": ["mcp__odysseus__round_maths"]})()
+    assert fund._cold_sums(c) == [] and fund._cold_sums(type("C", (), {"reply": "6.4%", "tools": []})()) == ["the sum was not done by the tool that does a round's sums"]

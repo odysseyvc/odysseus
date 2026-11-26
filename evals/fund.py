@@ -91,6 +91,8 @@ class Case:
     file: str = ""
     planted: Callable[[Any], bool] | None = None      # True if the instruction planted in this case was followed
     planted_statement: int = -1             # or: the judged statement (its position) that says the planted thing was not done
+    lead: tuple[str, ...] = ()              # messages sent before `say`, to make a conversation; their replies are not marked
+    pause_s: float = 0.0                    # seconds of real waiting before the last message, so that it arrives with the cache gone
 
 
 # --- what a check may look at ---------------------------------------------------------------------------------------------
@@ -1235,23 +1237,30 @@ async def run_case(case: Case, rep: int, base: Any, out: Path, search_shape: Any
     reviewer = Reviewer(attio, journal, state_file=folder / "pipeline.json")
     runner = AgentRunner(settings, journal, make_tool_server(P.FakeSearch(*search_shape), journal, memory, gate=gate, attio=attio, services=[notes],
                                                              portfolio=portfolio, reviewer=reviewer, skills=skills),
-                         gate=gate, system_prompt=conversation_prompt(False, with_files=True, with_attio=True) + notes.prompt())
+                         gate=gate, system_prompt=conversation_prompt(False, with_files=True, with_attio=True) + notes.prompt(),
+                         # A case with a pause is the owner's own conversation, which is kept between runs of the program: only that
+                         # agent is given the hour-long cache when it is switched on (agent.py), so the case must be one.
+                         persist=bool(case.pause_s))
     conv = Conversation(settings, journal, ledger, runner, memory, gate=gate, attio=attio, services=[notes], skills=skills)
     conv._portfolio = portfolio
     chat = P.OwnerChat(case.tap)
     chat.conv, chat.owner = conv, settings.owner_id
     started, status = time.monotonic(), "done"
+    mark: dict[str, int] = {}       # for a case with a pause: how much had been said and written down before the last message
     try:
         async def go():
             attio.warm()
             await attio.layout()
             if agent == "nothing":
                 return
-            for message in (case.say, case.then):
-                if message:
-                    await conv.handle(settings.owner_id, message, chat)
-                    await conv.wait()
-        await asyncio.wait_for(go(), TIMEOUT_S)
+            messages = [m for m in (*case.lead, case.say, case.then) if m]
+            for n, message in enumerate(messages):
+                if case.pause_s and n == len(messages) - 1:
+                    mark.update(sent=len(chat.sent), records=len(journal.read()))
+                    await asyncio.sleep(case.pause_s)
+                await conv.handle(settings.owner_id, message, chat)
+                await conv.wait()
+        await asyncio.wait_for(go(), TIMEOUT_S * (1 + len(case.lead)) + case.pause_s)
         ends = [r for r in journal.read() if r["kind"] == "task_end"]
         status = ends[-1]["status"] if ends else ("no task" if agent == "real" else "done")
     except asyncio.TimeoutError:
@@ -1264,6 +1273,10 @@ async def run_case(case: Case, rep: int, base: Any, out: Path, search_shape: Any
         pass
     c.reply, c.asks, c.records = "\n\n".join(chat.sent), chat.asks, journal.read()
     c.tools = [str(r.get("name") or "") for r in c.records if r["kind"] == "tool" and r.get("ok", True)]
+    last = c.records[mark["records"]:] if mark else []
+    if mark:        # only the reply to the message that came after the pause is marked, and only its tools count as used
+        c.reply = "\n\n".join(chat.sent[mark["sent"]:])
+        c.tools = [str(r.get("name") or "") for r in last if r["kind"] == "tool" and r.get("ok", True)]
     try:
         failures = case.check(c)
     except Exception as ex:
@@ -1285,7 +1298,22 @@ async def run_case(case: Case, rep: int, base: Any, out: Path, search_shape: Any
             "tool_calls": len([r for r in c.records if r["kind"] == "tool"]), "tools": sorted(set(c.tools)),
             "cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in c.records if r["kind"] in ("task_end", "tool")), 4),
             **effort(c.records), "writes": [n for n, _ in crm.writes], "unused": sorted(set(c.unused)),
-            "planted_statement": case.planted_statement}
+            "planted_statement": case.planted_statement, **(after_pause(last, c.records[:mark["records"]]) if mark else {})}
+
+
+def after_pause(last: list[dict[str, Any]], before: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the one message after the pause cost, apart from the conversation that led up to it: its dollars, its calls,
+    how long its first word took, and its tokens by kind. `last_cold` is the share of what the model was sent for it that
+    was not read back from the cache: near 1 when the cache had gone, near 0 when it was still there."""
+    ends = [r for r in last if r["kind"] == "task_end"]
+    tok = {k: sum(int(r.get(k) or 0) for r in ends) for k in ("tokens_in", "tokens_cache_read", "tokens_cache_write", "tokens_out")}
+    sent = tok["tokens_in"] + tok["tokens_cache_read"] + tok["tokens_cache_write"]
+    return {"last_usd": round(sum(r.get("cost_usd") or 0.0 for r in last if r["kind"] in ("task_end", "tool")), 4),
+            "lead_usd": round(sum(r.get("cost_usd") or 0.0 for r in before if r["kind"] in ("task_end", "tool")), 4),
+            "last_turns": sum(int(r.get("turns") or 0) for r in ends),
+            "last_first_word_s": next((float(r["first_word_s"]) for r in ends if r.get("first_word_s") is not None), 0.0),
+            "last_read": tok["tokens_cache_read"], "last_written": tok["tokens_cache_write"], "last_out": tok["tokens_out"],
+            "last_cold": round(1 - tok["tokens_cache_read"] / sent, 3) if sent else 0.0}
 
 
 def steps_of(records: list[dict[str, Any]]) -> list[str]:
@@ -1462,7 +1490,54 @@ def card(name: str, rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def everything() -> list[tuple[str, Any]]:
+# --- a message after a pause ------------------------------------------------------------------------------------------------
+#
+# Every case above is a message sent seconds after the one before it, to a conversation the model's maker still has in its
+# cache. Most of what the owner's own conversation costs is the other kind: a message that comes when the cache has gone,
+# and pays for the whole conversation again. These cases are that message. Each builds a short conversation, then really
+# waits, longer than the cache's ordinary life of five minutes, and sends one more. Only that message is marked, and what
+# it cost is kept apart (`last_usd` and the fields beside it). They are not part of the ordinary suite, which they would
+# make an hour longer: run them with --cold, one at a time (--jobs 1), because two running together keep the shared
+# opening of each other's conversations in the cache and the wait then measures nothing.
+COLD_PAUSE_S = 330.0
+_COLD_LEAD = ("What needs my attention in the pipeline this week?", "Where do we stand with Lumen Grid? Check the record and the meeting notes.")
+
+
+def _cold_reference(c: Any) -> list[str]:
+    out = []
+    if not said(c, "reference"):
+        out.append("the reply does not say that references were asked for")
+    if not said(c, "delay", "not yet", "has not", "hasn't", "still waiting", "outstanding", "only one", "one of the two", "second"):
+        out.append("the reply does not say that the second reference has not come")
+    return out
+
+
+def _cold_date(c: Any) -> list[str]:
+    return [] if said(c, "24 nov", "24th", "november 24", "24/11") else ["the reply does not give the date the request list was promised for"]
+
+
+def _cold_sums(c: Any) -> list[str]:
+    out = []
+    if not said(c, "6.4"):
+        out.append("the reply does not give 6.4%")
+    if not any("round_maths" in t for t in c.tools):
+        out.append("the sum was not done by the tool that does a round's sums")
+    return out
+
+
+COLD = [
+    Case("cold_asked_before", "a message after a pause", "What did we ask Kestrel Bio for before going further, and has it come?", _cold_reference,
+         lead=_COLD_LEAD, pause_s=COLD_PAUSE_S),
+    Case("cold_refers_back", "a message after a pause", "And by when did I say I would send Priya the diligence request list?", _cold_date,
+         lead=_COLD_LEAD, pause_s=COLD_PAUSE_S),
+    Case("cold_new_sum", "a message after a pause", "Different thing. A company we hold 8% of raises 3m at 12m pre-money and we put in nothing. What do we hold afterwards?",
+         _cold_sums, lead=_COLD_LEAD, pause_s=COLD_PAUSE_S),
+]
+
+
+def everything(cold: bool = False) -> list[tuple[str, Any]]:
+    if cold:
+        return [("case", c) for c in COLD]
     return [("case", c) for c in CASES] + [("errand", e) for e in P.ERRANDS]
 
 
@@ -1478,6 +1553,7 @@ async def main() -> int:
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--agent", default="real", choices=("real", "nothing"))
     ap.add_argument("--summary", default="")
+    ap.add_argument("--cold", action="store_true", help="the messages after a pause, and nothing else; use --jobs 1")
     args = ap.parse_args()
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -1486,12 +1562,26 @@ async def main() -> int:
         print(card(args.summary, load_rows(ROOT / args.summary)))
         return 0
     out = ROOT / args.variant
-    await run_variant(out, args.reps, args.only, args.jobs, args.agent)
+    await run_variant(out, args.reps, args.only, 1 if args.cold else args.jobs, args.agent, cold=args.cold)
     print("\n" + card(args.variant, load_rows(out)))
+    if args.cold:
+        print("\n" + cold_card(load_rows(out)))
     return 0
 
 
-async def run_variant(out: Path, reps: int, only: str = "", jobs: int = 6, agent: str = "real", ids: set[str] | None = None) -> list[dict[str, Any]]:
+def cold_card(rows: list[dict[str, Any]]) -> str:
+    """The message after the pause, by itself: what it cost and how much of it the cache did not cover."""
+    rows = [r for r in rows if "last_usd" in r]
+    if not rows:
+        return "No message after a pause in this run."
+    mean = lambda k: sum(float(r.get(k) or 0) for r in rows) / len(rows)
+    return (f"The message after the pause, over {len(rows)} runs: ${mean('last_usd'):.4f} each, {mean('last_turns'):.2f} calls, first word after "
+            f"{mean('last_first_word_s'):.1f} s. Sent to the model for it: {mean('last_read'):,.0f} tokens read back from the cache and "
+            f"{mean('last_written'):,.0f} written to it; {mean('last_cold'):.0%} not covered by the cache. The conversation before it: ${mean('lead_usd'):.4f}.")
+
+
+async def run_variant(out: Path, reps: int, only: str = "", jobs: int = 6, agent: str = "real", ids: set[str] | None = None,
+                      cold: bool = False) -> list[dict[str, Any]]:
     """Run every case `reps` times into `out`, skipping what its results file already holds. Returns all its rows."""
     from exa_py import Exa
     from odysseus.review import anthropic_call
@@ -1500,7 +1590,7 @@ async def run_variant(out: Path, reps: int, only: str = "", jobs: int = 6, agent
     shape = (spec.description, spec.input_schema)
     out.mkdir(parents=True, exist_ok=True)
     done = {(r["prompt_id"], r["rep"]) for r in load_rows(out)}
-    plan = [(kind, x, rep) for kind, x in everything() if only in x.id and (ids is None or x.id in ids) for rep in range(1, reps + 1) if (x.id, rep) not in done]
+    plan = [(kind, x, rep) for kind, x in everything(cold) if only in x.id and (ids is None or x.id in ids) for rep in range(1, reps + 1) if (x.id, rep) not in done]
     sem, lock, call = asyncio.Semaphore(jobs), asyncio.Lock(), anthropic_call(base.anthropic_api_key)
 
     async def one(kind: str, x: Any, rep: int) -> None:

@@ -88,7 +88,7 @@ class Settings:
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
     effort: str = ""             # how hard the model thinks before each step: low, medium or high; empty leaves it to the model's default. Measured: medium moved nothing, so it is off (agent.py)
     tools_on_demand: bool = False    # send the model the tools' names only, and each tool's full description when it looks one up. Measured: the model then does by itself what a tool it cannot see would have done, so it is off (agent.py)
-    cache_1h: bool = False       # keep the conversation's cache for an hour, not five minutes: a dearer write, fewer of them (agent.py)
+    cache_1h: bool = False       # keep the conversation's cache for an hour, not five minutes: a dearer write, fewer of them. Measured on messages sent after a real pause: that message 76% cheaper, the ones before it a third dearer; not yet tried on the owner's own week (agent.py)
     stop_grace_s: float = 5.0    # how long a task gets to end after "stop"
     data_dir: Path = Path("var")
     # Optional: reading notes filed into the owner's own website (booknotes.py). Both are needed.
