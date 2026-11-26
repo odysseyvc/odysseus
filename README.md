@@ -140,7 +140,8 @@ that is already in use, is `site/content/deploy.html` (built into the site as `d
   answered in the same chat by one exact word, YES or NO, read by code and not by the model, within ten minutes.
   Anything else you type approves nothing. This is weaker than a tap: a one-word reply meant for something else would
   answer the question that is waiting. Telegram and the direct WhatsApp route keep buttons.
-- Neither the Linq nor the Vobiz route has run against its vendor yet; both are built from documentation.
+- The Vobiz route has carried one text each way and nothing else: files, voice notes and a typed approval have not
+  been tried on it. The Linq route has not run against its vendor at all; it is built from documentation.
 - Your messages, mail and files pass through the vendors whose keys you supply.
 - With `E2B_API_KEY` set, the assistant can run Python on a rented machine that has no internet access and is destroyed
   after each run: for spreadsheets, arithmetic and charts. The code and the files it is given pass through E2B.
