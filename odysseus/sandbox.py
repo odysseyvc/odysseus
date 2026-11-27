@@ -455,13 +455,13 @@ class E2B:
         began = time.monotonic()
         look = look and self.documents
         life = seconds + 60 + (LOOK_S if look else 0)
-        box, healthy, fresh = None, False, True
+        box, healthy, fresh, paid_until = None, False, True, 0.0
         waiting, self._idle = self._idle, None           # taken, so that a run starting meanwhile gets a machine of its own
         if waiting is not None:
             if self._clock() < waiting[1] - 10:
                 try:
                     await waiting[0].set_timeout(life)
-                    box, fresh = waiting[0], False
+                    box, fresh, paid_until = waiting[0], False, waiting[1]
                 except Exception:
                     box = None                           # it has gone already: a new one, as before
             if box is None:
@@ -503,7 +503,11 @@ class E2B:
                     looked = [{"name": n, "pages": 0, "picture": b"", "problem": "the pages could not be turned into pictures"} for n, _ in made]
             healthy = True
             keeping = self._keep_s > 0 and self._idle is None
-            return Ran(out, "".join(ex.logs.stderr), error, made, time.monotonic() - began, looked, idle=float(self._keep_s) if keeping else 0.0)
+            took = time.monotonic() - began
+            # The idle time paid for is counted once for a stretch of runs and not once for each: a new machine is charged
+            # its whole keeping time, and a machine used again only for how much later it will now be destroyed.
+            idle = 0.0 if not keeping else float(self._keep_s) if fresh else max(0.0, self._clock() + self._keep_s - paid_until - took)
+            return Ran(out, "".join(ex.logs.stderr), error, made, took, looked, idle=idle)
         finally:
             # Kept for the next run only if this one ran to its end and no other machine is already standing ready.
             if healthy and self._keep_s > 0 and self._idle is None:

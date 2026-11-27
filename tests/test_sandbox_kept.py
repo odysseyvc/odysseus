@@ -60,7 +60,7 @@ async def test_the_next_run_uses_the_machine_already_running_with_its_folders_em
     assert len(Box.made) == 1 and not Box.made[0].killed and first.idle == sandbox.KEEP_S, "kept, and the keeping is counted as paid for"
     now.t += 30
     second = await backend.run("print(2)", [], 120)
-    assert len(Box.made) == 1 and second.idle == sandbox.KEEP_S
+    assert len(Box.made) == 1 and 29 <= second.idle <= 30, "used again 30 seconds on: only the extra 30 seconds of keeping are paid for, not 90 again"
     assert Box.made[0].ran == [sandbox.CLEAR_CODE, "print(1)", sandbox.CLEAR_CODE, "print(2)"], "emptied before each run"
     assert Box.made[0].timeouts[-1] == sandbox.KEEP_S, "its life is cut back to the keeping time after each run"
     await backend.close()
