@@ -436,7 +436,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         me.closers += [attach_vobiz(vobiz, shared.door), close_via]
     by_whatsapp = whatsapp or vobiz         # the direct route if it is set up, else the one through Vobiz
     if host:
-        shared.wa = by_whatsapp             # the one WhatsApp number, on which invited people are heard and answered too
+        # The WhatsApp number invited people join on and are answered on: the route that knows its own number. With
+        # both routes set up, the direct one came first and knows no number, so an invitation asked for on WhatsApp was
+        # answered "there is no WhatsApp number here" while one was in use.
+        shared.wa = line_with_a_number(vobiz, whatsapp) or by_whatsapp
     on_whatsapp = by_whatsapp is not None and settings.notify_on == "whatsapp"
     notify = me.notify = by_whatsapp.chat() if on_whatsapp else telegram
     # Optional: iMessage as a third channel, through Linq (linq.py). It only answers: reminders stay where they are.
@@ -592,6 +595,11 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me
+
+
+def line_with_a_number(*routes: Any) -> Any:
+    """The first WhatsApp route that knows the number it serves, or None. An invitation link can only open a known number."""
+    return next((r for r in routes if r is not None and getattr(r, "number", "")), None)
 
 
 def member_settings(settings: Settings, user_id: int) -> Settings:

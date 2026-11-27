@@ -135,3 +135,12 @@ async def test_without_the_house_the_number_hears_only_the_owner_as_before(tmp_p
     assert x.v.receive(*delivery(text("join " + code, sender=GUEST, mid="j1"))) == 200
     await x.v.wait()
     assert x.sent == [] and not x.people.has(wa_id(GUEST))
+
+
+def test_the_invitation_opens_the_route_that_knows_its_number_whichever_was_set_up_first():
+    """Both routes were set up on the server. The direct one came first and knows no number, so no link could be made."""
+    from types import SimpleNamespace
+    from odysseus.__main__ import line_with_a_number
+    direct, rented = SimpleNamespace(number=""), SimpleNamespace(number="918040001234")
+    assert line_with_a_number(rented, direct) is rented and line_with_a_number(direct, rented) is rented
+    assert line_with_a_number(None, direct) is None and line_with_a_number(None, None) is None
