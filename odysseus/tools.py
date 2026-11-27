@@ -52,6 +52,7 @@ SCHEDULE_TOOL = _name("schedule")
 WATCH_TOOL = _name("watch")
 CHECKIN_ADD, CHECKIN_DONE = _name("checkin_add"), _name("checkin_done")
 LEADS_TOOL = _name("who_to_ask_about")
+MANAGE_TOOL = _name("manage")
 
 
 def _after_reading(taint: Taint, text: str) -> list[str]:
@@ -226,6 +227,15 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
     gate.rule(skills_mod.SKILL_SAVE, lambda a: ASK if _after_reading(taint, skill_text(a)) else ALLOW,
               lambda a: skills_mod.describe_save(a, _after_reading(taint, skill_text(a))))
     gate.rule(_name("skill_read"), ALLOW)
+    # The things the program does itself (said.py). Showing something needs no question. Changing something runs unasked
+    # only while the task has read nothing but the owner's own words; after that the words may be someone else's, and the
+    # owner is asked. Stopping a person's assistant, removing a connection: always asked.
+    from . import said
+
+    def manage_decision(a: dict[str, Any]) -> str:
+        k = said.kind(str(a.get("what", "")))
+        return ALLOW if k == said.SHOW or (k == said.CHANGE and not taint.sources) else ASK
+    gate.rule(MANAGE_TOOL, manage_decision, said.describe)
     # Three tools that are code reading or code calculating. The round's sums change nothing. The pipeline review only
     # reads. Recording a company's figures writes numbers, and nothing else, to the assistant's own notebook, and code
     # shows the owner each one under the reply.
@@ -387,7 +397,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
                      checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None, peers: Any = None,
-                     skills: Any = None, portfolio: Any = None, reviewer: Any = None):
+                     skills: Any = None, portfolio: Any = None, reviewer: Any = None, manage: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -733,4 +743,8 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     if browser is not None:
         handler = gate.guarded(browser_mod.BROWSE_TOOL, browser.browse) if gate is not None else browser.browse   # lock 2
         tools.append(tool("browse", browser_mod.SCHEMA[0], browser_mod.SCHEMA[1])(handler))
+    if manage is not None and not read_only:
+        # The things the program does itself, asked for in the owner's own words (said.py). Never in an unattended run.
+        do, (about, shape) = manage
+        tools.append(tool("manage", about, shape)(gate.guarded(MANAGE_TOOL, do) if gate is not None else do))   # lock 2
     return create_sdk_mcp_server(name=SERVER, tools=tools)

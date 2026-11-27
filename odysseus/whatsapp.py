@@ -46,6 +46,7 @@ from collections import deque
 from typing import Any, Awaitable, Callable
 
 from .conversation import Conversation, split_message
+from . import fmt
 from .journal import Journal
 from .ocr import MAX_BYTES
 
@@ -75,6 +76,8 @@ class WhatsAppChat:
 
     def __init__(self, http: Http, phone_id: str, to: str, journal: Journal):
         self._http, self._url, self._to, self._journal = http, f"{GRAPH}/{phone_id}/messages", to, journal
+        self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
+        self.channel = "whatsapp"
 
     async def _post(self, body: dict[str, Any]) -> None:
         status, data = await self._http("POST", self._url, {"messaging_product": "whatsapp", "recipient_type": "individual", "to": self._to, **body})
@@ -86,10 +89,14 @@ class WhatsAppChat:
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
-            await self._post({"type": "text", "text": {"preview_url": False, "body": part}})
+            await self._post({"type": "text", "text": {"preview_url": False, "body": fmt.whatsapp(part) or part}})
 
     async def draft(self, draft_id: int, text: str) -> None:
         pass      # WhatsApp has no way to show a reply as it is being written
+
+    async def status(self, line: str) -> None:
+        """A few fixed words on what is being done, sent once when a task turns out to need a step (conversation.py)."""
+        await self.send(line)
 
     async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The question is sent whole. The buttons go on the last part, so they are reached only after
@@ -109,8 +116,12 @@ class WhatsApp:
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, phone_id: str, owner_number: str,
                  app_secret: str, verify_token: str, owner_id: int, clock: Callable[[], float] = time.time,
-                 ids_file: Any = None, groups: Callable[[], Any] | None = None):
+                 ids_file: Any = None, groups: Callable[[], Any] | None = None, people: Callable[[], Any] | None = None):
         self._conv, self._journal, self._http = conversation, journal, http
+        # Everyone who has an assistant here (people.py), once that exists; asked for at each delivery. With it, a person
+        # the host invited is heard on this number too, each by their own assistant. Without it, only the owner is.
+        self._people = people
+        self.number = ""            # the number itself, where the route knows it: what an invitation link opens
         self._groups = groups       # what serves a WhatsApp group, if anything does yet (whatsapp_group.py); asked for at each delivery
         self._clock = clock
         self._unsigned, self._unsigned_logged = 0, 0.0      # unsigned posts since the last log line, and when that was
@@ -140,8 +151,42 @@ class WhatsApp:
             return True
         return bool(user) and user == self._owner_user
 
-    def chat(self) -> WhatsAppChat:
-        return WhatsAppChat(self._http, self._phone_id, self._owner, self._journal)
+    def chat(self, to: str = "") -> WhatsAppChat:
+        return WhatsAppChat(self._http, self._phone_id, to or self._owner, self._journal)
+
+    def _person(self, m: dict[str, Any]) -> tuple[int, str, Any] | None:
+        """Who sent this, if they may be heard: their id, their number, and what hears them. The number comes from the
+        signed delivery, which the sender cannot choose."""
+        house = self._people() if self._people is not None else None
+        if self._is_owner(m):
+            return self._owner_id, self._owner, house or self._conv
+        number = digits(m.get("from", ""))
+        if house is None or not number:
+            return None
+        from .people import wa_id
+        uid = wa_id(number)
+        return (uid, number, house) if uid and house.is_owner(uid) else None
+
+    async def _joining(self, m: dict[str, Any]) -> bool:
+        """A stranger sending exactly the message an invitation link writes. The code is checked where every code is
+        (people.py): a wrong one gets no reply, and a few wrong ones in an hour and nothing more is looked at."""
+        from .people import JOIN, wa_id
+        house = self._people() if self._people is not None else None
+        number = digits(m.get("from", ""))
+        found = JOIN.match((m.get("text") or {}).get("body", "")) if m.get("type") == "text" else None
+        if house is None or found is None or not wa_id(number):
+            return False
+        chat = self.chat(number)
+        chat.who = str(m.get("_name") or "")
+        await house.handle(wa_id(number), "/start " + found.group(1), chat)
+        return True
+
+    @staticmethod
+    def _name(value: dict[str, Any], m: dict[str, Any]) -> None:
+        """Put the sender's own name, which comes beside the message and not in it, where a joining can find it."""
+        for c in value.get("contacts") or []:
+            if digits(c.get("wa_id", "")) == digits(m.get("from", "")) and digits(m.get("from", "")):
+                m["_name"] = str((c.get("profile") or {}).get("name") or "")[:80]
 
     # --- the handshake -----------------------------------------------------------------
     def verify(self, query: dict[str, str]) -> tuple[int, str]:
@@ -174,6 +219,7 @@ class WhatsApp:
                 if line and self._phone_id and line != self._phone_id:
                     continue        # for another number of the same account, which another route may be serving (vobiz.py)
                 for message in value.get("messages") or []:
+                    self._name(value, message)
                     task = asyncio.get_running_loop().create_task(self._handle(message))
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)
@@ -189,10 +235,13 @@ class WhatsApp:
                 # taken as an instruction to their own assistant, whether or not anything serves that group.
                 return
             self._seen.append(m.get("id"))
-            if not self._is_owner(m):
-                self._journal.write("dropped", what="whatsapp message from a number that is not the owner's")
+            person = self._person(m)
+            if person is None:
+                if not await self._joining(m):
+                    self._journal.write("dropped", what="whatsapp message from a number that is not the owner's")
                 return
-            chat, kind = self.chat(), m.get("type")
+            who, number, conv = person
+            chat, kind = self.chat(number), m.get("type")
             try:
                 age = self._clock() - int(m.get("timestamp") or 0) if m.get("timestamp") else 0
             except (TypeError, ValueError):
@@ -207,24 +256,24 @@ class WhatsApp:
                                     "I have not acted on it. Send it again if you still want it.")
                 return
             if kind == "text":
-                await self._conv.handle(self._owner_id, (m.get("text") or {}).get("body", ""), chat)
+                await conv.handle(who, (m.get("text") or {}).get("body", ""), chat)
             elif kind == "interactive":
                 reply = ((m.get("interactive") or {}).get("button_reply") or {}).get("id", "")
                 if reply.startswith("ap:") and reply.count(":") == 2:
                     _, approval_id, answer = reply.split(":")
-                    line = (await self._conv.handle_decision(self._owner_id, approval_id, True, thread=True) if answer == "t"
-                            else await self._conv.handle_decision(self._owner_id, approval_id, answer == "y"))
+                    line = (await conv.handle_decision(who, approval_id, True, thread=True) if answer == "t"
+                            else await conv.handle_decision(who, approval_id, answer == "y"))
                     if line == "This request is no longer waiting.":
                         await chat.send(line)
             elif kind in ("image", "document"):
                 item = m.get(kind) or {}
                 name = item.get("filename") or ("photo.jpg" if kind == "image" else "file")
                 data, size = await self._download(item.get("id", ""))
-                await self._conv.handle_file(self._owner_id, data, name, item.get("mime_type"), size, item.get("caption") or "", chat)
+                await conv.handle_file(who, data, name, item.get("mime_type"), size, item.get("caption") or "", chat)
             elif kind == "audio":
                 data, size = await self._download((m.get("audio") or {}).get("id", ""))
                 # WhatsApp does not say how long a recording is, so only its size is checked here.
-                await self._conv.handle_voice(self._owner_id, data, "voice.ogg", size, 0, chat)
+                await conv.handle_voice(who, data, "voice.ogg", size, 0, chat)
             elif kind == "system":
                 # Meta's own notice (the person changed their number or their id), not something the owner wrote.
                 self._journal.write("whatsapp", notice=str((m.get("system") or {}).get("type", ""))[:40])

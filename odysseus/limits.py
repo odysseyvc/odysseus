@@ -24,7 +24,7 @@ _BEFORE = re.compile(r"\b(?:at most|no more than|not more than|up to|max(?:imum)
 _AFTER = re.compile(r"\b" + _N + r"\s+" + _UNIT + r"\s+(?:at most|or fewer|or less|max(?:imum)?|tops)\b", re.I)
 _STRICT = re.compile(r"\b(?:under|fewer than|less than)\b", re.I)
 _WORD = re.compile(r"[^\W_]+(?:['’.,\-/][^\W_]+)*")
-SLACK = 0.8          # the model is told to aim for this share of the limit
+SLACK = 0.7          # the target given for words, as a share of the limit: replies overran a target of four fifths once they could carry lists and labels
 HEAD = 700           # characters of a message in which a limit is looked for
 
 
@@ -59,8 +59,9 @@ def note(message: str) -> str:
     n, unit = found
     aim = max(1, int(n * SLACK)) if unit == "word" else n
     return (f"\n\n[Added by the program, not by the owner: the owner set a limit of {n} {unit}{'s' if n != 1 else ''} for the whole reply. "
-            f"Replies to such requests have run about a fifth over, so write no more than {aim} {unit}{'s' if aim != 1 else ''}. Lists, headings and "
-            "every line count. Cut detail before you cut anything the owner asked for by name.]")
+            f"Replies to such requests have run well over their limit, so write no more than {aim} {unit}{'s' if aim != 1 else ''}. Lists, labels, headings and "
+            "every line count, and a labelled list spends words a sentence does not: under a limit, write tight sentences and keep marks "
+            "to a few words in bold. Cut detail before you cut anything the owner asked for by name.]")
 
 
 def over(message: str, reply: str) -> str:

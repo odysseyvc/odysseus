@@ -241,7 +241,11 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     from .portfolio import Portfolio
     portfolio = Portfolio(settings.data_dir / "portfolio.json", today=lambda: now().date())       # figures the firm's companies report (portfolio.py)
     shelf = Shelf(settings.data_dir / "files", now=now)       # what the owner sends is kept, to be handed back when asked for (files.py)
-    own_chat = TelegramChat(bot, settings.owner_id)           # a kept file goes to this person's own chat and nowhere else
+    # This person's own chat: where a kept file, a reminder and a report go, and nowhere else. A person who joined on
+    # WhatsApp has no Telegram chat; theirs is their thread on the host's WhatsApp number.
+    from .people import wa_number
+    on_wa = wa_number(settings.owner_id) if getattr(shared, "wa", None) is not None else ""
+    own_chat = shared.wa.chat(on_wa) if on_wa else TelegramChat(bot, settings.owner_id)
     # An email address of the assistant's own (mailbox.py), if there is a key. It is made when the person sends /address.
     late: dict = {}          # the conversation, once it exists: the mailbox and its tools are made before it
     inbox = inbox_tools = None
@@ -344,11 +348,20 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                             printer=printer, send_file=lambda name, data, caption: own_chat.send_file(name, data=data, caption=caption),
                             at=settings.pipeline_review_at)
 
+    async def run_command(text: str) -> None:
+        # A thing the program does itself, asked for in words (said.py): carried out exactly as the typed command was,
+        # by whatever stands in front of this person's conversation, and answered in the chat the task was asked in.
+        house = getattr(shared, "house", None)
+        target = house if house is not None and house.is_owner(settings.owner_id) else late["c"]
+        await target.handle(settings.owner_id, text, getattr(late["c"], "chat_now", None) or own_chat)
+    from . import said
+
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
                                 files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
-                                peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer)
+                                peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer,
+                                manage=(said.handler(run_command, journal, host), said.schema(host)))
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -401,9 +414,11 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         http, close_http = make_http(settings.whatsapp_token)
         whatsapp = WhatsApp(conversation, journal, http, phone_id=settings.whatsapp_phone_id, owner_number=settings.owner_whatsapp,
                             app_secret=settings.whatsapp_app_secret, verify_token=settings.whatsapp_verify_token, owner_id=settings.owner_id,
-                            ids_file=settings.data_dir / "whatsapp.json", groups=lambda: getattr(shared, "groups", None))
-    # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up.
-    telegram = TelegramChat(bot, settings.owner_id)
+                            ids_file=settings.data_dir / "whatsapp.json", groups=lambda: getattr(shared, "groups", None),
+                            people=lambda: getattr(shared, "house", None))
+    # Reminders and routines go to one place: Telegram, unless the owner chose WhatsApp and it is set up. A person who
+    # joined on WhatsApp is reached there, since they have nowhere else.
+    telegram = own_chat if on_wa else TelegramChat(bot, settings.owner_id)
     # Optional: WhatsApp by a second route, through Vobiz and a number rented from it (vobiz.py). It cannot send
     # buttons, so its approval questions are asked and answered in words (typed.py).
     vobiz = None
@@ -414,9 +429,12 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         via, close_via = vobiz_http(settings.vobiz_auth_id, settings.vobiz_auth_token)
         vobiz = Vobiz(conversation, journal, via, auth_id=settings.vobiz_auth_id, channel_id=settings.vobiz_channel_id,
                       number=settings.vobiz_number, owner_number=settings.owner_whatsapp, secret=settings.vobiz_secret,
-                      owner_id=settings.owner_id, ids_file=settings.data_dir / "whatsapp.json")
+                      owner_id=settings.owner_id, ids_file=settings.data_dir / "whatsapp.json",
+                      people=lambda: getattr(shared, "house", None))
         me.closers += [attach_vobiz(vobiz, shared.door), close_via]
     by_whatsapp = whatsapp or vobiz         # the direct route if it is set up, else the one through Vobiz
+    if host:
+        shared.wa = by_whatsapp             # the one WhatsApp number, on which invited people are heard and answered too
     on_whatsapp = by_whatsapp is not None and settings.notify_on == "whatsapp"
     notify = me.notify = by_whatsapp.chat() if on_whatsapp else telegram
     # Optional: iMessage as a third channel, through Linq (linq.py). It only answers: reminders stay where they are.
@@ -649,6 +667,11 @@ async def main() -> int:
     house = House(settings.owner_id, people, host.journal, build, link, most=settings.people_max, board=board,
                   firm=build_firm, group_file=settings.data_dir / "group.json")
     house.add(settings.owner_id, host)
+    shared.house = house        # the WhatsApp number asks it who may be heard
+    wa_line = getattr(getattr(shared, "wa", None), "number", "")
+    if wa_line:
+        from .people import wa_link
+        house.wa_link = lambda code: wa_link(wa_line, code)
     shared.rebuild = house.rebuild_soon
     for user_id in people.ids()[:settings.people_max - 1]:
         try:

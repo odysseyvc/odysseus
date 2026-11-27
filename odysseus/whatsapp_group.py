@@ -35,6 +35,7 @@ from collections import deque
 from typing import Any, Awaitable, Callable
 
 from .conversation import split_message
+from . import fmt
 from .journal import Journal
 from .typed import TypedAnswers, how
 from .whatsapp import GRAPH, STALE_AFTER_S, TEXT_LIMIT, Http, digits
@@ -83,7 +84,7 @@ class WhatsAppGroupChat:
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
             status, data = await self._http("POST", self._url, {"messaging_product": "whatsapp", "recipient_type": "group", "to": self._to,
-                                                                "type": "text", "text": {"preview_url": False, "body": part}})
+                                                                "type": "text", "text": {"preview_url": False, "body": fmt.whatsapp(part) or part}})
             if status >= 300:
                 detail = json.dumps(data)[:300] if not isinstance(data, (bytes, str)) else str(data)[:300]
                 self._journal.write("error", where="whatsapp_group.send", status=status, message=detail)

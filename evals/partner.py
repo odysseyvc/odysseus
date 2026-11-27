@@ -42,6 +42,7 @@ warnings.simplefilter("ignore")
 
 from exa_py import Exa  # noqa: E402
 
+from odysseus import fmt
 from odysseus.agent import AgentRunner, conversation_prompt  # noqa: E402
 from odysseus.attio import PROMPT as ATTIO_PROMPT  # noqa: E402
 from odysseus.attio import Attio  # noqa: E402
@@ -388,7 +389,7 @@ class OwnerChat:
         self.sent, self.asks, self._tap, self.conv, self.owner = [], [], tap, None, 0
 
     async def send(self, text: str) -> None:
-        self.sent.append(text)
+        self.sent.append(fmt.plain(text) or text)       # the checks read the words, not the marks
 
     async def draft(self, draft_id: int, text: str) -> None:
         pass

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.exceptions import TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from .conversation import Conversation, split_message
@@ -19,6 +19,8 @@ STALE_AFTER_S = 600       # a message older than this when it arrives is reporte
 
 
 from aiogram.types import LinkPreviewOptions  # noqa: E402
+
+from . import fmt  # noqa: E402
 
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
@@ -60,15 +62,24 @@ class TelegramChat:
             await self._bot.send_audio(self._chat_id, BufferedInputFile(data, filename="reply.opus"))
 
     async def send(self, text: str) -> None:
-        # Plain text: no parse mode, so nothing the model writes is read as markup.
+        # The reply's few marks are turned into Telegram's own form by code (fmt.py), which closes every tag it opens
+        # and escapes everything else. If Telegram still refuses the result, the same words go out with no marks.
         # No link previews: to make one Telegram fetches the link, and some links the program sends (a sign-in link) are
         # meant to be opened once, by the owner.
+        async def out(body: str, mode: str | None) -> None:
+            try:
+                await self._bot.send_message(self._chat_id, body, parse_mode=mode, link_preview_options=NO_PREVIEW, **self._quoting())
+            except TelegramRetryAfter as e:
+                # Telegram says it is being sent too much, and how long to wait. Wait that long, once, and send again.
+                await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
+                await self._bot.send_message(self._chat_id, body, parse_mode=mode, link_preview_options=NO_PREVIEW, **self._quoting())
+        marked = fmt.telegram(text)
+        if not marked.strip():
+            return
         try:
-            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW, **self._quoting())
-        except TelegramRetryAfter as e:
-            # Telegram says it is being sent too much, and how long to wait. Wait that long, once, and send again.
-            await asyncio.sleep(min(float(e.retry_after), 30.0) + 0.5)
-            await self._bot.send_message(self._chat_id, text, parse_mode=None, link_preview_options=NO_PREVIEW, **self._quoting())
+            await out(marked, "HTML")
+        except TelegramBadRequest:
+            await out(fmt.plain(text) or text, None)
 
     async def send_html(self, text: str) -> None:
         """A message the program wrote itself, with Telegram's HTML for bold, italics and links. Anything taken from
@@ -80,7 +91,11 @@ class TelegramChat:
             await self._bot.send_message(self._chat_id, text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
 
     async def draft(self, draft_id: int, text: str) -> None:
-        await self._bot.send_message_draft(self._chat_id, draft_id, text=text, parse_mode=None)
+        # A reply still arriving is shown in the same form as the finished one. A mark not yet closed is shown as typed.
+        try:
+            await self._bot.send_message_draft(self._chat_id, draft_id, text=fmt.telegram(text) or text, parse_mode="HTML")
+        except TelegramBadRequest:
+            await self._bot.send_message_draft(self._chat_id, draft_id, text=fmt.plain(text) or text, parse_mode=None)
 
     async def typing(self) -> None:
         """Show "typing..." in the chat. It lasts a few seconds, which covers the wait for the first step."""

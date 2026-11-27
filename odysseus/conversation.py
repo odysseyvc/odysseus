@@ -21,6 +21,7 @@ from .journal import Journal, Ledger
 from .memory import MEMORY_NOTE, MemoryStore
 from .offers import Offers
 from . import deckview as deckview_mod
+from . import fmt
 from . import limits
 from . import progress as progress_mod
 from . import shortlink
@@ -80,16 +81,13 @@ def progress_line(tool: str, inputs: dict | None = None) -> str:
 
 
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
-    parts = []
-    while len(text) > limit:
-        cut = text.rfind("\n", 0, limit)
-        if cut < limit // 2:
-            cut = limit
-        parts.append(text[:cut])
-        text = text[cut:].lstrip("\n")
-    if text.strip():            # a message of nothing but space is not sent: the owner would see an empty bubble
-        parts.append(text)
-    return [p for p in parts if p.strip()]
+    # Cut between paragraphs where that is possible, so that no cut falls inside a mark (fmt.py). A message of
+    # nothing but space is not sent: the owner would see an empty bubble.
+    return fmt.parts(text, limit)
+
+
+# Said by the owner as a message of its own, these begin again with nothing carried over. Read by code, like "stop".
+NEW_WORDS = ("/new", "new conversation", "start a new conversation", "new chat", "start over", "start afresh")
 
 
 class Conversation:
@@ -166,6 +164,7 @@ class Conversation:
         # so that a question still waiting when the program restarts can still be answered (offers.py).
         self._offers: dict[str, Any] = Offers(settings.data_dir / "offers.json")
         self.own_chat: Any = None       # the owner's own chat, for work offered before a restart: set by the program
+        self.chat_now: Any = None       # the chat the task now running was asked in: where a thing done by the program replies (said.py)
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
@@ -332,13 +331,12 @@ class Conversation:
             await self._stop(chat)
             return
         if command in ("/start", "/help"):
-            await chat.send("Odysseus is running. Send a message to begin, or stop to end a task. /new starts a fresh conversation. /status shows today's "
-                            "spending. /memory shows what I remember about you, and /forget followed by an id removes an entry. "
-                            "/schedule shows reminders and routines, and /cancel followed by an id removes one. /watches shows what I am watching for. "
-                            "/checkins shows the people I remind you to keep in touch with. "
-                            "/files shows the files you sent that I am keeping. /skills shows what you have taught me to do your way and the ways that came with me. /portfolio shows the figures recorded from your companies' updates. /address shows my own email address. "
-                            "/apps shows whether mail and calendar are connected. /browser lets you sign in to sites in my browser. "
-                            "/trust shows what colleagues' assistants may ask mine. /edit and your own words replaces a draft I made for a colleague."
+            await chat.send("I'm here. There are no commands to learn: say what you want in your own words.\n\n"
+                            "Besides the work itself, you can ask me to show what I remember about you, what is scheduled, what I am watching for, "
+                            "who I remind you to keep in touch with, the files I am keeping, what you have taught me, my own email address, "
+                            "what has been spent today, or whether your mail and calendar are connected. Ask me to connect a service, or to let "
+                            "you sign in to a website in my browser.\n\n"
+                            "Say \"stop\" to end what I am doing, and \"new conversation\" to begin again with nothing carried over."
                             + (" For reading notes on your website: \"reading <book> p.120: <thought>\", \"keep that private\", "
                                "\"why <book>: <reason>\", \"finished <book>: <takeaway>\" and \"publish <book>\"; \"save <link or title>\" for your To read list, "
                                "\"must read <book>: <why>\", and \"problem <title>: <why>\" or \"problem <title> idea: <text>\" for open problems." if self.reading is not None else ""))
@@ -443,7 +441,7 @@ class Conversation:
             return
 
         # A new conversation, with nothing carried over. Memory, reminders and connections are untouched.
-        if command == "/new":
+        if command in NEW_WORDS:
             if self.busy:
                 await chat.send("I'm in the middle of a task. Send stop first, then /new.")
                 return
@@ -634,7 +632,7 @@ class Conversation:
     async def _speak(self, text: str, chat: Chat) -> None:
         """Say the reply aloud as well. Never instead of the written one, and a failure here is only logged."""
         say, send = getattr(self._voice, "say", None), getattr(chat, "send_voice", None)
-        words = voice_mod.speakable(text)
+        words = voice_mod.speakable(fmt.plain(text))        # marks are for the eye; none of them is read aloud
         if say is None or send is None or getattr(self._s, "speak", "voice") == "off" or len(words) < 2 or self._ledger.spent_today() >= self._s.daily_usd:
             return
         try:
@@ -1107,6 +1105,8 @@ class Conversation:
                 self._gate.new_task(request)
         started = time.monotonic()
         last_draft = 0.0
+        if not bg:
+            self.chat_now = chat
         # The first words are kept so that, after a restart, the owner can be told what was interrupted.
         self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80], **({"background": True} if bg else {}))
 
@@ -1119,9 +1119,14 @@ class Conversation:
             line = progress_line(name, inputs)
             if shown["words"] or bg or line == shown["step"]:
                 return
-            shown["step"] = line
+            first, shown["step"] = not shown["step"], line
             try:
                 await chat.draft(draft_id, line)
+                # A chat that cannot show a reply being written (WhatsApp) showed nothing at all until the task ended,
+                # which for a task of several steps is most of a minute. It is sent the first step's line, once, as a
+                # message of its own. A reply that needs no step never gets one.
+                if first and hasattr(chat, "status"):
+                    await chat.status(line)
             except Exception:
                 pass
 

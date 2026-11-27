@@ -41,19 +41,42 @@ WELCOME = ("You're in. I'm an assistant, and this chat is yours alone: nobody el
            "remember about you.\n\n"
            "Message me as you would a colleague. I can search, remember, remind, read the files and decks you send, and, "
            "once you sign in below, read your mail and calendar. Anything that sends, shares, deletes or overwrites waits "
-           "for your tap.\n\n"
+           "for your approval.\n\n"
            "One thing to know: I run on a machine kept by the person who invited you. What you send me and what I read "
            "from your accounts is stored there, and they could read it.\n\n"
            "The assistants of your colleagues here can look up when you are free, to find a time for a meeting. They are "
-           "given busy and free times only, never what a meeting is or who it is with. /trust shows this and turns it off.\n\n"
-           "If your firm keeps its contacts and deals in Attio, send /connect attio to sign in to it.\n\n"
-           "Send /help for the commands.")
+           "given busy and free times only, never what a meeting is or who it is with. Ask me what colleagues' assistants may ask mine "
+           "to see this or turn it off.\n\n"
+           "If your firm keeps its contacts and deals in Attio, ask me to connect Attio.\n\n"
+           "There are no commands to learn. Say what you want in your own words.")
 CONNECT = "To let me read your mail and calendar, sign in to each. Then just send me a message."
 NO_ACCOUNTS = "Mail and calendar are not set up on this copy, so there is nothing to sign in to yet."
-HOST_HELP = ("Hosting: /invite makes a link for one new person (add a note to remember who it was for). /people lists who is here. "
-             "/insights shows how everyone used their assistant and where it fell short, in counts only. "
-             "/remove and an id stops that person's assistant. To give a group chat an assistant of its own, add me to the group and send "
-             "/firm on there; /firm off switches it off.")
+HOST_HELP = ("As the person who runs me, you can also ask me to invite someone (I make a link for one new person, for the chat you ask in, "
+             "or for the other one if you say which), to show who is here, to show how everyone has used their assistant, or to stop "
+             "someone's assistant. To give a group chat an assistant of its own, add me to the group and say so there.")
+
+
+# A person who joins on WhatsApp has no Telegram id. They are known by their number, moved into a range no Telegram id
+# reaches (Telegram's are below 2**52), so that the two kinds can never be mistaken for one another and everything
+# that is kept by a person's id (their folder, their sign-ins, their budget) works for both.
+WA_BASE = 10 ** 17
+JOIN = re.compile(r"^\s*join\s+([A-Za-z0-9_\-]{16,40})\s*$", re.I)      # what the WhatsApp invitation link writes for them
+
+
+def wa_id(number: str) -> int:
+    """The id of the person at this WhatsApp number, or 0 if it is not a number."""
+    d = "".join(c for c in str(number or "") if c.isdigit())
+    return WA_BASE + int(d) if 7 <= len(d) <= 15 else 0
+
+
+def wa_number(user_id: int) -> str:
+    """The WhatsApp number behind an id, or "" for a person who joined on Telegram."""
+    return str(user_id - WA_BASE) if isinstance(user_id, int) and user_id > WA_BASE else ""
+
+
+def wa_link(number: str, code: str) -> str:
+    """A link that opens WhatsApp at this number with the joining message already written."""
+    return f"https://wa.me/{''.join(c for c in str(number) if c.isdigit())}?text=join%20{code}"
 
 
 def _hash(code: str) -> str:
@@ -159,6 +182,7 @@ class House:
         self._joining: set[int] = set()
         self._rebuilding: dict[int, Any] = {}     # people whose assistant is being built again (a new connection), and the task doing it
         self._heard: dict[int, float] = {}        # when each person last sent anything
+        self.wa_link: Callable[[str], str] | None = None      # a code as a link that opens the WhatsApp number, if there is one
 
     def add(self, user_id: int, assistant: Any) -> None:
         self._at[user_id] = assistant
@@ -207,13 +231,23 @@ class House:
             if len(self._at) >= self._most:
                 await chat.send(f"This copy is set to serve at most {self._most} people, and it has that many. Remove someone first, or raise ODYSSEUS_PEOPLE_MAX.")
                 return True
+            # The invitation is for the chat it was asked in: asked on WhatsApp it opens WhatsApp, asked on Telegram it
+            # opens Telegram. The host can name the other one as the first word ("/invite whatsapp Priya").
+            where = "whatsapp" if getattr(chat, "channel", "") == "whatsapp" else "telegram"
+            if len(words) > 1 and words[1].lower() in ("whatsapp", "telegram"):
+                where, words = words[1].lower(), [words[0], *words[2:]]
+            if where == "whatsapp" and self.wa_link is None:
+                await chat.send("There is no WhatsApp number on this copy to invite anyone to. I can make a Telegram invitation instead.")
+                return True
             code = self._people.invite(" ".join(words[1:]))
             if code is None:
                 await chat.send(f"There are already {OPEN_INVITES} unused invitations. They lapse after {INVITE_DAYS} days.")
                 return True
-            self._journal.write("invite", outcome="made")
-            await chat.send("Send this link to one person. It works once, for the first person who opens it, and for "
-                            f"{INVITE_DAYS} days. They open it and tap Start.\n\n{await self._link(code)}")
+            self._journal.write("invite", outcome="made", where=where)
+            how = ("They open it and send the message it has written for them, as it is.\n\n" + self.wa_link(code) if where == "whatsapp"
+                   else "They open it and tap Start.\n\n" + await self._link(code))
+            await chat.send("Send this link to one person. It works once, for the first person who uses it, and for "
+                            f"{INVITE_DAYS} days. {how}")
             return True
         if command == "/people":
             lines = []
@@ -223,7 +257,7 @@ class House:
                 lines.append(f"- {who}{f' ({note})' if note else ''}, id {uid}: ${a.ledger.spent_today():.2f} today")
             waiting = len(self._people.invites)
             await chat.send("Here now:\n" + "\n".join(lines) + (f"\n\n{waiting} invitation{'s' if waiting != 1 else ''} not yet used." if waiting else "")
-                            + "\n\nTo invite someone, send /invite. To stop someone's assistant, send /remove and their id.")
+                            + "\n\nAsk me to invite someone, or to stop someone's assistant.")
             return True
         if command == "/insights":
             # How everyone used their assistant and where it fell short: labels and numbers from each journal, no words.
@@ -239,7 +273,7 @@ class House:
         if command == "/remove":
             uid = int(words[1]) if len(words) > 1 and words[1].isdigit() else 0
             if uid == self._host or not self._people.has(uid):
-                await chat.send("Send /remove followed by an id from /people. You cannot remove yourself.")
+                await chat.send("I need the id of the person to stop, from the list of who is here. You cannot remove yourself.")
                 return True
             self._people.remove(uid)
             if self._board is not None:
@@ -284,10 +318,10 @@ class House:
         finally:
             self._joining.discard(user_id)
         self._at[user_id] = assistant
-        await chat.send(WELCOME)
+        await chat.send(WELCOME + str(getattr(chat, "welcome_more", "") or ""))
         await self._offer_accounts(assistant, chat)
         name = self._people.members.get(str(user_id), {}).get("name") or "Someone"
-        await self._tell_host(f"{name} joined with one of your invitations (id {user_id}). /people lists everyone.")
+        await self._tell_host(f"{name} joined with one of your invitations (id {user_id}).")
 
     async def _offer_accounts(self, assistant: Any, chat: Any) -> None:
         apps = getattr(assistant, "apps", None)

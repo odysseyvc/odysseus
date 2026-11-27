@@ -34,6 +34,7 @@ import json
 from typing import Any, Awaitable, Callable
 
 from .conversation import Conversation, split_message
+from . import fmt
 from .journal import Journal
 from .ocr import MAX_BYTES
 from .typed import TypedAnswers, how
@@ -49,6 +50,10 @@ class VobizChat:
 
     def __init__(self, http: Http, url: str, channel_id: str, to: str, journal: Journal, typed: TypedAnswers):
         self._http, self._url, self._channel, self._to, self._journal, self._typed = http, url, channel_id, to, journal, typed
+        self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
+        self.channel = "whatsapp"
+        # Said once to a person who joins on this number, after the welcome: one more company carries what they send.
+        self.welcome_more = "\n\nOne more thing about this number: messages on it pass through the telephone company that provides it, which can read them."
 
     async def _post(self, body: dict[str, Any]) -> None:
         status, data = await self._http("POST", self._url, {"channel_id": self._channel, "to": "+" + self._to, **body})
@@ -60,10 +65,14 @@ class VobizChat:
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
-            await self._post({"type": "text", "text": {"body": part}})
+            await self._post({"type": "text", "text": {"body": fmt.whatsapp(part) or part}})
 
     async def draft(self, draft_id: int, text: str) -> None:
         pass
+
+    async def status(self, line: str) -> None:
+        """A few fixed words on what is being done, sent once when a task turns out to need a step (conversation.py)."""
+        await self.send(line)
 
     async def ask(self, text: str, approval_id: str, thread: bool = False) -> None:
         # The question is sent whole, and how to answer it comes last. It counts as asked only once it has been sent.
@@ -80,10 +89,15 @@ class Vobiz(WhatsApp):
                          owner_id=owner_id, **more)
         self._base, self._channel, self._number = base(auth_id), channel_id, digits(number)
         self._typed = TypedAnswers(self._clock)
+        self._typed_by = {self._owner: self._typed}       # each person's own waiting questions: one person's word never answers another's
+        self.number = self._number
         self._line_id = ""          # Meta's id for the number, as the last delivery gave it; needed to fetch a file
 
-    def chat(self) -> VobizChat:
-        return VobizChat(self._http, f"{self._base}/Message/", self._channel, self._owner, self._journal, self._typed)
+    def chat(self, to: str = "") -> VobizChat:
+        to = to or self._owner
+        if to not in self._typed_by:
+            self._typed_by[to] = TypedAnswers(self._clock)
+        return VobizChat(self._http, f"{self._base}/Message/", self._channel, to, self._journal, self._typed_by[to])
 
     async def _handle(self, m: dict[str, Any]) -> None:
         # One exact word from the owner, while a question asked here is waiting, answers it (typed.py). The checks the
@@ -91,15 +105,17 @@ class Vobiz(WhatsApp):
         if m.get("group_id"):
             return          # said in a group, not to the number: never an answer to a question asked of the owner alone
         body = (m.get("text") or {}).get("body", "") if m.get("type") == "text" else ""
-        if body and m.get("id") not in self._seen and self._is_owner(m) and not self._late(m):
-            found = self._typed.answer(body)
+        person = self._person(m) if body and m.get("id") not in self._seen and not self._late(m) else None
+        if person is not None:
+            who, number, conv = person
+            found = self._typed_by[number].answer(body) if number in self._typed_by else None
             if found is not None:
                 self._seen.append(m.get("id"))
                 approval_id, answer, first = found
                 try:
-                    line = (await self._conv.handle_decision(self._owner_id, approval_id, True, thread=True) if answer == "t"
-                            else await self._conv.handle_decision(self._owner_id, approval_id, answer == "y"))
-                    await self.chat().send(f'{line or "Noted."} ("{first}")')
+                    line = (await conv.handle_decision(who, approval_id, True, thread=True) if answer == "t"
+                            else await conv.handle_decision(who, approval_id, answer == "y"))
+                    await self.chat(number).send(f'{line or "Noted."} ("{first}")')
                 except Exception as e:
                     self._journal.write("error", where="vobiz.answer", error=type(e).__name__, message=str(e)[:300])
                 return
@@ -135,6 +151,7 @@ class Vobiz(WhatsApp):
                     continue        # for another number of the account
                 self._line_id = str(line.get("phone_number_id") or self._line_id)
                 for message in value.get("messages") or []:
+                    self._name(value, message)
                     task = asyncio.get_running_loop().create_task(self._handle(message))
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)

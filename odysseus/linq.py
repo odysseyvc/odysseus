@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from .conversation import Conversation, split_message
+from . import fmt
 from .journal import Journal
 from .ocr import MAX_BYTES
 from .typed import TypedAnswers, how
@@ -83,7 +84,7 @@ class LinqChat:
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
-            await self._linq.post_text(part)
+            await self._linq.post_text(fmt.plain(part) or part)       # this chat shows no marks
 
     async def draft(self, draft_id: int, text: str) -> None:
         # No reply can be shown as it is written. The "typing" bubble can: it lasts about a minute and a half and is

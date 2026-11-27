@@ -137,7 +137,7 @@ async def test_joining_builds_an_assistant_welcomes_with_sign_in_buttons_and_tel
     assert list(x.built) == [7] and x.house.is_owner(7)
     assert chat.sent == [WELCOME] and "could read it" in WELCOME, "the newcomer is told who can read what is stored"
     assert chat.buttons == [(CONNECT, [("Connect Gmail", "https://sign.example/g"), ("Connect Google Calendar", "https://sign.example/c")])]
-    assert x.host.notify.sent == ["Tara Menon joined with one of your invitations (id 7). /people lists everyone."]
+    assert x.host.notify.sent == ["Tara Menon joined with one of your invitations (id 7)."]
     again = Chat("Someone Else")
     await x.house.handle(8, f"/start {code}", again)
     assert again.sent == [] and 8 not in x.built, "the link works for the first person only"
@@ -180,7 +180,7 @@ async def test_only_the_host_invites_lists_and_removes(tmp_path):
     await x.house.handle(7, "still there?", after)
     assert after.sent == [] and len(member.conversation.heard) == 4, "a removed person is a stranger again"
     await x.house.handle(HOST, "/help", chat)
-    assert x.host.conversation.heard[-1] == ("text", HOST, "/help") and chat.sent[-1].startswith("Hosting: /invite")
+    assert x.host.conversation.heard[-1] == ("text", HOST, "/help") and chat.sent[-1].startswith("As the person who runs me") and "/" not in chat.sent[-1]
 
 
 async def test_a_full_house_and_a_failed_setup_are_said_plainly(tmp_path):
@@ -433,8 +433,8 @@ async def test_at_start_up_the_groups_assistant_is_built_apart_from_every_person
     assert [r["kind"] for r in Journal(tmp_path / "people" / "group" / "journal.jsonl").read()] == ["start"]
 
 
-def test_the_model_is_told_which_things_are_commands():
-    """Asked for an invite link, it said inviting people was not built. It cannot run a command; it can name one."""
+def test_the_model_is_told_it_can_have_the_program_do_these_things():
+    """Asked for an invite link, it once said inviting people was not built; then it could only name a command. Now it acts (said.py)."""
     from odysseus.agent import conversation_prompt
     said = conversation_prompt(True)
-    assert "/invite" in said and "/people" in said and "/help" in said and "never say such a thing is not built" in said
+    assert "call manage" in said and "/invite" not in said and "Never say such a thing is not built" in said

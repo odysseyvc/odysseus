@@ -187,7 +187,7 @@ def test_a_stated_limit_is_found_counted_and_restated_as_a_lower_target():
     assert limits.stated("Keep it short.") is None and limits.stated("Tell me about the 150 words project") is None
     assert limits.stated("x " * 600 + "in at most 10 words") is None, "a limit is looked for in the request, not far down a pasted text"
     note = limits.note("Summarise it in at most 150 words.")
-    assert "limit of 150 words" in note and "no more than 120 words" in note and note.startswith("\n\n[Added by the program, not by the owner")
+    assert "limit of 150 words" in note and "no more than 105 words" in note and note.startswith("\n\n[Added by the program, not by the owner")
     assert limits.note("Two lines at most.").count("2 lines") == 2 and limits.note("What is the stage?") == ""
     assert limits.count("One two three. Four-five, six!", "word") == 5 and limits.count("a\n\nb\nc", "line") == 3 and limits.count("A. B! C?", "sentence") == 3
     assert limits.over("at most 5 words", "one two three four five six") == "6 words against a limit of 5" and limits.over("at most 5 words", "one two") == ""
@@ -221,3 +221,12 @@ def test_the_status_line_does_not_say_reading_while_an_email_is_written():
     assert progress_line("mcp__odysseus__mail_read") == "Reading your mail..."
     for tool in ("mail_send", "mail_reply", "mail_draft", "mail_archive"):
         assert "Reading" not in progress_line("mcp__odysseus__" + tool)
+
+
+async def test_a_chat_that_cannot_show_writing_is_told_once_what_is_being_done(tmp_path):
+    from test_vobiz import rig
+    x = rig(tmp_path)
+    chat = x.v.chat()
+    assert hasattr(chat, "status")
+    await chat.status("Looking in Attio...")
+    assert [b["text"]["body"] for _, _, b in x.sent] == ["Looking in Attio..."]
