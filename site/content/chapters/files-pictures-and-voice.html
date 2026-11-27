@@ -313,11 +313,23 @@ return file_block(name, result, sights)</code></pre>
 <tr><th>What can the code reach?</th><td>The kept files the model named by id, at most five, and nothing else of the owner's</td></tr>
 <tr><th>Where can it send them?</th><td>Nowhere: the machine is created with outbound access off</td></tr>
 <tr><th>What survives the run?</th><td>What was printed, cut to a length, and at most three files written to one folder, which are kept and sent to the owner's chat only</td></tr>
-<tr><th>How long may it run?</th><td>Two minutes; the machine cannot outlive that by more than a minute</td></tr>
+<tr><th>How long may it run?</th><td>Two minutes a run; a machine is destroyed a minute and a half after its last run</td></tr>
 <tr><th>Who else sees the file?</th><td>The sandbox company, as the text-recognition company already does</td></tr>
 <tr><th>Is the owner asked?</th><td>No. It is not offered to unattended runs</td></tr>
 </tbody>
 </table></div>
+<h3 id="kept-machine">One machine for a stretch of runs</h3>
+<p>The first design was one machine per run, destroyed at the end of it, so that two runs shared nothing. It was simple to state and it was slow. Making a deck is three or four runs (write it, look at the pages, fix it, look again), and each began by starting a machine and waking the program that turns a deck into pictures. Timed against the real service with no model in the loop: a run that writes a three-slide deck and pictures its pages took 9 to 13 seconds on a new machine and 3 to 4 on one already running. Almost all of the difference was the picture program starting cold, and the rest was the machine starting.</p>
+<p>So a machine now serves one person's runs while they follow one another closely, and the company destroys it a minute and a half after the last. Three such runs in a row took 38.9 seconds with a new machine each time and 19.8 with one kept. <span class="g v">Verified</span>, one timing of each against the real service, the outputs correct in both.</p>
+<p>What the first design promised, and what is left of it:</p>
+<ul>
+<li>A run is handed only its own files. The folders files go into and come out of are emptied by code before every run, on a new machine and a kept one alike. Checked in the timing: each run listed one file in and one out.</li>
+<li>No machine is ever used by two runs at once, or by two people. A run that starts while another holds the machine gets its own.</li>
+<li>A run that goes wrong ends its machine, and so does the program stopping.</li>
+<li>What is given up: within one stretch, what earlier code left elsewhere on the machine, and the values it set, are still there for the next run. Those runs belong to one person and one conversation, whose record of what was read is kept for the whole conversation anyway, so a later run is trusted no more than the earliest thing read; and the machine still has no way out.</li>
+<li>The keeping is paid for: a minute and a half of an idle machine after a stretch, a quarter of a cent, counted in the ledger.</li>
+</ul>
+<p class="src"><code>odysseus/sandbox.py</code>, <code>tests/test_sandbox_kept.py</code></p>
 <p>It runs unasked because of the second row. A deck can talk the model into writing code the owner would not want; with no way out, that code can waste two minutes and print something false, and nothing more. What it prints is recorded as derived from the file, so the rules for what other people wrote apply to it: a save to memory after it is asked about, and a search carrying its figures is asked about ({{ch:untrusted-content}}).</p>
 <p>Run against the real service (<code>scripts/live_sandbox.py</code>, 9 of 9 checks, no model called). The first run of the check failed, usefully. With outbound access off, a connection to a numeric address still opened. A closer probe showed why: the company's own filter accepts the connection and passes nothing on. A web request to a numeric address got no reply, an encrypted one was cut, and names could not be looked up. The check now tests whether anything comes back and not whether a connection opens.</p>
 <div class="tbl"><table>
@@ -494,7 +506,7 @@ return file_block(name, result, sights)</code></pre>
 <li>Text recognition drops what is drawn. A file in a kept conversation is paid for with every later message; a separate reader is paid for once.</li>
 <li>The page reader has no tools, by two locks (an empty list and an empty server), so a hostile page can at most make it describe the page wrongly.</li>
 <li>A file is the owner's request but someone else's writing: nothing is removed, and nothing in it is an instruction.</li>
-<li>Code runs on a rented machine with no way out, destroyed after each run; its output is treated as derived from the file it was given.</li>
+<li>Code runs on a rented machine with no way out, kept only while one person's runs follow closely and then destroyed; its output is treated as derived from the file it was given.</li>
 <li>The same machine, from an image with the libraries already on it, writes decks, Word files and PDFs. A trial run shows the model pictures of the pages before anything is sent.</li>
 <li>The owner's own deck or Word file can be kept as a template. Fixed code lists its layouts and styles, and the look comes from the file, not from the model.</li>
 <li>A voice note is shown back as "Heard:" before it is acted on; names are what speech recognition gets wrong.</li>

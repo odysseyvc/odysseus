@@ -296,7 +296,9 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     code_tools = None
     if settings.e2b_api_key:
         from .sandbox import E2B, CodeRunner
-        code_runner = CodeRunner(E2B(settings.e2b_api_key, settings.sandbox_template), journal, ledger, settings.daily_usd, gate.taint)
+        machine = E2B(settings.e2b_api_key, settings.sandbox_template)
+        me.closers.append(machine.close)        # a machine kept ready for the next run is destroyed when this person's assistant closes
+        code_runner = CodeRunner(machine, journal, ledger, settings.daily_usd, gate.taint)
         if settings.review_model.lower() != "off":
             # Before a document goes, its pages are read once more against what the owner asked, by a model that did not write it (pagecheck.py).
             from .pagecheck import make_page_checker
@@ -342,7 +344,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         printer = None
         if settings.e2b_api_key and settings.sandbox_template:
             from .sandbox import E2B
-            printer = E2B(settings.e2b_api_key, settings.sandbox_template)
+            printer = E2B(settings.e2b_api_key, settings.sandbox_template, keep_s=0)       # once a week: nothing follows it closely
         reviewer = Reviewer(attio, journal, now=now, state_file=settings.data_dir / "pipeline.json",
                             messages=apps.messages_for_code if apps is not None else None, zone=ZoneInfo(settings.tz) if settings.tz else None,
                             printer=printer, send_file=lambda name, data, caption: own_chat.send_file(name, data=data, caption=caption),

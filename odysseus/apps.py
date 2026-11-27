@@ -58,6 +58,8 @@ class AppError(Exception):
 
 
 MOST_ACCOUNTS = 5           # sign-ins to one service, for one person
+WHOLE_MAIL = int(__import__("os").environ.get("ODYSSEUS_WHOLE_MAIL", "0"))     # a search that finds this many messages or fewer comes back with each in full. Off: measured on the mail errands, it moved neither time nor score
+WHOLE_MAIL_CHARS = 14000    # and at most this much text of them in all; over it, the list stands alone
 # Which of a person's accounts the call now being made is for. Set around one tool call and nothing else, so two calls
 # running at once (the same search in two mailboxes) each keep their own.
 import contextvars  # noqa: E402
@@ -718,6 +720,28 @@ class Apps:
                 # Say so when the list may be cut short, so that "all of them" is not claimed from a partial list.
                 text += (f"\n\n[These are the {n} newest matches. There may be more: narrow the query, for example by date "
                          "(after:2026/11/15 before:2026/11/17) or by sender, to see the rest.]")
+            # A search that finds a few messages is nearly always followed by opening each of them, which costs the owner
+            # another step's wait. When there are few, code opens them now, together, and hands the full texts over with
+            # the list. No call to the model is spent on it. More than a few, and the list stands alone as before.
+            items = _unwrap(data)
+            items = items if isinstance(items, list) else _first(items, "messages", default=[]) if isinstance(items, dict) else []
+            ids = [str(m.get("messageId") or m.get("id") or "") for m in items if isinstance(m, dict)]
+            ids = [i for i in dict.fromkeys(ids) if i]
+            if 0 < len(ids) <= WHOLE_MAIL:
+                got = await asyncio.gather(*(self._call("mail_read", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", {"message_id": i, "format": "full"}) for i in ids),
+                                           return_exceptions=True)
+                whole, used = [], 0
+                for one in got:
+                    if isinstance(one, BaseException):
+                        continue
+                    shown = format_messages(one, full=True)
+                    if used + len(shown) > WHOLE_MAIL_CHARS:
+                        break
+                    whole.append(shown)
+                    used += len(shown)
+                if len(whole) == len(ids):
+                    self._journal.write("tool", name="mail_read", ok=True, by="code", items=len(whole))
+                    text += ("\n\n[Added by the program: the messages listed above, each in full. They need not be opened again.]\n\n" + "\n\n".join(whole))
             return MAIL_NOTE + "\n\n" + self._seen(text)
 
         async def mail_read(a):

@@ -136,3 +136,20 @@ async def test_picking_needs_one_clear_match(tmp_path):
         Apps._pick(accounts, "wor-")
     with pytest.raises(AppError):
         Apps._pick(accounts, "")
+
+
+async def test_a_search_that_finds_a_few_messages_can_come_back_with_them_in_full(tmp_path, monkeypatch):
+    """Built to save a step, measured, and left off: on the mail errands it moved neither time nor score."""
+    import odysseus.apps as apps_mod
+    assert apps_mod.WHOLE_MAIL == 0, "off unless the owner's settings turn it on"
+    monkeypatch.setattr(apps_mod, "WHOLE_MAIL", 4)
+    b, apps, h = rig(tmp_path, boxes=("work",))
+    got = said(await h["mail_search"]({"query": "term sheet"}))
+    assert "each in full" in got and "Draft attached." in got
+    assert [s for s, _ in b.calls] == ["GMAIL_FETCH_EMAILS", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID"], "opened by code, in the same step"
+    assert [r for r in Journal(tmp_path / "j.jsonl").read() if r.get("by") == "code"][0]["items"] == 1
+    # many results: the list alone, as before
+    b.mail["ca_work"] = [{"messageId": f"m{i}", "threadId": f"t{i}", "sender": "a@b.example", "subject": f"S{i}", "preview": {"body": "x"}} for i in range(6)]
+    b.calls.clear()
+    more = said(await h["mail_search"]({"query": "x"}))
+    assert "each in full" not in more and [s for s, _ in b.calls] == ["GMAIL_FETCH_EMAILS"]

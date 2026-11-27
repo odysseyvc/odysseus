@@ -12,7 +12,13 @@ What holds, by code and not by instruction:
                    address still opens, because the company's own filter accepts it, and then nothing is passed on
                    and nothing comes back. That nothing comes back was measured. That nothing goes out one way
                    rests on the company's word; proving it would take a server of one's own to listen.
-  nothing is kept  one machine per run, killed when the run ends, whatever happened. Two runs share nothing.
+  nothing is kept  a machine serves one person's runs while they follow one another closely, and is destroyed a minute
+                   and a half after the last. Before each run the folders files go into and come out of are emptied,
+                   so a run is handed only its own files; what earlier code left elsewhere on the machine, and the
+                   values it set, are still there for the next run in the same stretch. It was one machine per run
+                   until the wait was measured: a run that makes a deck took 9 to 13 seconds on a fresh machine and
+                   3 on one already running, and making a document is three or four runs. No machine is ever shared
+                   between two people, or by two runs at once.
   a time limit     the code is stopped after two minutes; the machine cannot outlive that by more than a minute.
   what goes in     the code the model wrote, and the kept files it named by id: at most five, of the owner's own shelf.
                    Nothing else of the owner's is on the machine. The sandbox company sees both.
@@ -415,8 +421,9 @@ class Ran:
     stderr: str = ""
     error: str = ""                                  # the exception the code ended with, if it did
     made: list[tuple[str, bytes]] = field(default_factory=list)      # files the code wrote to the out folder
-    seconds: float = 0.0                             # how long the machine existed: what is paid for
+    seconds: float = 0.0                             # how long the run took on the machine
     looked: list[dict[str, Any]] = field(default_factory=list)       # in a trial: per made file, its name, pages, picture (bytes), problem
+    idle: float = 0.0                                # and how long the machine may stand idle afterwards, kept for the next run: paid for too
 
 
 class Backend(Protocol):
@@ -424,11 +431,19 @@ class Backend(Protocol):
     # A backend that can make documents also has `documents = True` and accepts `look=True` (a trial: pictures of the pages).
 
 
-class E2B:
-    """One machine per run, from E2B's code-interpreter service, with no way out to the internet."""
+KEEP_S = 90             # a machine is kept this long after a run, for the next run of the same person
+CLEAR_CODE = (f"import os, shutil\nfor d in ({IN_DIR!r}, {OUT_DIR!r}):\n    shutil.rmtree(d, ignore_errors=True)\n    os.makedirs(d, exist_ok=True)\n"
+              "os.chdir('/home/user')\n")
 
-    def __init__(self, api_key: str, template: str = ""):
+
+class E2B:
+    """A machine from E2B's code-interpreter service, with no way out to the internet. One person's runs that follow
+    closely share it; it is never used by two runs at once."""
+
+    def __init__(self, api_key: str, template: str = "", keep_s: int = KEEP_S, clock: Any = time.monotonic):
         self._key = api_key
+        self._keep_s, self._clock = keep_s, clock
+        self._idle: tuple[Any, float] | None = None      # a machine standing ready, and when the company will destroy it
         # The name of an image of our own, with what making documents needs (scripts/build_sandbox.py). Without one the
         # company's standard image is used, and neither decks, PDFs nor trials are offered.
         self._template = template.strip()
@@ -439,14 +454,28 @@ class E2B:
         import json
         began = time.monotonic()
         look = look and self.documents
-        box = await AsyncSandbox.create(**({"template": self._template} if self._template else {}),
-                                        timeout=seconds + 60 + (LOOK_S if look else 0), allow_internet_access=False, api_key=self._key)
+        life = seconds + 60 + (LOOK_S if look else 0)
+        box, healthy, fresh = None, False, True
+        waiting, self._idle = self._idle, None           # taken, so that a run starting meanwhile gets a machine of its own
+        if waiting is not None:
+            if self._clock() < waiting[1] - 10:
+                try:
+                    await waiting[0].set_timeout(life)
+                    box, fresh = waiting[0], False
+                except Exception:
+                    box = None                           # it has gone already: a new one, as before
+            if box is None:
+                await self._end(waiting[0])
+        if box is None:
+            box = await AsyncSandbox.create(**({"template": self._template} if self._template else {}),
+                                            timeout=life, allow_internet_access=False, api_key=self._key)
         try:
-            for name, data in files:
-                await box.files.write(f"{IN_DIR}/{name}", data)
-            ex = await box.run_code(f"import os\nos.makedirs({OUT_DIR!r}, exist_ok=True)\nos.makedirs({IN_DIR!r}, exist_ok=True)\nos.chdir('/home/user')\n")
+            # The folders are emptied first, on a new machine and a kept one alike: a run is handed only its own files.
+            ex = await box.run_code(CLEAR_CODE)
             if ex.error is not None:
                 raise SandboxError("the machine could not be prepared")
+            for name, data in files:
+                await box.files.write(f"{IN_DIR}/{name}", data)
             ex = await box.run_code(code, timeout=seconds)
             out = "".join(ex.logs.stdout)
             if ex.text and ex.text.strip() and ex.text.strip() not in out:
@@ -472,12 +501,31 @@ class E2B:
                     item["picture"] = bytes(await box.files.read(sheet, format="bytes")) if sheet else b""
                 if not looked:
                     looked = [{"name": n, "pages": 0, "picture": b"", "problem": "the pages could not be turned into pictures"} for n, _ in made]
-            return Ran(out, "".join(ex.logs.stderr), error, made, time.monotonic() - began, looked)
+            healthy = True
+            keeping = self._keep_s > 0 and self._idle is None
+            return Ran(out, "".join(ex.logs.stderr), error, made, time.monotonic() - began, looked, idle=float(self._keep_s) if keeping else 0.0)
         finally:
-            try:
-                await box.kill()
-            except Exception:
-                pass            # it ends by itself a minute after the time limit
+            # Kept for the next run only if this one ran to its end and no other machine is already standing ready.
+            if healthy and self._keep_s > 0 and self._idle is None:
+                try:
+                    await box.set_timeout(self._keep_s)
+                    self._idle = (box, self._clock() + self._keep_s)
+                except Exception:
+                    await self._end(box)
+            else:
+                await self._end(box)
+
+    @staticmethod
+    async def _end(box: Any) -> None:
+        try:
+            await box.kill()
+        except Exception:
+            pass            # it ends by itself when its time is up
+
+    async def close(self) -> None:
+        waiting, self._idle = self._idle, None
+        if waiting is not None:
+            await self._end(waiting[0])
 
 
 def _safe(name: str) -> str:
@@ -550,7 +598,7 @@ class CodeRunner:
             except (Exception, asyncio.TimeoutError) as e:
                 self._journal.write("tool", name="run_code", ok=False, error=type(e).__name__, message=str(e)[:200], files_in=len(files))
                 return _result(f"The code could not be run: {type(e).__name__}. Nothing was changed anywhere.", failed=True)
-            cost = round(ran.seconds * USD_PER_S, 5)
+            cost = round((ran.seconds + getattr(ran, 'idle', 0.0)) * USD_PER_S, 5)
             sent, problems = [], []
             if look:
                 second = ""
@@ -624,7 +672,7 @@ class CodeRunner:
                     found = dict(json.loads(line[5:])) if line else {}
                 except ValueError:
                     found = {}
-                cost = round(ran.seconds * USD_PER_S, 5)
+                cost = round((ran.seconds + getattr(ran, 'idle', 0.0)) * USD_PER_S, 5)
                 if not found or found.get("problem"):
                     self._journal.write("tool", name="template", ok=False, action="study", error="unreadable", seconds=round(ran.seconds, 1), cost_usd=cost)
                     return _result(f"{entry['name']} could not be measured ({str(found.get('problem') or 'it did not open')[:240]}). Tell the owner, "
@@ -681,7 +729,7 @@ class CodeRunner:
                 found = dict(json.loads(line[7:])) if line else {}
             except ValueError:
                 found = {}
-            cost = round(ran.seconds * USD_PER_S, 5)
+            cost = round((ran.seconds + getattr(ran, 'idle', 0.0)) * USD_PER_S, 5)
             kind = TEMPLATE_KINDS[ext]
             if not found or found.get("problem") or found.get("kind") != kind:
                 self._journal.write("tool", name="template", ok=False, error="unreadable", seconds=round(ran.seconds, 1), cost_usd=cost)

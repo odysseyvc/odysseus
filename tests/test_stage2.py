@@ -209,7 +209,7 @@ async def test_a_failed_read_is_tried_again_before_the_model_hears_of_it(tmp_pat
     sim, h, journal = failing(tmp_path, Fault("GMAIL_FETCH_EMAILS", 1, "rate"), Fault("GMAIL_FETCH_EMAILS", 2, "error"))
     out = await h["mail_search"]({"query": "from:priya"})
     assert "is_error" not in out and "Priya" in out["content"][0]["text"]
-    assert [r["ok"] for r in journal.read() if r["kind"] == "tool"] == [False, False, True]
+    assert [r["ok"] for r in journal.read() if r["kind"] == "tool" and r.get("name") == "mail_search"] == [False, False, True]
 
 
 async def test_when_a_read_keeps_failing_the_model_is_given_the_services_own_words(tmp_path):
