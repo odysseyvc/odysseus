@@ -191,3 +191,26 @@ def test_a_stated_limit_is_found_counted_and_restated_as_a_lower_target():
     assert limits.note("Two lines at most.").count("2 lines") == 2 and limits.note("What is the stage?") == ""
     assert limits.count("One two three. Four-five, six!", "word") == 5 and limits.count("a\n\nb\nc", "line") == 3 and limits.count("A. B! C?", "sentence") == 3
     assert limits.over("at most 5 words", "one two three four five six") == "6 words against a limit of 5" and limits.over("at most 5 words", "one two") == ""
+
+
+# --- a note is read whole, by code, when it is listed ---------------------------------------------------------------------
+
+async def test_a_short_listing_of_notes_comes_back_with_each_note_whole_and_a_long_one_says_these_are_only_openings(tmp_path):
+    from evals import partner as P
+    from odysseus.attio import Attio, WHOLE_MOST
+    from odysseus.journal import Journal
+    crm, granola = P.FakeAttio(), P.FakeGranola()
+    ids = P.seed(crm, granola)
+    far = "The opening says little. " * 12 + "Introduced by Tomas Reyes of Halberd Partners."
+    crm.note(ids["d_lumen"], "Sourcing", far)
+    attio = Attio(crm, Journal(tmp_path / "j.jsonl"))
+    make_gate = __import__("odysseus.tools", fromlist=["make_gate"]).make_gate
+    make_gate(Journal(tmp_path / "g.jsonl"), attio=attio)
+    h = attio.handlers()
+    out = (await h["attio_run"]({"tool": "search-notes-by-metadata", "arguments": {"parent_record_id": ids["d_lumen"]}}))["content"][0]["text"]
+    assert "Halberd Partners" in out and "the full text of every note listed above" in out, "what was past the opening is now in front of the model"
+    assert any(r.get("by") == "code" for r in Journal(tmp_path / "j.jsonl").read()), "and the journal says code did the reading"
+    for i in range(WHOLE_MOST + 1):
+        crm.note(ids["d_lumen"], f"Note {i}", "x" * 300)
+    out = (await h["attio_run"]({"tool": "search-notes-by-metadata", "arguments": {"parent_record_id": ids["d_lumen"]}}))["content"][0]["text"]
+    assert "gives only the opening of each note" in out and "get-note-body" in out and "Halberd Partners" not in out
