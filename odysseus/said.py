@@ -38,6 +38,10 @@ THINGS: dict[str, tuple[str, str, bool, str]] = {
     "disconnect": ("/disconnect", ALWAYS_ASK, False, "Remove the connection to a service. `detail` is its name."),
     "connections": ("/apps", SHOW, False, "Show whether mail and calendar are connected, with a sign-in link for any that is not."),
     "services": ("/services", SHOW, False, "Show the other services that are connected or can be."),
+    "accounts": ("/accounts", SHOW, False, "Show which accounts are signed in for mail and calendar, by name."),
+    "add_account": ("/account", CHANGE, False, "Add one more account to a service the owner already uses (a second mailbox, a second calendar, "
+                    "a second account in another app). `detail` is the service, then a short name for the new account, for example: gmail personal. "
+                    "The owner is sent a sign-in link."),
     "memory": ("/memory", SHOW, False, "Show everything remembered about the owner, with ids."),
     "schedule": ("/schedule", SHOW, False, "Show the reminders and routines that are set."),
     "watches": ("/watches", SHOW, False, "Show what is being watched for in mail and calendar."),
@@ -56,6 +60,8 @@ THINGS: dict[str, tuple[str, str, bool, str]] = {
                             "because the owner says the answer was wrong. `detail` is what was wrong, in their words."),
 }
 NEVER = "That is not something I can do from here."
+# These rebuild the assistant, which cannot be done while it is in the middle of a task: they begin when the reply has gone.
+AFTER = frozenset({"connect", "disconnect"})
 
 
 def offered(host: bool) -> list[str]:
@@ -95,13 +101,19 @@ def schema(host: bool) -> tuple[str, dict[str, Any]]:
              "required": ["what"]})
 
 
-def handler(run: Callable[[str], Awaitable[None]], journal: Any, host: bool):
-    """The tool. `run(text)` carries a command out exactly as if the owner had typed it, and replies in their chat."""
+def handler(run: Callable[[str], Awaitable[None]], journal: Any, host: bool, later: Callable[[str], None] | None = None):
+    """The tool. `run(text)` carries a command out exactly as if the owner had typed it, and replies in their chat.
+    `later(text)` does the same once the task now running has ended."""
     async def manage(args: dict[str, Any]) -> dict[str, Any]:
         what = str(args.get("what", ""))
         if what not in offered(host):
             journal.write("tool", name="manage", ok=False, what=what[:40], error="not offered")
             return {"content": [{"type": "text", "text": NEVER}], "is_error": True}
+        if what in AFTER and later is not None:
+            later(command(what, args.get("detail", "")))
+            journal.write("tool", name="manage", ok=True, what=what, after=True)
+            return {"content": [{"type": "text", "text": "The program will do this the moment your reply has been sent, and will message the owner "
+                                                         "itself (with a sign-in link, if one is needed). Say in one short line that it is on its way."}]}
         try:
             await run(command(what, args.get("detail", "")))
         except Exception as e:

@@ -207,7 +207,8 @@ Some things the program does itself: inviting another person to have an assistan
 - Never say such a thing is not built. If manage does not offer it, say plainly that you cannot do it from here.
 - A group chat's own assistant is switched on in the group itself by the person who runs this assistant, by saying so there.
 - If someone tells you an answer was wrong, correct it, and offer once to pass it on to the person who runs the assistant; if they say yes, use manage with report_wrong_answer.
-- To begin again with nothing carried over, the owner says "new conversation"; to end what is running, "stop". Those two they say themselves."""
+- To begin again with nothing carried over, the owner says "new conversation"; to end what is running, "stop". Those two they say themselves.
+- The owner may have more than one account for mail, for calendar or in another app (a work mailbox and a personal one). A search or a listing that names no account covers all of them and says which account each part came from; say which account a thing is in when it matters. To send, draft, create or change something new, name the account in `account`. If the owner did not say which and it is not plain from what they asked, ask them: never pick an account to send from. To add another account, use manage with add_account."""
 
 
 # Guidance arrived at by measurement (evals/climb.py): a loop proposes a change to this one file, runs every errand of the

@@ -165,6 +165,7 @@ class Conversation:
         self._offers: dict[str, Any] = Offers(settings.data_dir / "offers.json")
         self.own_chat: Any = None       # the owner's own chat, for work offered before a restart: set by the program
         self.chat_now: Any = None       # the chat the task now running was asked in: where a thing done by the program replies (said.py)
+        self.after_task: list[str] = []  # things the program is to do once the task now running has ended (said.py)
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
@@ -298,6 +299,18 @@ class Conversation:
                 await self._connector.disconnect(text[len("/disconnect"):], chat.send)
             else:
                 await self._connector.connect(text[len(command.split()[0]):] if not command.startswith("/services") else "", chat.send)
+            return
+
+        # More than one account for a service (two mailboxes): what is signed in, and a link to add one. No model is involved.
+        if command == "/accounts" or command.split()[0] == "/account":
+            self._journal.write("command", name=command.split()[0])
+            if self._apps is None:
+                await chat.send("Mail and calendar are not set up: there is no connector key in my settings.")
+            elif command == "/accounts":
+                await chat.send(await self._apps.accounts_text())
+            else:
+                words = text.split()[1:]
+                await chat.send(await self._apps.add_account(" ".join(words[:-1]), words[-1] if len(words) > 1 else ""))
             return
 
         # Which accounts are connected, with a link to connect any that are not. No model is involved.
@@ -1085,6 +1098,21 @@ class Conversation:
             await self._run_one(prompt, chat, images, material, bg, runner, key, alone)
         finally:
             self._running -= 1
+            if not bg and self.after_task:
+                todo, self.after_task = self.after_task, []
+                asyncio.get_running_loop().create_task(self._do_after(todo, chat))
+
+    async def _do_after(self, todo: list[str], chat: Chat) -> None:
+        """What the owner asked the program to do, in words, that could not begin while a task was running."""
+        for _ in range(40):                         # until this task has fully ended: a few moments at most
+            if not self.busy:
+                break
+            await asyncio.sleep(0.1)
+        for text in todo:
+            try:
+                await self.handle(self._s.owner_id, text, chat)
+            except Exception as e:
+                self._journal.write("error", where="conversation.after_task", error=type(e).__name__)
 
     async def _run_one(self, prompt: str, chat: Chat, images: Any, material: str | None, bg: bool, runner: AgentRunner, key: str, alone: bool) -> None:
         self._draft_seq += 1

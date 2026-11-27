@@ -209,6 +209,29 @@ class AnyApp:
 
     # --- the tools --------------------------------------------------------------------
 
+    async def _which_account(self, slug: str, wanted: str, kind: str) -> tuple:
+        """() when nothing needs saying to the connector, or (the account's id,). Raises when a change names none of several."""
+        lister = getattr(self._b, "accounts", None)
+        if lister is None:
+            return ()
+        try:
+            found = await asyncio.wait_for(asyncio.to_thread(lister, toolkit_of(slug)), CALL_TIMEOUT_S)
+        except (Exception, asyncio.TimeoutError):
+            return ()
+        if len(found) < 2:
+            return ()
+        named = [{"id": f["id"], "name": f.get("alias") or ("main" if n == 0 else f"account {n + 1}")} for n, f in enumerate(found)]
+        want = " ".join(wanted.split()).casefold()
+        if want:
+            hit = [f for f in named if f["name"].casefold() == want]
+            if len(hit) == 1:
+                return (hit[0]["id"],)
+            raise AppError(f"There is no account called {wanted!r} in this app. The accounts are: {', '.join(f['name'] for f in named)}.")
+        if kind == "read":
+            return ()
+        raise AppError(f"The owner has {len(named)} accounts in this app: {', '.join(f['name'] for f in named)}. Say which one in `account`. "
+                       "If the owner did not say which, ask them; do not choose for them.")
+
     def handlers(self) -> dict[str, Any]:
         def ok(text: str) -> dict[str, Any]:
             return {"content": [{"type": "text", "text": text}]}
@@ -292,12 +315,15 @@ class AnyApp:
             slug = str(a["tool"]).strip().upper()
             inputs = a.get("arguments") or {}
             kind = self.kind(slug)
+            # A person may have more than one account in an app. A read with none named goes where the connector sends
+            # it; a change is never made in an account nobody named.
+            which = await self._which_account(slug, str(a.get("account") or ""), kind)
             try:
-                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
+                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs, *which), CALL_TIMEOUT_S)
             except (AppError, asyncio.TimeoutError, OSError) as e:
                 if kind == "read":
                     # Reading is safe to repeat, so it is tried once more before the model hears of it.
-                    data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs), CALL_TIMEOUT_S)
+                    data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, inputs, *which), CALL_TIMEOUT_S)
                 else:
                     # A change is never repeated by code: the app may have done it and lost the answer.
                     why = "did not answer in time" if isinstance(e, asyncio.TimeoutError) else str(e)[:300]
@@ -333,6 +359,7 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
                 "much as you can in one call.",
                 {"type": "object",
                  "properties": {"tool": {"type": "string", "description": "A tool name from app_find, e.g. GOOGLESHEETS_VALUES_UPDATE."},
-                                "arguments": {"type": "object", "description": "The tool's inputs, as app_find described them."}},
+                                "arguments": {"type": "object", "description": "The tool's inputs, as app_find described them."},
+                                "account": {"type": "string", "description": "Only when the owner has more than one account in this app: which one, by its name."}},
                  "required": ["tool", "arguments"]}),
 }

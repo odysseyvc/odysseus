@@ -57,6 +57,36 @@ class AppError(Exception):
     pass
 
 
+MOST_ACCOUNTS = 5           # sign-ins to one service, for one person
+# Which of a person's accounts the call now being made is for. Set around one tool call and nothing else, so two calls
+# running at once (the same search in two mailboxes) each keep their own.
+import contextvars  # noqa: E402
+
+_ACCOUNT: contextvars.ContextVar = contextvars.ContextVar("odysseus_account", default=None)
+_ID_KEYS = ("messageId", "message_id", "threadId", "thread_id", "id", "eventId", "event_id")
+SPREAD = frozenset({"mail_search", "calendar_list"})            # reading that covers every account when none is named
+FOUND_BY_ID = frozenset({"mail_read", "mail_attachment"})       # reading one thing by its id: the account that has it is found
+ACCOUNT_FIELD = {"type": "string", "description": "Only when the owner has more than one account for this: which one, by the name it is listed under. "
+                 "Leave it out to read all of them, or when the thing has an id you were given (the right account is then known)."}
+
+
+def _ids_in(data: Any, depth: int = 0) -> set[str]:
+    """Every id a result carries, so that a later call about one of them goes to the account it came from."""
+    out: set[str] = set()
+    if depth > 6:
+        return out
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k in _ID_KEYS and isinstance(v, str) and 6 <= len(v) <= 200:
+                out.add(v)
+            elif isinstance(v, (dict, list)):
+                out |= _ids_in(v, depth + 1)
+    elif isinstance(data, list):
+        for v in data[:200]:
+            out |= _ids_in(v, depth + 1)
+    return out
+
+
 class AppBackend(Protocol):
     def execute(self, slug: str, arguments: dict[str, Any]) -> Any: ...
     def connected(self) -> dict[str, bool]: ...
@@ -72,11 +102,23 @@ class ComposioBackend:
     def _s(self):
         if self._session is None:
             from composio import Composio
-            self._session = Composio(api_key=self._api_key).sessions.create(user_id=self._user_id, manage_connections=False)
+            # Several accounts for one service (two mailboxes, say) are the connector's own feature. A call that names no
+            # account is not refused: which account it means is decided here (Apps), before the call is made.
+            self._session = Composio(api_key=self._api_key).sessions.create(
+                user_id=self._user_id, manage_connections=False,
+                multi_account={"enable": True, "max_accounts_per_toolkit": MOST_ACCOUNTS, "require_explicit_selection": False})
         return self._session
 
-    def execute(self, slug: str, arguments: dict[str, Any]) -> Any:
-        result = self._s().execute(slug, arguments=arguments)
+    def accounts(self, toolkit: str) -> list[dict[str, str]]:
+        """This person's working sign-ins to one service, oldest first: the connector's id for each and the name it was given."""
+        from composio import Composio
+        got = Composio(api_key=self._api_key).connected_accounts.list(user_ids=[self._user_id], toolkit_slugs=[toolkit], statuses=["ACTIVE"])
+        items = [i.model_dump() if hasattr(i, "model_dump") else dict(i) for i in getattr(got, "items", None) or []]
+        items.sort(key=lambda d: str(d.get("created_at") or ""))
+        return [{"id": str(d["id"]), "alias": str(d.get("alias") or "")} for d in items if d.get("id")]
+
+    def execute(self, slug: str, arguments: dict[str, Any], account: str | None = None) -> Any:
+        result = self._s().execute(slug, arguments=arguments, **({"account": account} if account else {}))
         if getattr(result, "result_type", None) != "completed":
             raise AppError(str(getattr(result, "error", None) or f"{slug} ended as {getattr(result, 'result_type', 'unknown')}")[:300])
         return result.data
@@ -86,8 +128,8 @@ class ComposioBackend:
         state = {i.slug.lower(): bool(i.connection and i.connection.is_active) for i in items}
         return {GMAIL: state.get(GMAIL, False), CALENDAR: state.get(CALENDAR, False)}
 
-    def connect_link(self, toolkit: str) -> str:
-        return self._s().authorize(toolkit).redirect_url
+    def connect_link(self, toolkit: str, alias: str | None = None) -> str:
+        return self._s().authorize(toolkit, **({"alias": alias} if alias else {})).redirect_url
 
     def find(self, task: str) -> dict[str, Any]:
         return self._s().search(query=task).model_dump(mode="json")
@@ -263,7 +305,8 @@ def describe_send(args: dict[str, Any]) -> str:
     body = str(args.get("body", "")).strip()
     if not body and not str(args.get("subject", "")).strip():
         raise AppError("An email needs a subject or a body.")
-    return (f"Send this email from your account?\n\nTo: {', '.join(to)}\n" + (f"Cc: {', '.join(cc)}\n" if cc else "")
+    acct = " ".join(str(args.get("account") or "").split())[:60]
+    return (f"Send this email from your {acct + ' ' if acct else ''}account?\n\nTo: {', '.join(to)}\n" + (f"Cc: {', '.join(cc)}\n" if cc else "")
             + f"Subject: {str(args.get('subject', '')).strip() or '(none)'}\n\n{body}")
 
 
@@ -388,6 +431,116 @@ class Apps:
         self.reader = None                               # reads a file's text and pages (reading.py); set at start
         self.fetcher = None                              # fetches the attachment from the address the mail service gives (links.py)
         self.keep = None                                 # keeps an attachment that was read, to be handed back when asked for (files.py)
+        self._listed: dict[str, tuple[float, list[dict[str, str]]]] = {}     # each service's accounts, and when they were read
+        self._where: dict[str, str] = {}                 # the account each message, thread and event came from, by its id
+        self._names: dict[str, str] = {}                 # a mailbox's own address, by the connector's id for the account
+
+    # --- more than one account for a service --------------------------------------------------------------------
+    async def accounts(self, kit: str, fresh: bool = False) -> list[dict[str, str]]:
+        """This person's accounts for mail or calendar: [{"id", "name"}], oldest first. Empty when the connector cannot
+        say, which is treated as one account and changes nothing."""
+        import time as _time
+        lister = getattr(self._b, "accounts", None)
+        if lister is None:
+            return []
+        at, kept = self._listed.get(kit, (0.0, []))
+        if kept and not fresh and _time.monotonic() - at < 120:
+            return kept
+        try:
+            found = await asyncio.wait_for(asyncio.to_thread(lister, kit), CALL_TIMEOUT_S)
+        except (Exception, asyncio.TimeoutError) as e:
+            self._journal.write("error", where="apps.accounts", error=type(e).__name__)
+            return kept
+        out = []
+        for n, a in enumerate(found[:MOST_ACCOUNTS]):
+            name = a.get("alias") or ""
+            if not name and kit == GMAIL and len(found) > 1:
+                if a["id"] not in self._names:
+                    try:
+                        data = _unwrap(await asyncio.wait_for(asyncio.to_thread(self._b.execute, "GMAIL_GET_PROFILE", {}, a["id"]), CALL_TIMEOUT_S))
+                        self._names[a["id"]] = str((data or {}).get("emailAddress") or "").strip().lower() if isinstance(data, dict) else ""
+                    except (Exception, asyncio.TimeoutError):
+                        self._names[a["id"]] = ""
+                name = self._names.get(a["id"], "")
+            out.append({"id": a["id"], "name": name or ("main" if n == 0 else f"account {n + 1}")})
+        self._listed[kit] = (_time.monotonic(), out)
+        return out
+
+    @staticmethod
+    def _pick(accounts: list[dict[str, str]], wanted: str) -> dict[str, str]:
+        want = wanted.strip().casefold()
+        exact = [a for a in accounts if a["name"].casefold() == want]
+        near = exact or [a for a in accounts if want and want in a["name"].casefold()]
+        if len(near) != 1:
+            raise AppError(f"There is no single account called {wanted!r}. The accounts are: {', '.join(a['name'] for a in accounts)}.")
+        return near[0]
+
+    async def _as(self, account: dict[str, str], fn: Any, args: dict[str, Any]) -> str:
+        token = _ACCOUNT.set(account["id"])
+        try:
+            return await fn(args)
+        finally:
+            _ACCOUNT.reset(token)
+
+    async def _on_accounts(self, name: str, fn: Any, args: dict[str, Any]) -> str:
+        """Run one mail or calendar tool for the right account. With one account, exactly as before."""
+        accounts = await self.accounts(GMAIL if name.startswith("mail") else CALENDAR)
+        if len(accounts) < 2:
+            return await fn(args)
+        names = ", ".join(a["name"] for a in accounts)
+        wanted = str(args.get("account") or "").strip()
+        if wanted:
+            return await self._as(self._pick(accounts, wanted), fn, args)
+        about = next((str(args[k]).strip() for k in ("message_id", "thread_id", "event_id") if str(args.get(k) or "").strip()), "")
+        if about:
+            known = next((a for a in accounts if a["id"] == self._where.get(about)), None)
+            if known is not None:
+                return await self._as(known, fn, args)
+            if name in FOUND_BY_ID:                 # reading changes nothing, so each account may be tried for it
+                last: Exception | None = None
+                for a in accounts:
+                    try:
+                        return await self._as(a, fn, args)
+                    except AppError as e:
+                        last = e
+                raise last or AppError("No account has that.")
+        if name in SPREAD:
+            texts = await asyncio.gather(*(self._as(a, fn, args) for a in accounts), return_exceptions=True)
+            parts = []
+            for a, text in zip(accounts, texts):
+                parts.append(f"In the account {a['name']}:\n" + (f"Could not be read: {text}" if isinstance(text, BaseException) else str(text)))
+            return "\n\n".join(parts)
+        raise AppError(f"The owner has {len(accounts)} accounts for this: {names}. Say which one in `account`. "
+                       "If the owner did not say which, ask them; do not choose for them.")
+
+    async def accounts_text(self) -> str:
+        """What is signed in, for the owner. Written by code."""
+        lines = []
+        for kit, label in ((GMAIL, "Mail"), (CALENDAR, "Calendar")):
+            found = await self.accounts(kit, fresh=True)
+            lines.append(f"{label}: " + (", ".join(a["name"] for a in found) if found else "one account or none (ask whether mail and calendar are connected)"))
+        return "\n".join(lines) + f"\n\nYou can add another account to a service, up to {MOST_ACCOUNTS}: tell me which service and a short name for it, such as personal."
+
+    async def add_account(self, service: str, name: str) -> str:
+        """A sign-in link for one more account of a service, under the short name the owner gave it."""
+        from .people import clean_name
+        name = clean_name(name).lower()[:24]
+        if not service.strip() or not name:
+            return "I need the service and a short name for the new account, for example: add another Gmail called personal."
+        kit = {"gmail": GMAIL, "mail": GMAIL, "email": GMAIL, "google mail": GMAIL, "calendar": CALENDAR, "google calendar": CALENDAR}.get(service.strip().lower())
+        try:
+            if kit is None:
+                matches = await asyncio.wait_for(asyncio.to_thread(self._b.lookup, service.strip()), CALL_TIMEOUT_S)
+                kit = matches[0][0] if matches else None
+            if kit is None:
+                return f"I do not know a service called {service.strip()!r}."
+            link = await asyncio.wait_for(asyncio.to_thread(self._b.connect_link, kit, name), CALL_TIMEOUT_S)
+        except (Exception, asyncio.TimeoutError) as e:
+            self._journal.write("error", where="apps.add_account", error=type(e).__name__, message=str(e)[:200])
+            return "I could not make a sign-in link for that just now. A name can be used once for each service; try another name, or try again shortly."
+        self._listed.pop(kit, None)
+        self._journal.write("account", outcome="link made", toolkit=kit)
+        return f"Open this link and sign in to the account you want to add as {name!r}. Sign in to the right one: the link does not choose it for you.\n\n{link}"
 
     def event(self, event_id: str) -> dict[str, Any] | None:
         return self._events.get(event_id)
@@ -444,8 +597,13 @@ class Apps:
         # never repeated by code: the service may have done it and lost the answer, and a second try would do it twice.
         reading = tool in READS
         for attempt in range(3 if reading else 1):
+            account = _ACCOUNT.get()
             try:
-                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments), CALL_TIMEOUT_S)
+                data = await asyncio.wait_for(asyncio.to_thread(self._b.execute, slug, arguments, *([account] if account else [])), CALL_TIMEOUT_S)
+                if account:
+                    if len(self._where) > 20000:
+                        self._where.clear()
+                    self._where.update({i: account for i in _ids_in(data)})
             except (Exception, asyncio.TimeoutError) as e:
                 # `retrying` marks an attempt that is about to be made again: only the last one is the call's failure.
                 self._journal.write("tool", name=tool, ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", attempt=attempt + 1,
@@ -539,10 +697,10 @@ class Apps:
         def ok(text: str) -> dict[str, Any]:
             return {"content": [{"type": "text", "text": text}]}
 
-        def wrap(fn):
+        def wrap(fn, name=""):
             async def handler(args: dict[str, Any]) -> dict[str, Any]:
                 try:
-                    return ok(await fn(args))
+                    return ok(await self._on_accounts(name, fn, args))
                 except AppError as e:
                     return {"content": [{"type": "text", "text": f"Not done: {e}"}], "is_error": True}
             return handler
@@ -711,7 +869,7 @@ class Apps:
             self._pending.append(f"archived message {message_id}")
             return "Archived: it is out of the inbox and still in All Mail."
 
-        return {k: wrap(v) for k, v in {"mail_search": mail_search, "mail_read": mail_read, "mail_attachment": mail_attachment, "mail_send": mail_send,
+        return {k: wrap(v, k) for k, v in {"mail_search": mail_search, "mail_read": mail_read, "mail_attachment": mail_attachment, "mail_send": mail_send,
                                          "mail_reply": mail_reply, "calendar_list": calendar_list,
                                          "calendar_create": calendar_create, "calendar_change": calendar_change,
                                          "calendar_delete": calendar_delete, "mail_draft": mail_draft,
@@ -798,3 +956,9 @@ def compact_inputs(schema: Any) -> str:
             bit += f" ({said[:110]})"
         parts.append(bit)
     return "; ".join(parts)
+
+
+# Every mail and calendar tool can be told which account, for a person who has more than one (Apps._on_accounts).
+for _name, (_about, _shape) in list(SCHEMAS.items()):
+    if _name.startswith(("mail_", "calendar_")):
+        SCHEMAS[_name] = (_about, {**_shape, "properties": {**_shape.get("properties", {}), "account": ACCOUNT_FIELD}})

@@ -361,7 +361,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
                                 files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
                                 peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer,
-                                manage=(said.handler(run_command, journal, host), said.schema(host)))
+                                manage=(said.handler(run_command, journal, host, later=lambda text: late["c"].after_task.append(text)), said.schema(host)))
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.

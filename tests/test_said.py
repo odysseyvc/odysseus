@@ -76,3 +76,16 @@ def test_the_model_is_told_to_act_on_words_and_never_to_name_a_command():
 async def test_new_conversation_is_said_in_words(tmp_path):
     from odysseus.conversation import NEW_WORDS
     assert "new conversation" in NEW_WORDS and "/new" in NEW_WORDS
+
+
+async def test_a_connection_asked_for_in_words_begins_when_the_task_has_ended(tmp_path):
+    ran, journal, _ = rig(tmp_path)
+    later = []
+
+    async def run(text):
+        ran.append(text)
+    manage = said.handler(run, journal, True, later=later.append)
+    got = await manage({"what": "connect", "detail": "attio"})
+    assert ran == [] and later == ["/connect attio"] and "on its way" in got["content"][0]["text"]
+    await manage({"what": "add_account", "detail": "gmail personal"})
+    assert ran == ["/account gmail personal"], "a link for one more account needs no rebuilding, so it is made at once"
