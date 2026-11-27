@@ -61,7 +61,7 @@ class Chat(Protocol):
 
 
 STEPS = (("attio", "Looking in Attio"), ("pipeline_review", "Going through the pipeline"), ("portfolio", "Looking at the companies' figures"),
-         ("round_maths", "Working out the round"), ("mail_", "Reading your mail"), ("inbox_", "Reading my own mailbox"), ("calendar", "Checking your calendar"),
+         ("round_maths", "Working out the round"), ("mail_send", "Writing the email"), ("mail_reply", "Writing the reply"), ("mail_draft", "Drafting the email"), ("mail_archive", "Filing the email away"), ("mail_", "Reading your mail"), ("inbox_", "Reading my own mailbox"), ("calendar", "Checking your calendar"),
          ("web_search", "Searching the web"), ("browse", "Opening the page"), ("run_code", "Working on the file"), ("template", "Looking at your template"),
          ("skill_read", "Reading how you like this done"), ("files_", "Looking through your files"), ("recall", "Looking back through our conversations"),
          ("remember", "Making a note"), ("note", "Making a note"), ("schedule", "Setting that up"), ("watch", "Setting up the watch"),

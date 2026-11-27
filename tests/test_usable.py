@@ -214,3 +214,10 @@ async def test_a_short_listing_of_notes_comes_back_with_each_note_whole_and_a_lo
         crm.note(ids["d_lumen"], f"Note {i}", "x" * 300)
     out = (await h["attio_run"]({"tool": "search-notes-by-metadata", "arguments": {"parent_record_id": ids["d_lumen"]}}))["content"][0]["text"]
     assert "gives only the opening of each note" in out and "get-note-body" in out and "Halberd Partners" not in out
+
+
+def test_the_status_line_does_not_say_reading_while_an_email_is_written():
+    from odysseus.conversation import progress_line
+    assert progress_line("mcp__odysseus__mail_read") == "Reading your mail..."
+    for tool in ("mail_send", "mail_reply", "mail_draft", "mail_archive"):
+        assert "Reading" not in progress_line("mcp__odysseus__" + tool)
