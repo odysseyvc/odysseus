@@ -102,6 +102,7 @@ async def test_with_one_account_everything_is_as_it_was(tmp_path):
     assert "Term sheet" in got and "In the account" not in got
     await h["mail_send"]({"to": ["tara@fund.example"], "subject": "Hello", "body": "Hi"})
     assert all(a is None for _, a in b.calls), "no account is named to the connector when there is only one"
+    assert "Mail: me@fund.example" in await apps.accounts_text(), "one mailbox is still shown by its own address"
 
     class Old:                                  # a connector that knows nothing of accounts still works
         def execute(self, slug, arguments):

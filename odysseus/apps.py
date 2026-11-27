@@ -518,6 +518,11 @@ class Apps:
         lines = []
         for kit, label in ((GMAIL, "Mail"), (CALENDAR, "Calendar")):
             found = await self.accounts(kit, fresh=True)
+            if kit == GMAIL and len(found) == 1 and found[0]["name"] == "main":
+                try:
+                    found = [{**found[0], "name": await self.my_address() or "main"}]      # one mailbox is shown by its own address too
+                except AppError:
+                    pass
             lines.append(f"{label}: " + (", ".join(a["name"] for a in found) if found else "one account or none (ask whether mail and calendar are connected)"))
         return "\n".join(lines) + f"\n\nYou can add another account to a service, up to {MOST_ACCOUNTS}: tell me which service and a short name for it, such as personal."
 
