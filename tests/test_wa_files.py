@@ -100,3 +100,43 @@ def test_a_file_asked_for_in_a_chat_goes_to_that_chat_when_it_can_take_files():
     from odysseus import __main__ as main
     src = inspect.getsource(main)
     assert "def files_go_to()" in src and src.count("deliver(shelf, entry, files_go_to())") == 2
+
+
+async def test_after_a_days_silence_the_approved_line_opens_the_chat_and_the_message_follows(tmp_path):
+    sent = []
+
+    async def http(method, url, body):
+        sent.append(body)
+        if body.get("type") != "template" and not any(b.get("type") == "template" for b in sent[:-1]):
+            return 400, {"error": "open conversation required for text messages"}
+        return 201, {"id": "out"}
+    chat = VobizChat(http, "https://api.vobiz.ai/api/v1/Account/MA_TEST/WhatsApp/Message/", "chan-1", "447700900123",
+                     Journal(tmp_path / "j.jsonl"), TypedAnswers(lambda: 0.0))
+    chat.template = "assistant_update"
+    await chat.send("Reminder: call the plumber about the leak before five today, and bring the invoice.")
+    assert [b["type"] for b in sent] == ["text", "template", "text"], "refused, opened with the approved line, then sent"
+    opening = sent[1]["template"]
+    assert opening["name"] == "assistant_update" and opening["language"] == {"code": "en"}
+    assert opening["components"][0]["parameters"][0]["text"].startswith("Reminder: call the plumber")
+    assert sent[2]["text"]["body"].startswith("Reminder: call the plumber")
+
+
+async def test_without_an_approved_line_or_if_it_is_refused_the_refusal_stands(tmp_path):
+    import pytest as _pytest
+
+    async def closed(method, url, body):
+        return 400, {"error": "open conversation required for text messages"}
+    chat = VobizChat(closed, "https://api.vobiz.ai/api/v1/Account/MA_TEST/WhatsApp/Message/", "chan-1", "447700900123",
+                     Journal(tmp_path / "j.jsonl"), TypedAnswers(lambda: 0.0))
+    with _pytest.raises(RuntimeError):
+        await chat.send("a reminder")                      # no template set: as before
+    chat.template = "assistant_update"
+    with _pytest.raises(RuntimeError):
+        await chat.send("a reminder")                      # the opening line is refused too: still an error, never a silence
+    errors = [r for r in Journal(tmp_path / "j.jsonl").read() if r.get("kind") == "error"]
+    assert len(errors) == 2 and "opening line was refused too" in errors[1]["message"]
+
+
+def test_the_opening_line_says_what_it_is_and_carries_the_first_words():
+    from odysseus.vobiz import OPENING_MOST, TEMPLATE_BODY, TEMPLATE_NAME
+    assert "{{1}}" in TEMPLATE_BODY and TEMPLATE_NAME == "assistant_update" and OPENING_MOST <= 200

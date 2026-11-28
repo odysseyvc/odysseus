@@ -309,6 +309,30 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                    if settings.computer else E2B(settings.e2b_api_key, settings.sandbox_template))
         me.closers.append(machine.close)        # a machine kept ready for the next run is destroyed when this person's assistant closes
         code_runner = CodeRunner(machine, journal, ledger, settings.daily_usd, gate.taint)
+
+        def look_in_on(job_id: str, minutes: int) -> None:
+            # A job started in the background is looked in on by code until it ends or its time is up, and what it printed is
+            # then handed to the assistant as a task of its own, which reports to the owner. Nobody has to ask.
+            async def watch() -> None:
+                state, tail = "running", ""
+                for _ in range(minutes * 2 + 4):
+                    await asyncio.sleep(30)
+                    try:
+                        state, tail = await machine.job(job_id)
+                    except Exception:
+                        continue
+                    if state != "running":
+                        break
+                journal.write("job", id=job_id, state=state)
+                try:
+                    await late["c"].handle(settings.owner_id,
+                                           f"[From the program, not the owner: the job you started in the background (id {job_id}) is now {state}. "
+                                           f"The end of what it printed follows. Tell the owner what came of it, and send any file they are owed.]\n\n{tail[-4000:]}",
+                                           own_chat, material="the output of a job on your computer", background=True)
+                except Exception as e:
+                    journal.write("error", where="job.report", error=type(e).__name__)
+            me.tasks.append(asyncio.create_task(watch()))
+        code_runner.on_job = look_in_on if getattr(machine, "lasting", False) else None
         if settings.review_model.lower() != "off":
             # Before a document goes, its pages are read once more against what the owner asked, by a model that did not write it (pagecheck.py).
             from .pagecheck import make_page_checker
@@ -453,6 +477,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                       number=settings.vobiz_number, owner_number=settings.owner_whatsapp, secret=settings.vobiz_secret,
                       owner_id=settings.owner_id, ids_file=settings.data_dir / "whatsapp.json",
                       people=lambda: getattr(shared, "house", None))
+        vobiz.template, vobiz.template_lang = settings.wa_template, settings.wa_template_lang
         me.closers += [attach_vobiz(vobiz, shared.door), close_via]
     by_whatsapp = whatsapp or vobiz         # the direct route if it is set up, else the one through Vobiz
     if host:

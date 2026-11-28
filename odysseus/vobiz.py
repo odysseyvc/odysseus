@@ -41,6 +41,10 @@ from .typed import TypedAnswers, how
 from .whatsapp import CAPTION_LIMIT, STALE_AFTER_S, TEXT_LIMIT, Http, WhatsApp, digits, file_kind, reports, sent_id, signature_ok, size_of
 
 FILE_LIMIT = 16 * 1024 * 1024        # the largest file this route takes
+OPENING_MOST = 120                   # characters of the message carried in the approved opening line
+# The opening line itself, as it is submitted for approval (scripts/vobiz_template.py). {{1}} is the first words of the message.
+TEMPLATE_NAME = "assistant_update"
+TEMPLATE_BODY = "Your assistant has something for you: {{1}}\n\nThe full message follows. Reply here at any time."
 
 
 def base(auth_id: str) -> str:
@@ -55,18 +59,35 @@ class VobizChat:
         self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
         self.channel = "whatsapp"
         self.route = "vobiz"
+        self.template, self.template_lang = "", "en"     # an approved opening line for writing after a day's silence, if the owner has one
         # Said once to a person who joins on this number, after the welcome: one more company carries what they send.
         self.welcome_more = "\n\nOne more thing about this number: messages on it pass through the telephone company that provides it, which can read them."
 
-    async def _post(self, body: dict[str, Any]) -> None:
+    async def _post(self, body: dict[str, Any], again: bool = True) -> None:
         status, data = await self._http("POST", self._url, {"channel_id": self._channel, "to": "+" + self._to, **body})
         if status < 300:
             self._journal.write("wa_out", route=self.route, type=str(body.get("type", ""))[:20], chars=size_of(body), id=sent_id(data))
-        if status >= 300:
-            # Most often: no conversation is open, which is the 24-hour window. Raised so the reply is not counted as delivered.
-            error = data.get("error") if isinstance(data, dict) else data
-            self._journal.write("error", where="vobiz.send", status=status, message=(json.dumps(error) if isinstance(error, dict) else str(error))[:300])
-            raise RuntimeError(f"the WhatsApp line refused the message ({status})")
+            return
+        error = data.get("error") if isinstance(data, dict) else data
+        said = json.dumps(error) if isinstance(error, dict) else str(error)
+        # WhatsApp lets a business write freely only for a day after the person last wrote. After that, the one thing
+        # that may be sent is a message approved in advance (a template), and sending one opens the day again. So a
+        # reminder to someone who has been silent is sent as the approved line, carrying the first words of what is to
+        # be said, and then the message itself. Without an approved template the refusal stands, as before.
+        if again and self.template and "open conversation required" in said.lower() and body.get("type") != "template":
+            first = " ".join(str((body.get("text") or {}).get("body") or (body.get("media") or {}).get("caption") or "a file for you").split())
+            first = first[:OPENING_MOST] + ("..." if len(first) > OPENING_MOST else "")
+            opened, back = await self._http("POST", self._url, {"channel_id": self._channel, "to": "+" + self._to, "type": "template", "template": {
+                "name": self.template, "language": {"code": self.template_lang}, "category": "utility",
+                "components": [{"type": "body", "parameters": [{"type": "text", "text": first or "an update"}]}]}})
+            self._journal.write("wa_out", route=self.route, type="template", ok=opened < 300, id=sent_id(back) if opened < 300 else "")
+            if opened < 300:
+                await self._post(body, again=False)
+                return
+            said = f"the approved opening line was refused too ({opened})"
+        # Most often: no conversation is open, which is the 24-hour window. Raised so the reply is not counted as delivered.
+        self._journal.write("error", where="vobiz.send", status=status, message=said[:300])
+        raise RuntimeError(f"the WhatsApp line refused the message ({status})")
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
@@ -115,6 +136,7 @@ class Vobiz(WhatsApp):
                          owner_id=owner_id, **more)
         self._base, self._channel, self._number = base(auth_id), channel_id, digits(number)
         self._typed = TypedAnswers(self._clock)
+        self.template, self.template_lang = "", "en"     # set by the program from the owner's settings (ODYSSEUS_WA_TEMPLATE)
         self._typed_by = {self._owner: self._typed}       # each person's own waiting questions: one person's word never answers another's
         self.number = self._number
         self._line_id = ""          # Meta's id for the number, as the last delivery gave it; needed to fetch a file
@@ -123,7 +145,9 @@ class Vobiz(WhatsApp):
         to = to or self._owner
         if to not in self._typed_by:
             self._typed_by[to] = TypedAnswers(self._clock)
-        return VobizChat(self._http, f"{self._base}/Message/", self._channel, to, self._journal, self._typed_by[to])
+        chat = VobizChat(self._http, f"{self._base}/Message/", self._channel, to, self._journal, self._typed_by[to])
+        chat.template, chat.template_lang = self.template, self.template_lang
+        return chat
 
     async def _handle(self, m: dict[str, Any]) -> None:
         # One exact word from the owner, while a question asked here is waiting, answers it (typed.py). The checks the

@@ -88,6 +88,13 @@ class Gate:
         self._escalate: Callable[..., Awaitable[str]] | None = None
         self._escalate_when: Callable[[str, dict[str, Any]], bool] | None = None
         self._unasked = 0                  # such changes so far in this task
+        # One approval can cover the rest of a job on one thing. The owner asked for a long list to be written to their
+        # own sheet; it went in several pieces, each was put to them, one question lapsed while they were away, and the
+        # task ended unfinished. `scope_of(tool, args)` names the thing a small change is to (a file of the owner's own),
+        # or "" when the call is of a kind that is asked about every time. Once the owner has approved one change to
+        # that thing in this task, later small changes to the same thing in the same task are not asked about again.
+        self._scope_of: Callable[[str, dict[str, Any]], str] | None = None
+        self._covered: set[str] = set()
         # Several tasks may run at once: the owner's conversation, and jobs in the background (conversation.py). Whatever
         # is kept "for the current task" is then kept for all of them together, and always in the stricter direction: the
         # count of unasked changes goes on, what was asked is every request, nobody stops being asked until the last task
@@ -114,6 +121,15 @@ class Gate:
             self._rules[tool] = Rule(decide, describe, after=after)
         else:
             self._rules[tool] = Rule(lambda args, d=decide: d, describe, constant=decide)
+
+    def set_scope(self, scope_of: Callable[[str, dict[str, Any]], str] | None) -> None:
+        self._scope_of = scope_of
+
+    def _scope(self, tool: str, args: dict[str, Any]) -> str:
+        try:
+            return str(self._scope_of(tool, args) or "") if self._scope_of is not None else ""
+        except Exception:
+            return ""
 
     def set_asker(self, asker: Asker | None) -> None:
         """Who to ask. None means nobody is here, and anything that needs asking is refused."""
@@ -186,6 +202,7 @@ class Gate:
         """A task is starting. `key` names it ("main", "background")."""
         if not self._tasks:
             self._unasked = 0               # a fresh count only when nothing else is running
+            self._covered.clear()
         self._tasks[key] = request
         self._asker = asker
         self.request = "\n\n---\n\n".join(r for r in self._tasks.values() if r)
@@ -206,6 +223,7 @@ class Gate:
     def new_task(self, request: str = "") -> None:
         """The conversation is starting a task: what the owner asked, and a fresh count of changes made unasked."""
         self.request, self._unasked = request, 0
+        self._covered.clear()
 
     async def _escalation(self, tool: str, args: dict[str, Any]) -> str:
         """Why a call the rules would allow should be put to the owner after all, or "" to let it run."""
@@ -251,11 +269,17 @@ class Gate:
     async def permission(self, tool: str, args: dict[str, Any], context: Any = None):
         verdict = self.decide(tool, args)
         if verdict == ALLOW:
+            scope = self._scope(tool, args)
+            if scope and scope in self._covered:
+                self._journal.write("gate", tool=tool, verdict="covered")      # the owner approved a change to this same thing earlier in this task
+                return PermissionResultAllow()
             why_ask = await self._escalation(tool, args)
             if not why_ask:
                 return PermissionResultAllow()
             approved, why, approval = await self.ask(tool, args, note=why_ask)
             if approved:
+                if scope:
+                    self._covered.add(scope)
                 return PermissionResultAllow(updated_input=copy.deepcopy(approval.args))
             return PermissionResultDeny(message=why)
         if verdict == REFUSE:

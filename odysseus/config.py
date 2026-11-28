@@ -65,6 +65,8 @@ class Settings:
     vobiz_auth_token: str = ""        # and its token
     vobiz_channel_id: str = ""        # the WhatsApp channel made in Vobiz for the number
     vobiz_number: str = ""            # the WhatsApp number rented from Vobiz, with country code
+    wa_template: str = ""             # the name of an approved WhatsApp template, for writing to someone silent for more than a day (vobiz.py)
+    wa_template_lang: str = "en"
     vobiz_secret: str = ""            # a secret of your own choosing, given to Vobiz when the address is registered; it signs every delivery
     vobiz: bool = True                # ODYSSEUS_VOBIZ=off switches this route off and leaves its settings in place
     # Optional: the group's assistant in a WhatsApp group (whatsapp_group.py). It needs the direct route above, because
@@ -202,6 +204,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         vobiz_channel_id=merged.get("VOBIZ_CHANNEL_ID", "").strip(),
         vobiz_number=merged.get("VOBIZ_NUMBER", "").strip(),
         vobiz_secret=merged.get("VOBIZ_WEBHOOK_SECRET", "").strip(),
+        wa_template=merged.get("ODYSSEUS_WA_TEMPLATE", "").strip(),
+        wa_template_lang=merged.get("ODYSSEUS_WA_TEMPLATE_LANG", "en").strip() or "en",
         vobiz=merged.get("ODYSSEUS_VOBIZ", "").strip().lower() not in ("0", "false", "no", "off"),
         whatsapp_group_phone_id=merged.get("WHATSAPP_GROUP_PHONE_ID", "").strip(),
         whatsapp_group_members=merged.get("WHATSAPP_GROUP_MEMBERS", "").strip(),

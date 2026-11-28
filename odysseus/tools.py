@@ -205,6 +205,20 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 1800.0, with_apps: 
                 return False
             return change and bool(taint.sources or taint.leaked(json.dumps(a, ensure_ascii=False, default=str)))
         gate.set_escalator(escalate, changes_after_reading)
+
+        def one_thing(tool: str, args: dict[str, Any]) -> str:
+            """The file of the owner's own that a small change is to, for an approval that covers the rest of the job on it."""
+            if tool != anyapp_mod.APP_RUN or anyapp is None:
+                return ""
+            slug = str(args.get("tool", "")).strip().upper()
+            if not anyapp.small(slug):
+                return ""               # sending, sharing, deleting, clearing, replacing, and other people's apps: asked about every time
+            inputs = args.get("arguments") if isinstance(args.get("arguments"), dict) else {}
+            for key in ("spreadsheet_id", "spreadsheetId", "document_id", "documentId", "presentation_id", "presentationId", "file_id", "fileId"):
+                if str(inputs.get(key) or "").strip():
+                    return f"{anyapp_mod.toolkit_of(slug)}:{str(inputs[key]).strip()}"
+            return ""
+        gate.set_scope(one_thing)
     if with_apps:
         from datetime import datetime
         apps_mod.add_rules(gate, now or datetime.now, apps)
@@ -291,6 +305,8 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 1800.0, with_apps: 
     # Code run on a throwaway machine with no internet (sandbox.py): it can reach nothing of the owner's but the kept
     # files it is handed, and can send them nowhere. What it makes goes to the owner's own chat. So it runs unasked.
     gate.rule(_name("run_code"), ALLOW)
+    gate.rule(_name("job_start"), ALLOW)        # a longer run on the same computer, by the same reasoning as run_code
+    gate.rule(_name("job_check"), ALLOW)
     # Marking one of the owner's kept files as the template their documents start from. Nothing leaves, the owner is told,
     # and it is undone in a word.
     gate.rule(_name("template"), ALLOW)

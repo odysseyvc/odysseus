@@ -32,7 +32,7 @@ NOTICE = "I was restarted in the middle of your last message. Nothing had been c
 READS = frozenset({
     "web_search", "recall", "mail_search", "mail_read", "mail_each", "mail_attachment", "calendar_list", "calendar_busy", "mail_profile", "mail_for_code",
     "attio_find", "app_find", "files_find", "list_schedule", "list_watches", "checkin_list", "skill_read", "template", "see_pages", "page_check",
-    "times_find", "inbox_list", "inbox_read", "portfolio_show", "who_to_ask_about", "pipeline_review", "round_maths", "review", "close"})
+    "times_find", "job_check", "inbox_list", "inbox_read", "portfolio_show", "who_to_ask_about", "pipeline_review", "round_maths", "review", "close"})
 
 
 def keep(path: Path, text: str, via: str, again: bool = False) -> bool:
