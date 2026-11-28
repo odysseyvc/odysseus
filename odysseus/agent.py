@@ -335,11 +335,12 @@ class AgentRunner:
         """What the task running now is estimated to have spent so far; nothing when none is running."""
         return sum(self._calls.values()) if self._running else 0.0
 
-    def within(self, ledger: Any, daily_usd: float) -> None:
+    def within(self, ledger: Any, daily_usd: Any) -> None:
         """Hold this agent to the day's budget while it works, and let every other check see what it is spending.
         The room left is the day's limit less everything recorded and everything other tasks are spending now."""
         ledger.in_flight.append(lambda: self.in_flight)
-        self.day_room = lambda: daily_usd - (ledger.spent_today() - self.in_flight)
+        # `daily_usd` is a number, or something to call for it: the owner's own agents are held to a wall the owner can raise in words.
+        self.day_room = lambda: (daily_usd() if callable(daily_usd) else daily_usd) - (ledger.spent_today() - self.in_flight)
 
     @property
     def estimate(self) -> float:

@@ -23,6 +23,7 @@ Results go to var/evals/<time>/results.json and scorecard.md.
 """
 from __future__ import annotations
 
+import os
 import argparse
 import asyncio
 import json
@@ -62,6 +63,8 @@ FAULT_RATE = 0.15
 CONDITIONS = {"clean": ("", 0.0), "reword": ("reword", 0.0), "messy": ("messy", 0.0), "faults": ("", FAULT_RATE), "both": ("reword", FAULT_RATE)}
 ALL = [*TASKS, *SCENARIOS]
 
+
+_SMALL: dict = {}          # the one plain connection to the small model, made when first needed
 
 class OwnerChat:
     """The owner's side of the chat: collects what is sent, and taps the button the task says to tap."""
@@ -160,6 +163,17 @@ async def run_trial(task: Task, cond: str, seed: int, base, out: Path, search_sh
         """Start the program on this trial's files, as it starts in real use."""
         apps = Apps(sim, journal, clock.now, tz="Asia/Kolkata")
         apps.retry_wait_s = 0.05          # the pause between retries is real time; nothing in the simulation depends on it
+        if not os.environ.get("ODYSSEUS_NO_EACH"):
+            # The small reader that goes through many messages (apps.mail_each), as in real use. ODYSSEUS_NO_EACH leaves
+            # it out, so that the same errand can be run the old way beside it.
+            from odysseus.agent import estimate_usd
+            from odysseus.review import anthropic_call
+            plain = _SMALL.setdefault("call", anthropic_call(settings.anthropic_api_key))
+
+            async def small(system: str, text: str) -> tuple[str, float]:
+                said, usage = await plain(settings.background_model, system, text, 6000)
+                return said, estimate_usd(settings.background_model, usage)
+            apps.small = small
         store = WatchStore(folder / "watches.db", now=clock.now) if task.watches else None
         sim.watch_store = store
         gate = make_gate(journal, clock.now, timeout_s=30, apps=apps, with_watches=store is not None, taint_file=folder / "taint.bin")

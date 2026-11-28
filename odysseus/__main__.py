@@ -414,6 +414,13 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     mark("conversation")
     if apps is not None:
         apps.reader, apps.fetcher = conversation.reader, Fetcher()      # so that a file attached to an email is read as any file is
+
+        async def small_reader(system: str, text: str) -> tuple[str, float]:
+            # One plain call to the small model, with no tools: it reads one message and says what it found (apps.mail_each).
+            from .agent import estimate_usd
+            said, usage = await second_call(settings.background_model, system, text, 6000)      # a long review names many people
+            return said, estimate_usd(settings.background_model, usage)
+        apps.small = small_reader
         apps.keep = lambda data, name, mime, text, origin: conversation._keep(data, name, mime, len(data), "", text, source="mail", origin=origin)
     if attio is not None:
         attio.warm()        # read the workspace's layout now, so the first question about the firm does not wait for it
@@ -617,8 +624,10 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     me.agents = [runner, *workers, run_routine.runner, watch_runner.runner, *(r.runner for r in (brief_runner, leads_runner, triage, drafter) if r is not None)]
     # Every agent this person has, attended or not, is held to the day's budget while it works and is counted by the
     # others while it runs: a routine, a brief or a draft for a colleague can no longer take the day past its limit.
+    # What a day is expected to cost is a wall for unattended work and a mark for the owner's own requests, which may
+    # go on to several times it (conversation.day_wall): a long job the owner asked for is not refused at the mark.
     for agent in me.agents:
-        agent.within(ledger, settings.daily_usd)
+        agent.within(ledger, conversation.day_wall if agent is runner or agent in workers else settings.daily_usd)
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me

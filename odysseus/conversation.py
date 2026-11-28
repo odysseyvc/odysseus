@@ -39,6 +39,8 @@ from .gate import Gate
 from .schedule import ScheduleStore
 
 STOP_WORDS = {"stop", "/stop", "cancel", "/cancel"}
+# Said by the owner as a message of its own, these let today's spending go further. Read by code, never by a model.
+RAISE_WORDS = {"raise today's limit", "raise todays limit", "raise the limit", "raise today's budget", "keep going today"}
 MAX_WAITING = 5      # messages that can wait behind a running task
 # Pictures the model can look at directly. Anything else that is an image is turned into text first (ocr.py).
 PICTURE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -180,6 +182,8 @@ class Conversation:
         self.in_flight = getattr(settings, "data_dir", None) and settings.data_dir / "in_flight.json"
         self.picked_up = ""              # a message picked up after a restart: it is not picked up a second time
         self._told_waiting = 0.0         # when the owner was last told that files are waiting their turn
+        self._day_told: Any = None       # the day on which the owner was told that it had gone past its expected cost
+        self._day_raised: tuple[Any, float] = (None, 0.0)     # the day, and how much the owner has added to its wall in words
         self.just_sent: list[tuple[float, str]] = []     # files the owner sent in the last few minutes: when, and the file's name
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
@@ -203,6 +207,21 @@ class Conversation:
 
     def is_owner(self, user_id: int) -> bool:
         return user_id == self._s.owner_id
+
+    def day_wall(self) -> float:
+        """The most this person's own requests may bring a day to: several times what a day is expected to cost, and more
+        if they have said so today (RAISE_WORDS). Unattended work stops at the expected cost itself."""
+        if self._day_raised[0] != self._now().date():
+            self._day_raised = (self._now().date(), 0.0)
+        return self._s.daily_usd * max(1.0, getattr(self._s, "day_stretch", 1.0)) + self._day_raised[1]
+
+    def _raise_day(self) -> None:
+        self.day_wall()
+        self._day_raised = (self._day_raised[0], self._day_raised[1] + self._s.daily_usd * max(1.0, getattr(self._s, "day_stretch", 1.0)))
+
+    def _day_full(self) -> str:
+        return (f"Today has reached ${self._ledger.spent_today():.2f}, and ${self.day_wall():.2f} is where I stop and check with you. "
+                "Say \"raise today's limit\" and I'll carry on")
 
     @property
     def busy(self) -> bool:
@@ -477,7 +496,8 @@ class Conversation:
             if jobs:
                 state += (", with a job in the background" if jobs == 1 else f", with {jobs} jobs in the background") \
                     + (f" and {len(self._bg_waiting)} waiting behind {'it' if jobs == 1 else 'them'}" if self._bg_waiting else "")
-            await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f} of ${self._s.daily_usd:.2f}.")
+            await chat.send(f"{state.capitalize()}. Spent today: ${self._ledger.spent_today():.2f}. A day usually comes to ${self._s.daily_usd:.2f} at most; "
+                            f"I stop and check with you at ${self.day_wall():.2f}.")
             return
 
         # A new conversation, with nothing carried over. Memory, reminders and connections are untouched.
@@ -509,9 +529,9 @@ class Conversation:
                     await chat.send("Got it. I'm working through what you've sent in turn, and will report on each as it is done." if len(self._workers) > 1
                                     else "Got it. I'll start on this when the one I'm working on is done.")
                 return
-            if self._ledger.spent_today() >= self._s.daily_usd:
+            if self._ledger.spent_today() >= self.day_wall():
                 self._journal.write("refused", reason="daily_budget")
-                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started this.")
+                await chat.send(self._day_full() + ", so I have not started this.")
                 return
             self._bg_tasks[free] = asyncio.create_task(self._bg_work(free, text, chat, material))
             return
@@ -543,11 +563,25 @@ class Conversation:
                 chat.quote = True       # its answer is sent as a reply to this message, so answers that arrive together can be told apart
             return
 
-        # 4. The daily budget is checked before any model call is made.
-        if self._ledger.spent_today() >= self._s.daily_usd:
-            self._journal.write("refused", reason="daily_budget")
-            await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started this.")
+        # 4. The day's spending is checked before any model call is made. What a day is expected to cost is a mark: the
+        # owner's own request still runs past it, and they are told once that the day has gone past it. Several times
+        # the mark is a wall, where nothing more starts until the owner says so in words (RAISE_WORDS).
+        if command in RAISE_WORDS:
+            self._raise_day()
+            self._journal.write("command", name="raise today's limit")
+            await chat.send(f"Done. I'll carry on today up to ${self.day_wall():.2f}. Today so far: ${self._ledger.spent_today():.2f}.")
             return
+        if self._ledger.spent_today() >= self.day_wall():
+            self._journal.write("refused", reason="daily_budget")
+            await chat.send(self._day_full() + ", so I have not started this.")
+            return
+        if self._ledger.spent_today() >= self._s.daily_usd and self._day_told != self._now().date():
+            self._day_told = self._now().date()
+            try:
+                await chat.send(f"Today has cost ${self._ledger.spent_today():.2f} so far, past the ${self._s.daily_usd:.2f} a day usually comes to. "
+                                f"I'm carrying on with what you ask, and will stop and check with you at ${self.day_wall():.2f}.")
+            except Exception:
+                pass
 
         self._task = asyncio.create_task(self._work(text, chat, images, material))
 
@@ -557,9 +591,9 @@ class Conversation:
         while self._waiting:
             text, chat, images, material, q = self._waiting.popleft()
             self._journal.write("dequeued", q=q)
-            if self._ledger.spent_today() >= self._s.daily_usd:
+            if self._ledger.spent_today() >= self.day_wall():
                 self._journal.write("refused", reason="daily_budget")
-                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started a message that was waiting.")
+                await chat.send(self._day_full() + ", so I have not started a message that was waiting.")
                 continue
             await self._safely(text, chat, images, material)
 
@@ -572,9 +606,9 @@ class Conversation:
         await self._safely(text, chat, None, material, bg=True, slot=slot)
         while self._bg_waiting:
             text, chat, material = self._bg_waiting.popleft()
-            if self._ledger.spent_today() >= self._s.daily_usd:
+            if self._ledger.spent_today() >= self.day_wall():
                 self._journal.write("refused", reason="daily_budget")
-                await chat.send(f"Today's budget of ${self._s.daily_usd:.2f} is used up, so I have not started a job that was waiting.")
+                await chat.send(self._day_full() + ", so I have not started a job that was waiting.")
                 continue
             await self._safely(text, chat, None, material, bg=True, slot=slot)
 
@@ -1269,7 +1303,7 @@ class Conversation:
         # The day's budget is a ceiling on this task too, not only a threshold for starting it: the task is ended when
         # what it has spent reaches what was left of the day when it began or since (agent.py).
         if getattr(runner, "day_room", None) is None and hasattr(runner, "within"):         # set where the agents are assembled; this is for a runner made elsewhere
-            runner.within(self._ledger, self._s.daily_usd)
+            runner.within(self._ledger, self.day_wall)
         # Only the real agent takes a report of its steps; a stand-in for it in a test need not.
         steps = {"on_step": on_step} if "on_step" in getattr(getattr(runner.run, "__code__", None), "co_varnames", ()) else {}
         if not bg and hasattr(chat, "typing"):
@@ -1316,7 +1350,7 @@ class Conversation:
                      + ". What I have so far is above. Tell me what to do differently and I will pick it up from there.",
             "budget": f"I ended this task because it reached ${self._s.task_usd * getattr(self._s, 'task_stretch', 1.0):.2f}, the most one task may cost. "
                       "What I have so far is above. Say \"carry on\" and I will continue from here.",
-            "day_budget": f"I ended this task because today's budget of ${self._s.daily_usd:.2f} is used up.",
+            "day_budget": self._day_full() + ". What I have so far is above.",
             "turn_limit": f"I ended this task after {int(self._s.max_turns * getattr(self._s, 'task_stretch', 1.0))} steps, the most one task may take. "
                           "What I have so far is above. Say \"carry on\" and I will continue from here.",
             "error": "Something went wrong and I could not finish. The details are in the log.",

@@ -52,7 +52,7 @@ async def test_a_task_is_ended_when_something_else_running_uses_up_the_day(tmp_p
     y = make(tmp_path / "y", [script], daily=1.00, task_usd=5.00)
     y.ledger.in_flight.append(lambda: 1.00)
     await say(y, "anything")
-    assert "is used up, so I have not started this" in y.chat.sent[-1] and not y.clients, "nothing is started into a day already spent"
+    assert "so I have not started this" in y.chat.sent[-1] and "raise today's limit" in y.chat.sent[-1] and not y.clients, "nothing is started into a day already spent"
 
 
 # --- a task handed to the browser is counted, as a search is (browser.add_rules, taint.spill) --------------------------
@@ -72,3 +72,33 @@ def test_a_browser_task_carrying_much_that_the_owner_did_not_type_is_shown_first
     assert "4188392077, which you did not type" in asked and number["task"] in asked
     gate.taint.owner_said("look up reference 4188392077 at the bank")
     assert gate.decide(BROWSE_TOOL, number) == "allow", "what the owner typed is theirs to send"
+
+
+async def test_what_a_day_usually_costs_is_a_mark_for_the_owners_own_requests(tmp_path):
+    """Real use: six decks and a long reading job took a day near its $3, and the next request would have been refused."""
+    x = make(tmp_path, daily=1.00, day_stretch=4.0)
+    x.ledger.add(1.50)                      # past what a day usually costs, well short of four times it
+    await say(x, "hello")
+    assert x.clients, "the owner's own request still runs"
+    told = [t for t in x.chat.sent if "past the $1.00 a day usually comes to" in t]
+    assert len(told) == 1 and "$4.00" in told[0], "and they are told once, with where it stops"
+    await say(x, "hello again")
+    assert len([t for t in x.chat.sent if "a day usually comes to" in t]) == 1, "once a day, not with every message"
+
+
+async def test_several_times_the_mark_is_a_wall_that_the_owner_raises_in_words(tmp_path):
+    x = make(tmp_path, daily=1.00, day_stretch=4.0)
+    x.ledger.add(4.00)
+    await say(x, "hello")
+    assert not x.clients and "$4.00 is where I stop and check with you" in x.chat.sent[-1] and "raise today's limit" in x.chat.sent[-1]
+    await say(x, "Raise today's limit")
+    assert not x.clients and "up to $8.00" in x.chat.sent[-1], "read by code: no model is called to raise it"
+    await say(x, "hello")
+    assert x.clients, "and the day goes on"
+
+
+def test_unattended_work_stops_at_the_mark_and_the_owners_agents_at_the_wall():
+    import inspect
+    from odysseus import __main__ as main
+    src = inspect.getsource(main)
+    assert "agent.within(ledger, conversation.day_wall if agent is runner or agent in workers else settings.daily_usd)" in src

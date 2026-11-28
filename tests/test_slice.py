@@ -107,7 +107,8 @@ class FakeChat:
 def make(tmp_path: Path, scripts=None, **kw):
     settings = Settings(telegram_token="t", owner_id=OWNER, anthropic_api_key="k", exa_api_key="e",
                         data_dir=tmp_path, stop_grace_s=kw.pop("grace", 0.2), daily_usd=kw.pop("daily", 3.0),
-                        max_turns=kw.pop("max_turns", 25), task_usd=kw.pop("task_usd", 0.50), task_stretch=kw.pop("stretch", 1.0))
+                        max_turns=kw.pop("max_turns", 25), task_usd=kw.pop("task_usd", 0.50), task_stretch=kw.pop("stretch", 1.0),
+                        day_stretch=kw.pop("day_stretch", 1.0))
     journal = Journal(tmp_path / "journal.jsonl")
     ledger = Ledger(journal)
     clients = []
@@ -312,7 +313,7 @@ async def test_daily_budget_refuses_before_any_model_call(tmp_path):
     x.ledger.add(0.02)
     await say(x, "hello")
     assert x.clients == []
-    assert "budget" in x.chat.sent[0] and "not started" in x.chat.sent[0]
+    assert "where I stop" in x.chat.sent[0] and "not started" in x.chat.sent[0]
 
 
 async def test_ledger_is_rebuilt_from_the_journal(tmp_path):

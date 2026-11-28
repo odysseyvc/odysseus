@@ -79,7 +79,7 @@ async def test_a_task_is_ended_when_it_uses_up_what_was_left_of_the_day(tmp_path
     x.ledger.add(0.80)          # 20 cents of the day left: enough to start, not enough for one of these calls
     await say(x, "expensive")
     assert ends(x.journal)[-1]["status"] == "day_budget" and ends(x.journal)[-1]["turns"] == 1
-    assert "today's budget of $1.00 is used up" in x.chat.sent[-1] and "Partial answer" in x.chat.sent[-1]
+    assert "$1.00 is where I stop and check with you" in x.chat.sent[-1] and "Partial answer" in x.chat.sent[-1]
     assert x.clients[0].interrupted.is_set()
     roomy = make(tmp_path / "roomy", [script], daily=5.00, task_usd=5.00)
     await say(roomy, "expensive")

@@ -172,7 +172,44 @@ def _seed_gym(memory, schedule):
     schedule.pop_changes()
 
 
+# --- a long job: everyone met, across ten long weekly reviews --------------------------------------------------------
+# Real use asked for this and got a partial list for sixty cents: each long review was opened into the main model's own
+# conversation and read only to a cut. Here every review is long (the last two people in each come far past where a
+# message used to be cut), and the check is simply whether all forty people are in the answer. All names are made up.
+_FIRST = ("Asha", "Bram", "Cleo", "Dev", "Esme", "Faro", "Gita", "Hugo", "Ines", "Jomo", "Kavi", "Lena", "Milo", "Nura", "Odin", "Pia", "Quin", "Rhea",
+          "Sami", "Tova", "Ugo", "Vera", "Wim", "Xena", "Yuki", "Zane", "Abel", "Bex", "Cato", "Dara", "Emil", "Fay", "Gus", "Hana", "Ivo", "Juno", "Kit",
+          "Lior", "Mara", "Nico")
+_LAST = ("Varrow", "Quill", "Ostrand", "Meller", "Tanvik", "Brisco", "Halden", "Yarrow", "Corvane", "Dunmore")
+_FIRMS = ("Lattice", "Kiln", "Harbor", "Vellum", "Cinder", "Marrow", "Tidal", "Orchard", "Ferrous", "Quarry")
+REVIEW_PEOPLE = [(f"{_FIRST[i]} {_LAST[i % 10]}", f"{_FIRMS[i % 10]}{_FIRST[(i * 7) % 40][:2]} Labs") for i in range(40)]
+
+
+def _review_body(week: int) -> str:
+    people = REVIEW_PEOPLE[week * 4: week * 4 + 4]
+    filler = " ".join(f"Note {n}: nothing new on fund operations, the newsletter, the events calendar or hiring this week." for n in range(1, 75))
+    early = "\n".join(f"- Met {name}, founder of {firm}. Introduced by a portfolio founder. Worth a second call." for name, firm in people[:2])
+    late = "\n".join(f"- Met {name}, founder of {firm}. Came through an event. Not a fit for now." for name, firm in people[2:])
+    return (f"Weekly review, week {week + 1}.\n\nNew founders met:\n{early}\n\nOperations:\n{filler}\n\nAlso met later in the week:\n{late}\n\n"
+            "One big task for next week: clear the backlog of follow-ups.")
+
+
+def _weekly_reviews(sim) -> None:
+    from datetime import timedelta
+    for week in range(10):
+        sim.mail.append({"id": f"rv{week:02d}", "thread": f"trv{week:02d}", "from": "Tara Menon <tara@fund.example>",
+                         "date": sim.clock.t - timedelta(days=7 * week + 1), "unread": False, "subject": f"Weekly review, week {week + 1}",
+                         "body": _review_body(week)})
+
+
+def _everyone_met(c: Ctx) -> list[str]:
+    missing = [name for name, _ in REVIEW_PEOPLE if name.lower() not in c.reply.lower()]
+    return ([f"the reply leaves out {len(missing)} of the 40 people met ({', '.join(missing[:6])}{', ...' if len(missing) > 6 else ''})"] if missing else []) \
+        + nothing_sent(c)
+
+
 TASKS: list[Task] = [
+    Task("long_reviews_everyone", "long job", "Go through all the weekly reviews in my mail and give me a list of every founder met and their company. "
+         "Go through the entire thing and leave nobody out.", _everyone_met, quiet=True, world=_weekly_reviews),
     # --- reading mail ---------------------------------------------------------------
     Task("mail_flight", "mail read", "What time does my flight to Bengaluru leave, and what is the booking reference?",
          lambda c: need(c, "the departure time", r"0?7[:.]15") + need(c, "the booking reference", "QX7R2L") + nothing_sent(c), quiet=True),

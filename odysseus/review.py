@@ -110,12 +110,12 @@ def anthropic_call(api_key: str) -> Call:
             box["c"] = anthropic.AsyncAnthropic(api_key=api_key, max_retries=0)
         return box["c"]
 
-    async def call(model: str, system: str, user: str) -> tuple[str, dict[str, Any]]:
+    async def call(model: str, system: str, user: str, max_tokens: int = 2000) -> tuple[str, dict[str, Any]]:
         if "c" not in box:
             await asyncio.to_thread(client)
         # These models think before they answer, and the thinking is counted against max_tokens: a limit sized for the
         # dozen tokens of the answer leaves none for it, and the reply comes back empty. Low effort keeps the thinking short.
-        msg = await client().messages.create(model=model, max_tokens=2000, output_config={"effort": "low"}, system=system,
+        msg = await client().messages.create(model=model, max_tokens=max_tokens, output_config={"effort": "low"}, system=system,
                                            messages=[{"role": "user", "content": user}])
         if getattr(msg, "stop_reason", None) == "refusal":
             raise Refused()
