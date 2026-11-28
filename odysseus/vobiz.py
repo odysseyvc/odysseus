@@ -38,7 +38,9 @@ from . import fmt
 from .journal import Journal
 from .ocr import MAX_BYTES
 from .typed import TypedAnswers, how
-from .whatsapp import STALE_AFTER_S, TEXT_LIMIT, Http, WhatsApp, digits, reports, sent_id, signature_ok, size_of
+from .whatsapp import CAPTION_LIMIT, STALE_AFTER_S, TEXT_LIMIT, Http, WhatsApp, digits, file_kind, reports, sent_id, signature_ok, size_of
+
+FILE_LIMIT = 16 * 1024 * 1024        # the largest file this route takes
 
 
 def base(auth_id: str) -> str:
@@ -72,6 +74,26 @@ class VobizChat:
 
     async def draft(self, draft_id: int, text: str) -> None:
         pass
+
+    async def send_file(self, name: str, data: bytes | None = None, handle: str = "", kind: str = "document", caption: str = "") -> None:
+        """A file the assistant made or kept, sent into this thread: handed over first, then named in a message, in this
+        route's own shapes. Without the bytes there is nothing to send, and the caller falls back to its copy."""
+        if not data:
+            raise ValueError("no file to send")
+        if len(data) > FILE_LIMIT:
+            raise ValueError("the file is too large for this WhatsApp number (16 MB at most)")
+        upload = getattr(self._http, "upload", None)
+        if upload is None:
+            raise RuntimeError("files cannot be sent on this route")
+        sent_as, mime = file_kind(name, kind)
+        status, got = await upload(self._url.replace("/Message/", "/Media/"), {"channel_id": self._channel}, name, data, mime)
+        media_id = str(got.get("media_id") or "") if isinstance(got, dict) else ""
+        if status >= 300 or not media_id:
+            self._journal.write("error", where="vobiz.upload", status=status)
+            raise RuntimeError(f"the WhatsApp line did not take the file ({status})")
+        about = fmt.whatsapp(caption)[:CAPTION_LIMIT]
+        await self._post({"type": sent_as, "media": {"id": media_id, **({"filename": name[:200]} if sent_as == "document" else {}),
+                                                     **({"caption": about} if about else {})}})
 
     async def status(self, line: str) -> None:
         """A few fixed words on what is being done, sent once when a task turns out to need a step (conversation.py)."""
@@ -200,6 +222,12 @@ def make_http(auth_id: str, auth_token: str) -> tuple[Http, Callable[[], Awaitab
         if "application/json" in r.headers.get("content-type", ""):
             return r.status_code, r.json()
         return r.status_code, r.content
+
+    async def upload(url: str, fields: dict[str, str], name: str, data: bytes, mime: str) -> tuple[int, Any]:
+        """Hand a file over as a form, with the account's headers."""
+        r = await client.post(url, data=fields, files={"file": (name, data, mime)}, timeout=120)
+        return r.status_code, (r.json() if "application/json" in r.headers.get("content-type", "") else r.content)
+    http.upload = upload
     return http, client.aclose
 
 

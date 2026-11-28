@@ -248,6 +248,12 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     own_chat = shared.wa.chat(on_wa) if on_wa else TelegramChat(bot, settings.owner_id)
     # An email address of the assistant's own (mailbox.py), if there is a key. It is made when the person sends /address.
     late: dict = {}          # the conversation, once it exists: the mailbox and its tools are made before it
+
+    def files_go_to() -> Any:
+        """Where a file asked for in a conversation is sent: the chat it was asked in, when that chat can take files;
+        otherwise this person's own chat. A deck asked for on WhatsApp used to arrive on Telegram."""
+        asked_in = getattr(late.get("c"), "chat_now", None)
+        return asked_in if asked_in is not None and hasattr(asked_in, "send_file") else own_chat
     inbox = inbox_tools = None
     if settings.agentmail_api_key:
         async def own_addresses() -> set:
@@ -304,7 +310,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
             from .pagecheck import make_page_checker
             code_runner.checker = make_page_checker(journal, settings.anthropic_api_key, settings.pages_check_model or settings.background_model)
             code_runner.request = lambda: gate.request
-        code_tools = code_runner.handlers(shelf, lambda entry: deliver(shelf, entry, own_chat))
+        code_tools = code_runner.handlers(shelf, lambda entry: deliver(shelf, entry, files_go_to()))
 
     # Asking a colleague's assistant (peers.py): this person's desk at the switchboard, and the tool that uses it.
     peer_tools = drafter = None
@@ -361,7 +367,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
-                                files=shelf, send_file=lambda entry: deliver(shelf, entry, own_chat), inbox=inbox_tools, code=code_tools,
+                                files=shelf, send_file=lambda entry: deliver(shelf, entry, files_go_to()), inbox=inbox_tools, code=code_tools,
                                 peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer,
                                 manage=(said.handler(run_command, journal, host, later=lambda text: late["c"].after_task.append(text)), said.schema(host)))
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)

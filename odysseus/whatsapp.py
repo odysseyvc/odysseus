@@ -52,6 +52,17 @@ from .ocr import MAX_BYTES
 
 GRAPH = "https://graph.facebook.com/v27.0"
 TEXT_LIMIT, BUTTON_BODY_LIMIT = 4096, 1024
+CAPTION_LIMIT = 1000
+FILE_LIMIT = 100 * 1024 * 1024       # the largest document this route takes
+PICTURES = ("image/jpeg", "image/png")
+
+
+def file_kind(name: str, kind: str = "document") -> tuple[str, str]:
+    """What a file is sent as (image or document) and its type, from its name. A picture goes as a picture only when
+    it was asked for as one and WhatsApp shows that type; everything else goes as a document, which keeps its name."""
+    import mimetypes
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    return ("image" if kind == "photo" and mime in PICTURES else "document"), mime
 STALE_AFTER_S = 600       # a message older than this when it arrives is reported, not acted on
 OTHER_NOTE = "I can only read text, photos and documents on WhatsApp for now."
 
@@ -122,6 +133,27 @@ class WhatsAppChat:
 
     async def draft(self, draft_id: int, text: str) -> None:
         pass      # WhatsApp has no way to show a reply as it is being written
+
+    async def send_file(self, name: str, data: bytes | None = None, handle: str = "", kind: str = "document", caption: str = "") -> None:
+        """A file the assistant made or kept, sent into this thread. It is handed to WhatsApp first and then named in a
+        message, so no address of the file exists anywhere for a moment. `handle` is another chat's own name for a
+        file and means nothing here: without the bytes there is nothing to send, and the caller falls back to its copy."""
+        if not data:
+            raise ValueError("no file to send")
+        if len(data) > FILE_LIMIT:
+            raise ValueError("the file is too large for WhatsApp")
+        upload = getattr(self._http, "upload", None)
+        if upload is None:
+            raise RuntimeError("files cannot be sent on this route")
+        sent_as, mime = file_kind(name, kind)
+        status, got = await upload(self._url.rsplit("/", 1)[0] + "/media", {"messaging_product": "whatsapp"}, name, data, mime)
+        media_id = str(got.get("id") or "") if isinstance(got, dict) else ""
+        if status >= 300 or not media_id:
+            self._journal.write("error", where="whatsapp.upload", status=status)
+            raise RuntimeError(f"WhatsApp did not take the file ({status})")
+        about = fmt.whatsapp(caption)[:CAPTION_LIMIT]
+        await self._post({"type": sent_as, sent_as: {"id": media_id, **({"filename": name[:200]} if sent_as == "document" else {}),
+                                                     **({"caption": about} if about else {})}})
 
     async def status(self, line: str) -> None:
         """A few fixed words on what is being done, sent once when a task turns out to need a step (conversation.py)."""
@@ -346,6 +378,12 @@ def make_http(token: str) -> tuple[Http, Callable[[], Awaitable[None]]]:
         if "application/json" in r.headers.get("content-type", ""):
             return r.status_code, r.json()
         return r.status_code, r.content
+
+    async def upload(url: str, fields: dict[str, str], name: str, data: bytes, mime: str) -> tuple[int, Any]:
+        """Hand a file over as a form. Only for the address that takes files: a file is never put in a message's own body."""
+        r = await client.post(url, data=fields, files={"file": (name, data, mime)}, timeout=120)
+        return r.status_code, (r.json() if "application/json" in r.headers.get("content-type", "") else r.content)
+    http.upload = upload
     return http, client.aclose
 
 
