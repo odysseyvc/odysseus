@@ -22,8 +22,11 @@ class Box:
         self.files = types.SimpleNamespace(write=self._write, list=self._list, read=self._read)
         Box.made.append(self)
 
+    asked: list[dict] = []
+
     @classmethod
     async def create(cls, **kw):
+        cls.asked.append(kw)
         return cls()
 
     async def set_timeout(self, seconds):
@@ -103,3 +106,10 @@ async def test_keeping_can_be_switched_off(monkeypatch):
     backend = sandbox.E2B("key", "template", keep_s=0)
     got = await backend.run("print(1)", [], 120)
     assert Box.made[0].killed and got.idle == 0.0
+
+
+async def test_a_machine_is_made_with_no_way_out_and_no_way_in(e2b):
+    backend, now = e2b
+    Box.asked.clear()
+    await backend.run("print(1)", [], 120)
+    assert Box.asked[0]["allow_internet_access"] is False and Box.asked[0]["network"] == {"allow_public_traffic": False}

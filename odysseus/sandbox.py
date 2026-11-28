@@ -467,8 +467,14 @@ class E2B:
             if box is None:
                 await self._end(waiting[0])
         if box is None:
+            # No way out, and no way in. The machine runs whatever code is sent to one of its ports, and its address is
+            # guessable by anyone who learns the machine's id; by default the sandbox company's newer accounts require a
+            # token on every request from outside, and older ones do not. It is asked for outright here, so that the
+            # property does not rest on an account's default. Checked against the real service: a request with no token
+            # is refused (403) and the program's own runs still work.
             box = await AsyncSandbox.create(**({"template": self._template} if self._template else {}),
-                                            timeout=life, allow_internet_access=False, api_key=self._key)
+                                            timeout=life, allow_internet_access=False, network={"allow_public_traffic": False},
+                                            api_key=self._key)
         try:
             # The folders are emptied first, on a new machine and a kept one alike: a run is handed only its own files.
             ex = await box.run_code(CLEAR_CODE)
