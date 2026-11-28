@@ -93,7 +93,7 @@ class TelegramChat:
     async def draft(self, draft_id: int, text: str) -> None:
         # A reply still arriving is shown in the same form as the finished one. A mark not yet closed is shown as typed.
         try:
-            await self._bot.send_message_draft(self._chat_id, draft_id, text=fmt.telegram(text) or text, parse_mode="HTML")
+            await self._bot.send_message_draft(self._chat_id, draft_id, text=fmt.telegram(fmt.settle(text)) or text, parse_mode="HTML")
         except TelegramBadRequest:
             await self._bot.send_message_draft(self._chat_id, draft_id, text=fmt.plain(text) or text, parse_mode=None)
 

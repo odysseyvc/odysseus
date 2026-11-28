@@ -45,7 +45,7 @@ class Reader:
         # The pages of a short PDF are looked at in a run of their own, and what they show comes back as text (pages.py).
         # The file itself is never put into the conversation, where it would be carried forward with every later message.
         sights, chosen = None, ()
-        if self._pages is not None and self._ledger.spent_today() < self._daily_usd:
+        if self._pages is not None and self._ledger.spent_today() < (self._daily_usd() if callable(self._daily_usd) else self._daily_usd):
             try:
                 if shown_whole(kind, len(data), result.pages):
                     sights, _ = await self._pages(data, result.text[:MAX_CHARS])

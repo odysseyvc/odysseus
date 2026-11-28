@@ -308,7 +308,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                             owner=str(settings.owner_id), internet=settings.computer_internet)
                    if settings.computer else E2B(settings.e2b_api_key, settings.sandbox_template))
         me.closers.append(machine.close)        # a machine kept ready for the next run is destroyed when this person's assistant closes
-        code_runner = CodeRunner(machine, journal, ledger, settings.daily_usd, gate.taint)
+        code_runner = CodeRunner(machine, journal, ledger, lambda: late["c"].day_wall() if "c" in late else settings.daily_usd, gate.taint)
 
         def look_in_on(job_id: str, minutes: int) -> None:
             # A job started in the background is looked in on by code until it ends or its time is up, and what it printed is
@@ -413,7 +413,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     from .pages import make_counter
     pages = make_page_reader(settings, journal, empty_server(), model=settings.pages_model or None,
                              count=make_counter(settings.anthropic_api_key),      # counted first, free; see pages.py
-                             room=lambda: min(settings.task_usd, settings.daily_usd - ledger.spent_today())) if ocr is not None else None
+                             room=lambda: min(settings.task_usd, conversation.day_wall() - ledger.spent_today())) if ocr is not None else None
     mark("pages")
     conversation = me.conversation = Conversation(settings, journal, ledger, runner, memory, now=now, schedule=schedule, gate=gate, apps=apps,
                                 browser=browser, ocr=ocr, anyapp=anyapp, tracing=tracing, voice=voice, watches=watches, attio=attio, services=services,

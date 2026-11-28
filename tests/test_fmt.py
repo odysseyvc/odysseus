@@ -162,3 +162,12 @@ async def test_telegram_is_sent_the_marked_form_and_the_plain_words_if_it_refuse
     bot = Bot(refuse=True)
     await TelegramChat(bot, 7).send("**Done.** a < b")
     assert bot.calls == [("<b>Done.</b> a &lt; b", "HTML"), ("Done. a < b", None)]
+
+
+def test_a_reply_still_arriving_does_not_show_a_mark_that_has_only_been_opened():
+    assert fmt.settle("Found it. **") == "Found it. "
+    assert fmt.settle("Found it. **Northw") == "Found it. Northw"
+    assert fmt.settle("**Done.** Next: **") == "**Done.** Next: "
+    assert fmt.settle("Copy `AB-1") == "Copy AB-1"
+    assert fmt.settle("**Done.** All `good`.") == "**Done.** All `good`."
+    assert fmt.telegram(fmt.settle("**")) == "" and well_formed(fmt.telegram(fmt.settle("a **b** and **c")))

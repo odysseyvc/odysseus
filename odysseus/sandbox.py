@@ -767,7 +767,11 @@ def _result(text: str, failed: bool = False) -> dict[str, Any]:
 
 class CodeRunner:
     def __init__(self, backend: Backend, journal: Journal, ledger: Ledger, daily_usd: float, taint: Any = None):
-        self._backend, self._journal, self._ledger, self._daily_usd, self._taint = backend, journal, ledger, daily_usd, taint
+        # `daily_usd` is a number, or something to call for it. For the owner's own requests it is the day's wall, which is
+        # several times what a day is expected to cost and which the owner can raise in words (conversation.day_wall).
+        # Found in real use: the conversation had stopped refusing at the day's expected cost and this tool had not, so
+        # a spreadsheet was refused for "today's budget" in a chat that had just said it was carrying on.
+        self._backend, self._journal, self._ledger, self._day, self._taint = backend, journal, ledger, daily_usd, taint
         self.documents = bool(getattr(backend, "documents", False))      # can it make decks and PDFs, and show their pages
         self.lasting = bool(getattr(backend, "lasting", False))          # is it the person's own computer, which stays
         self.on_job: Any = None      # told (id, minutes) when a job is started in the background, so that it can be looked in on
@@ -775,6 +779,10 @@ class CodeRunner:
         # A second reader for a trial's pages (pagecheck.py), and what the owner asked in this task. Set by whoever builds the assistant.
         self.checker: Any = None
         self.request: Callable[[], str] = lambda: ""
+
+    @property
+    def _daily_usd(self) -> float:
+        return float(self._day() if callable(self._day) else self._day)
 
     def handlers(self, shelf: Any, send_file: Callable[[dict[str, Any]], Awaitable[str]] | None = None) -> dict[str, Any]:
         async def run_code(args: dict[str, Any]) -> dict[str, Any]:
@@ -792,7 +800,7 @@ class CodeRunner:
             if len(ids) > FILES_IN:
                 return refuse(f"At most {FILES_IN} files can go in with one run.", "too many files")
             if self._ledger.spent_today() >= self._daily_usd:
-                return refuse(f"Not run: today's budget of ${self._daily_usd:.2f} is used up.", "daily_budget")
+                return refuse(f"Not run: today has reached ${self._daily_usd:.2f}, where I stop and check with the owner. Tell them so: they can say \"raise today's limit\".", "daily_budget")
             if look and not self.documents:
                 return refuse("A trial with pictures of the pages is not available on this machine. Run it without `look`.", "no look")
             files: list[tuple[str, bytes]] = []
@@ -889,7 +897,7 @@ class CodeRunner:
                 if data is None or len(data) > MAX_FILE:
                     return refuse(f"{entry['name']} is not here as a file of at most 20 MB. Ask the owner to send it again.", "no file")
                 if self._ledger.spent_today() >= self._daily_usd:
-                    return refuse(f"Not done: today's budget of ${self._daily_usd:.2f} is used up.", "daily_budget")
+                    return refuse(f"Not done: today has reached ${self._daily_usd:.2f}, where I stop and check with the owner. Tell them so: they can say \"raise today's limit\".", "daily_budget")
                 try:
                     ran = await asyncio.wait_for(self._backend.run(STUDY_CODE, [("study.pdf", data)], STUDY_S), STUDY_S + 90)
                 except (Exception, asyncio.TimeoutError) as e:
@@ -945,7 +953,7 @@ class CodeRunner:
             if data is None or len(data) > MAX_FILE:
                 return refuse(f"{entry['name']} is not here as a file of at most 20 MB. Ask the owner to send it again.", "no file")
             if self._ledger.spent_today() >= self._daily_usd:
-                return refuse(f"Not done: today's budget of ${self._daily_usd:.2f} is used up.", "daily_budget")
+                return refuse(f"Not done: today has reached ${self._daily_usd:.2f}, where I stop and check with the owner. Tell them so: they can say \"raise today's limit\".", "daily_budget")
             import json
             try:
                 ran = await asyncio.wait_for(self._backend.run(OUTLINE_CODE, [("template." + ext, data)], TEMPLATE_S), TEMPLATE_S + 90)
@@ -984,7 +992,7 @@ class CodeRunner:
             if not command or len(command) > MAX_CODE:
                 return _result("job_start needs `command`: one shell command line, such as `python analyse.py`.", failed=True)
             if self._ledger.spent_today() >= self._daily_usd:
-                return _result("Today's budget is used up, so nothing was started.", failed=True)
+                return _result("Today has reached the most I spend in a day without the owner's say, so nothing was started. They can say \"raise today's limit\".", failed=True)
             try:
                 minutes = max(1, min(int(args.get("minutes") or 15), JOB_MOST_MIN))
             except (TypeError, ValueError):

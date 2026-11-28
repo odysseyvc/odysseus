@@ -288,6 +288,19 @@ def plain(text: str) -> str:
     return _render(text, _Plain())
 
 
+def settle(text: str) -> str:
+    """A reply still arriving, with a mark that has been opened and not yet closed taken off its end. Shown as typed, a
+    lone pair of asterisks sat in the chat for a moment before the bold word arrived behind it."""
+    text = str(text or "")
+    if text.count("**") % 2:
+        at = text.rfind("**")
+        text = text[:at] + text[at + 2:]
+    if text.count("`") % 2:
+        at = text.rfind("`")
+        text = text[:at] + text[at + 1:]
+    return text
+
+
 def parts(text: str, limit: int) -> list[str]:
     """A long reply as several, each within `limit`, cut between blocks where it can be and never inside a mark's line.
     The parts are still in the model's marks: turn each into a chat's form after cutting."""

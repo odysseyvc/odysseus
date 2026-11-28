@@ -84,7 +84,7 @@ async def test_what_is_refused_before_any_machine_is_started(tmp_path):
         assert out.get("is_error") and why.lower() in text(out).lower(), why
     spent = rig(tmp_path / "spent", daily=0.01)
     spent.ledger.add(0.01)
-    assert "budget" in text(await spent.run({"code": "print(1)"}))
+    assert "where I stop and check with the owner" in text(await spent.run({"code": "print(1)"}))
     assert x.machine.calls == [] and spent.machine.calls == []
 
 

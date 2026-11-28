@@ -191,7 +191,7 @@ class Conversation:
         self._apps = apps
         self._browser = browser
         self._ocr = ocr
-        self.reader = Reader(ocr, pages, journal, ledger, settings.daily_usd)     # one way of reading a file, wherever it came from
+        self.reader = Reader(ocr, pages, journal, ledger, self.day_wall)     # one way of reading a file, wherever it came from
         self._voice = voice
         self._anyapp = anyapp
         self._attio = attio

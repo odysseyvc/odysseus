@@ -102,3 +102,25 @@ def test_unattended_work_stops_at_the_mark_and_the_owners_agents_at_the_wall():
     from odysseus import __main__ as main
     src = inspect.getsource(main)
     assert "agent.within(ledger, conversation.day_wall if agent is runner or agent in workers else settings.daily_usd)" in src
+
+
+async def test_the_code_runner_stops_where_the_day_does_and_not_at_its_expected_cost(tmp_path):
+    """Seen in the first real chat: the day had passed $3, the chat said it was carrying on, and the tool refused a spreadsheet."""
+    import types
+    from odysseus import sandbox
+    from odysseus.journal import Journal, Ledger
+
+    class Machine:
+        documents, lasting, run_s = False, False, 120
+
+        async def run(self, code, files, seconds, **kw):
+            return sandbox.Ran("ok\n", "", "", [], 1.0)
+    journal = Journal(tmp_path / "j.jsonl")
+    ledger = Ledger(journal)
+    ledger.add(3.13)                                    # past what a day usually costs
+    wall = {"usd": 12.0}
+    run = sandbox.CodeRunner(Machine(), journal, ledger, lambda: wall["usd"]).handlers(types.SimpleNamespace())["run_code"]
+    assert not (await run({"code": "print(1)"})).get("is_error"), "the owner's own request runs past the mark"
+    wall["usd"] = 3.0
+    refused = await run({"code": "print(1)"})
+    assert refused.get("is_error") and "raise today's limit" in refused["content"][0]["text"], "and stops at the wall, saying how it is raised"
