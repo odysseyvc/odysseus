@@ -155,7 +155,7 @@ def empty_server() -> Any:
     return create_sdk_mcp_server(name=SERVER, tools=[])
 
 
-def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: bool = False, with_browser: bool = False,
+def make_gate(journal: Journal, now=None, timeout_s: float = 1800.0, with_apps: bool = False, with_browser: bool = False,
               browser_ask_signed_in: bool = True, anyapp: AnyApp | None = None, apps: Apps | None = None,
               with_watches: bool = False, taint_file: Any = None, browser: Browser | None = None, attio: Any = None,
               services: Any = (), auto_small: bool = False, escalate: Any = None) -> Gate:
@@ -234,7 +234,7 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 600.0, with_apps: b
 
     def manage_decision(a: dict[str, Any]) -> str:
         k = said.kind(str(a.get("what", "")))
-        return ALLOW if k == said.SHOW or (k == said.CHANGE and not taint.sources) else ASK
+        return ALLOW if k in (said.SHOW, said.LINK) or (k == said.CHANGE and not taint.sources) else ASK
     gate.rule(MANAGE_TOOL, manage_decision, said.describe)
     # Three tools that are code reading or code calculating. The round's sums change nothing. The pipeline review only
     # reads. Recording a company's figures writes numbers, and nothing else, to the assistant's own notebook, and code

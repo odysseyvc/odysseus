@@ -218,7 +218,7 @@ async def test_with_more_agents_more_jobs_run_at_once_and_the_one_after_that_wai
             break
         await asyncio.sleep(0.01)
     assert len(x.conv._jobs()) == 2 and len(x.conv._bg_waiting) == 1, "two at once, and the third waits its turn"
-    assert x.chat.sent[-1] == "Got it. I'll start on this when one of the jobs I'm working on is done."
+    assert x.chat.sent[-1] == "Got it. I'm working through what you've sent in turn, and will report on each as it is done."
     assert sorted(x.gate._tasks) == ["background-0", "background-1"] and x.gate.overlapping
     await x.conv.handle(OWNER, "/status", x.chat)
     assert x.chat.sent[-1].startswith("Idle, with 2 jobs in the background and 1 waiting behind them.")

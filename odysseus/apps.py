@@ -57,6 +57,7 @@ class AppError(Exception):
     pass
 
 
+MAIL_PART = 12000           # characters of one message shown at a time; a longer one is read in parts
 MOST_ACCOUNTS = 5           # sign-ins to one service, for one person
 WHOLE_MAIL = int(__import__("os").environ.get("ODYSSEUS_WHOLE_MAIL", "0"))     # a search that finds this many messages or fewer comes back with each in full. Off: measured on the mail errands, it moved neither time nor score
 WHOLE_MAIL_CHARS = 14000    # and at most this much text of them in all; over it, the list stands alone
@@ -194,7 +195,7 @@ def _clip(text: Any, n: int) -> str:
     return text if len(text) <= n else text[:n].rstrip() + "…"
 
 
-def format_messages(data: Any, full: bool = False) -> str:
+def format_messages(data: Any, full: bool = False, part: int = 1) -> str:
     data = _unwrap(data)
     if isinstance(data, list):
         msgs = data
@@ -220,7 +221,16 @@ def format_messages(data: Any, full: bool = False) -> str:
                  if isinstance(a, dict) and a.get("filename")]
         if files:       # named so that the model knows there is something to read with mail_attachment
             head += "\nAttachments: " + "; ".join(files[:8]) + (f"; and {len(files) - 8} more" if len(files) > 8 else "")
-        blocks.append(head + ("\n\n" + (text[:6000] if full else text) if text else ""))
+        if full and text:
+            # A long message is shown a part at a time and says so, with how to read on. It used to be cut at 6,000
+            # characters with no way to read the rest, and the weekly reviews a firm lives on are longer than that.
+            parts = max(1, -(-len(text) // MAIL_PART))
+            at = min(max(1, int(part or 1)), parts)
+            text = text[(at - 1) * MAIL_PART: at * MAIL_PART]
+            if parts > 1:
+                text += (f"\n\n[This is part {at} of {parts} of this message. " + (f"Read on with mail_read and part={at + 1}. Nothing after "
+                         "this point has been read yet: do not answer as if it had." if at < parts else "This is the last part.") + "]")
+        blocks.append(head + ("\n\n" + text if text else ""))
     return "\n\n---\n\n".join(blocks) or "No messages."
 
 
@@ -547,6 +557,8 @@ class Apps:
             return "I could not make a sign-in link for that just now. A name can be used once for each service; try another name, or try again shortly."
         self._listed.pop(kit, None)
         self._journal.write("account", outcome="link made", toolkit=kit)
+        from . import shortlink
+        link = shortlink.LINKS.wrap(link)           # under this program's own address: the owner is never sent a supplier's
         return f"Open this link and sign in to the account you want to add as {name!r}. Sign in to the right one: the link does not choose it for you.\n\n{link}"
 
     def event(self, event_id: str) -> dict[str, Any] | None:
@@ -748,7 +760,11 @@ class Apps:
             if not str(a.get("message_id", "")).strip():
                 raise AppError("mail_read needs a message_id from mail_search.")
             data = await self._call("mail_read", "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", {"message_id": str(a["message_id"]).strip(), "format": "full"})
-            return MAIL_NOTE + "\n\n" + self._seen(format_messages(data, full=True))
+            try:
+                part = int(a.get("part") or 1)
+            except (TypeError, ValueError):
+                part = 1
+            return MAIL_NOTE + "\n\n" + self._seen(format_messages(data, full=True, part=part))
 
         async def mail_attachment(a):
             """One attachment of one message, read as any file is. The mail service hands the file over as a short-lived
@@ -910,8 +926,12 @@ SCHEMAS: dict[str, tuple[str, dict[str, Any]]] = {
                     "'is:unread'. Returns sender, subject, date and a short extract, with ids for mail_read.",
                     {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer", "description": "1 to 25. Default 10."}},
                      "required": ["query"]}),
-    "mail_read": ("Read one message in full, by the id mail_search returned.",
-                  {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]}),
+    "mail_read": ("Read one message in full, by the id mail_search returned. A long message comes a part at a time and says how many parts "
+                  "there are: read every part before you report on it, and never report on a message you have read only the start of "
+                  "without saying so.",
+                  {"type": "object", "properties": {"message_id": {"type": "string"},
+                                                    "part": {"type": "integer", "description": "Which part of a long message. Default 1."}},
+                   "required": ["message_id"]}),
     "mail_attachment": ("Read one attachment of a message: a PDF, a Word or PowerPoint file, a scan or a picture. mail_search and mail_read "
                         "list a message's attachments by name. Returns the file's text, page by page, with notes on charts and pictures "
                         "for a short PDF. It costs a little each time, so read an attachment when the owner's request needs it.",

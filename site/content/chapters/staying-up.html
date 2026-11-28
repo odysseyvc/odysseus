@@ -135,6 +135,20 @@ except Exception as e:
 <p>The program does not carry on, because it cannot know how far the task got. A tool call can succeed even though its reply never arrived: {{ch:a-changing-world}} calls this the lost acknowledgement. A restart is the same uncertainty at a larger scale. The email may have left in the last instant before the process stopped. Telling the owner costs one message; a duplicate email cannot be recalled.</p>
 <p>The notice is sent to the owner before the <code>start</code> line is written. For the host's own assistant it is sent after the agent client has connected, so that the program knows whether the conversation was resumed. An invited person's agents connect only at their first message, so their notice assumes the saved conversation will be picked up.</p>
 
+<h3 id="pick-up">When announcing is not enough: picking a message up again</h3>
+<p>"Announce, do not resume" was written when a restart was rare. Then new versions went out several times in a day while the owner was using the assistant, and one of them cut off a real request. The owner was told, honestly, to send it again. An assistant that makes its owner repeat themselves because of its own release is not one a firm will rely on.</p>
+<p>The reason for not resuming still holds, and it is narrower than the rule made it. A task that was stopped after it had sent, filed or saved something must not be run again by code: the second run does it twice. A task that had only read can be run again with nothing lost but a few seconds. The journal already says which kind a stopped task was, since every tool call is recorded with its name and, for a database or an app, whether it read or changed.</p>
+<p>So the message being worked on is kept in one small file until its task ends. At the next start it is run again, in the chat it came from, when all four hold:</p>
+<ul>
+<li>every tool the stopped task had used only reads, and nothing had been approved. A tool the program does not recognise counts as a change;</li>
+<li>the program was down for minutes, not hours: an old instruction is not run as if it had just been given;</li>
+<li>it was words the owner typed, not a file or a voice note;</li>
+<li>it has not been picked up once already. A message that stopped the program twice is not given a third try, which is how a program gets stuck restarting.</li>
+</ul>
+<p>Otherwise the owner is told, as before, and decides. The journal could not do this job alone: it holds only a task's first words, on purpose ({{ch:the-conversation}}).</p>
+<p class="src"><code>odysseus/resume.py</code>, <code>tests/test_resume.py</code></p>
+<p>The other half is not in the program. A release used to build and restart in one command; the restart can instead wait until the journal shows no task running, no question waiting and nothing queued. The two together leave a gap of a few seconds, which the file covers. <span class="g u">Not tested</span>: a real release stopping a real task.</p>
+
 <h2 id="example">Worked example: a restart with work in flight</h2>
 <div class="box example"><div class="label">Worked example</div>
 <p><strong>Input.</strong> The owner asks "Summarise my inbox". While that task runs, they send three more messages. The summary is sent, the first waiting message is taken up, and the process is stopped while it runs. The journal ends like this (fields trimmed):</p>

@@ -356,12 +356,14 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                             printer=printer, send_file=lambda name, data, caption: own_chat.send_file(name, data=data, caption=caption),
                             at=settings.pipeline_review_at)
 
-    async def run_command(text: str) -> None:
+    async def run_command(text: str) -> list[str]:
         # A thing the program does itself, asked for in words (said.py): carried out exactly as the typed command was,
         # by whatever stands in front of this person's conversation, and answered in the chat the task was asked in.
         house = getattr(shared, "house", None)
         target = house if house is not None and house.is_owner(settings.owner_id) else late["c"]
-        await target.handle(settings.owner_id, text, getattr(late["c"], "chat_now", None) or own_chat)
+        heard = Heard(getattr(late["c"], "chat_now", None) or own_chat)
+        await target.handle(settings.owner_id, text, heard)
+        return heard.said
     from . import said
 
     def tools_for_a_conversation():
@@ -496,12 +498,31 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         me.tasks.append(asyncio.create_task(watcher.keep_listening(asyncio.get_running_loop())))
 
     interrupted = unfinished(journal)      # read before this run of the program writes anything
+    journal_before = journal.read()[-400:]  # and the last stretch of it, to see what the interrupted task had done
     mark("built")
     # Connect the agent loops now, so the first message, and the first job in the background, are not slow.
     if host:
         await asyncio.gather(runner.start(), *(w.start() for w in workers))
     mark("loop")
-    if interrupted is not None:
+    from . import resume
+    again = resume.message(settings.data_dir / "in_flight.json", journal_before, time.time()) if interrupted is not None and interrupted.get("preview") is not None else None
+    resume.done(settings.data_dir / "in_flight.json")       # whatever is decided, the file has served
+    if again is not None:
+        # The program was stopped in the middle of a message that had changed nothing yet. It is picked up again, in
+        # the chat it came from, and the owner is told so in one line. Before this, they were told to send it again.
+        back = {"vobiz": vobiz, "whatsapp": whatsapp}.get(again["via"])
+        chat_back = back.chat() if back is not None and host else own_chat
+        journal.write("resumed", via=again["via"], age_s=round(time.time() - again["at"]))
+        conversation.picked_up = again["text"]
+
+        async def pick_up() -> None:
+            try:
+                await chat_back.send(resume.NOTICE)
+                await conversation.handle(settings.owner_id, again["text"], chat_back)
+            except Exception as e:
+                journal.write("error", where="restart.resume", error=type(e).__name__)
+        me.tasks.append(asyncio.create_task(pick_up()))
+    elif interrupted is not None:
         # A task was running when the program last stopped. Say so: before this, it vanished without a word.
         try:
             await notify.send(restart_notice(interrupted, runner.resumed))
@@ -601,6 +622,25 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     if watcher is not None:
         me.closers += [watcher.stop, triage.runner.close]
     return me
+
+
+class Heard:
+    """A chat that also keeps what was said in it, for one thing the program does itself (said.py): the owner is sent
+    everything exactly as before, and the tool can tell the model what that was, with links taken out."""
+
+    def __init__(self, chat: Any):
+        self._chat, self.said = chat, []
+
+    async def send(self, text: str) -> None:
+        self.said.append(text)
+        await self._chat.send(text)
+
+    async def links(self, text: str, links: Any) -> None:
+        self.said.append(text)
+        await (self._chat.links(text, links) if hasattr(self._chat, "links") else self._chat.send(text + "\n\n" + "\n\n".join(f"{a}:\n{b}" for a, b in links)))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._chat, name)
 
 
 def line_with_a_number(*routes: Any) -> Any:

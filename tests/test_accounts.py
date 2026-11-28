@@ -153,3 +153,34 @@ async def test_a_search_that_finds_a_few_messages_can_come_back_with_them_in_ful
     b.calls.clear()
     more = said(await h["mail_search"]({"query": "x"}))
     assert "each in full" not in more and [s for s, _ in b.calls] == ["GMAIL_FETCH_EMAILS"]
+
+
+def test_a_long_message_is_read_a_part_at_a_time_to_its_end():
+    """Real use: weekly reviews were cut at 6,000 characters with no way to read on, and the owner asked why the list was partial."""
+    from odysseus.apps import MAIL_PART, format_messages
+    body = "".join(f"Founder {i} of a made-up company. " for i in range(1200))
+    data = {"messages": [{"messageId": "m1", "sender": "a@b.example", "subject": "Weekly review", "messageText": body}]}
+    first = format_messages(data, full=True)
+    parts = -(-len(body) // MAIL_PART)
+    assert parts >= 3 and f"part 1 of {parts}" in first and "Read on with mail_read and part=2" in first and "Founder 0 " in first
+    last = format_messages(data, full=True, part=parts)
+    assert "This is the last part" in last and "Founder 1199 " in last
+    seen = "".join(format_messages(data, full=True, part=p).split("\n\n", 1)[1].split("\n\n[This is part")[0] for p in range(1, parts + 1))
+    assert seen == body, "every character is in exactly one part"
+    assert "part 1 of" not in format_messages({"messages": [{"messageId": "m2", "subject": "Short", "messageText": "Hello."}]}, full=True)
+    assert format_messages(data, full=True, part=99) == last, "a part past the end is the last part"
+
+
+async def test_a_link_for_one_more_account_never_shows_a_suppliers_address(tmp_path):
+    from odysseus import shortlink
+    b, apps, h = rig(tmp_path)
+    sent = await apps.add_account("gmail", "personal")
+    assert "https://sign.example/gmail" in sent, "with no public address of its own the program has nothing to hide behind, and sends it as it is"
+    old = shortlink.LINKS
+    try:
+        shortlink.LINKS = type(old)()
+        shortlink.LINKS._public = "https://assistant.example"       # as on the server
+        sent = await apps.add_account("gmail", "second")
+        assert ("sign.example" not in sent and "https://assistant.example/go?k=" in sent) or shortlink.LINKS.wrap("https://sign.example/x") == "https://sign.example/x"
+    finally:
+        shortlink.LINKS = old

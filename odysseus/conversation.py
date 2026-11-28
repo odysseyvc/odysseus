@@ -23,6 +23,7 @@ from .offers import Offers
 from . import deckview as deckview_mod
 from . import fmt
 from . import limits
+from . import resume
 from . import progress as progress_mod
 from . import shortlink
 from .reading import Reader
@@ -93,6 +94,7 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
 
 
 # Said by the owner as a message of its own, these begin again with nothing carried over. Read by code, like "stop".
+JUST_SENT_S = 600           # how long a file sent with no words is still "just sent"
 NEW_WORDS = ("/new", "new conversation", "start a new conversation", "new chat", "start over", "start afresh")
 
 
@@ -172,6 +174,13 @@ class Conversation:
         self.own_chat: Any = None       # the owner's own chat, for work offered before a restart: set by the program
         self.chat_now: Any = None       # the chat the task now running was asked in: where a thing done by the program replies (said.py)
         self.after_task: list[str] = []  # things the program is to do once the task now running has ended (said.py)
+        # The message now being worked on, kept in one small file until its task ends. If the program is stopped in the
+        # middle (a new version going out), the file is still there at the next start and the message can be picked up
+        # again (resume.py). The journal cannot do this: it holds a task's first words only, on purpose.
+        self.in_flight = getattr(settings, "data_dir", None) and settings.data_dir / "in_flight.json"
+        self.picked_up = ""              # a message picked up after a restart: it is not picked up a second time
+        self._told_waiting = 0.0         # when the owner was last told that files are waiting their turn
+        self.just_sent: list[tuple[float, str]] = []     # files the owner sent in the last few minutes: when, and the file's name
         self._thread_from = max((float(r.get("ts", 0)) for r in journal.read() if r.get("kind") in ("fresh", "new_conversation")), default=0.0)
         self._gate = gate
         self._apps = apps
@@ -225,6 +234,18 @@ class Conversation:
                 and await self.reading.take(text, chat, getattr(chat, "sent_at", None)):
             self._journal.write("command", name="reading")
             return
+
+        # Files the owner sent a moment ago with no words are read by separate jobs, so the conversation knew nothing of
+        # them: six decks and then "store these in the right places" was answered "nothing came with your message".
+        # Code says once, with the owner's next message, what arrived. The files' contents are not put here.
+        if self.just_sent and material is None and not images and not background and not command.startswith("/") and command not in STOP_WORDS:
+            fresh, self.just_sent = [n for t, n in self.just_sent if time.time() - t < JUST_SENT_S], []
+            if fresh:
+                text += (f"\n\n[From the program: in the last few minutes the owner sent {len(fresh)} file{'s' if len(fresh) != 1 else ''} with no "
+                         f"message: {'; '.join(fresh)}. Each is being read by a separate job, which files a deck in the firm's database and reports "
+                         "on it in this chat by itself, and asks the owner where it must. If this message says \"these\", \"them\" or \"it\" "
+                         "with nothing else to point at, it means those files. You cannot see their contents from here: say what is under way "
+                         "and what the owner will be asked, and do not ask what they meant.]")
 
         # The owner tapped Done on a check-in a moment ago and was asked what came of it. Whether this message is the
         # answer is for the model to judge; code says only that the question is open, and says it once.
@@ -482,8 +503,11 @@ class Conversation:
                     return
                 self._bg_waiting.append((text, chat, material))
                 self._journal.write("queued", background=True, waiting=len(self._bg_waiting))
-                await chat.send("Got it. I'll start on this when one of the jobs I'm working on is done." if len(self._workers) > 1
-                                else "Got it. I'll start on this when the one I'm working on is done.")
+                # One line for a burst of files, not one for each: six decks sent together used to get the same line four times.
+                if time.time() - self._told_waiting > 60:
+                    self._told_waiting = time.time()
+                    await chat.send("Got it. I'm working through what you've sent in turn, and will report on each as it is done." if len(self._workers) > 1
+                                    else "Got it. I'll start on this when the one I'm working on is done.")
                 return
             if self._ledger.spent_today() >= self._s.daily_usd:
                 self._journal.write("refused", reason="daily_budget")
@@ -591,6 +615,10 @@ class Conversation:
         if user_id != self._s.owner_id:
             self._journal.write("dropped", user_id=user_id, what="file")
             return                      # a stranger's file is never downloaded or read
+        if not (caption or "").strip():
+            # Sent with no words: the conversation is told of it when the owner next writes, since the file itself is read
+            # by a separate job and the conversation would otherwise not know that anything had arrived.
+            self.just_sent = [(t, n) for t, n in self.just_sent if time.time() - t < JUST_SENT_S][-11:] + [(time.time(), str(name)[:80])]
         # A picture is shown to the model itself, which can see what is in it and read what is written on it.
         # Before this, a picture was only ever turned into text, so a photograph with no writing was a blank.
         try:
@@ -1100,10 +1128,14 @@ class Conversation:
         key = f"background-{slot}" if bg else "main"
         alone = self._running == 0
         self._running += 1
+        kept = (not bg and material is None and not images and self.in_flight is not None
+                and resume.keep(self.in_flight, prompt, via_of(chat), again=prompt == self.picked_up))
         try:
             await self._run_one(prompt, chat, images, material, bg, runner, key, alone)
         finally:
             self._running -= 1
+            if kept:
+                resume.done(self.in_flight)
             if not bg and self.after_task:
                 todo, self.after_task = self.after_task, []
                 asyncio.get_running_loop().create_task(self._do_after(todo, chat))
