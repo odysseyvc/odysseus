@@ -80,6 +80,12 @@ def progress_line(tool: str, inputs: dict | None = None) -> str:
     return "Working on it..."
 
 
+def via_of(chat: Any) -> str:
+    """Which way a message came and its reply goes, for the record: telegram, whatsapp, vobiz, imessage. A chat says so
+    itself; one that does not is Telegram's, the first there was."""
+    return str(getattr(chat, "route", "") or getattr(chat, "channel", "") or "telegram")[:20]
+
+
 def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     # Cut between paragraphs where that is possible, so that no cut falls inside a mark (fmt.py). A message of
     # nothing but space is not sent: the owner would see an empty bubble.
@@ -1136,7 +1142,7 @@ class Conversation:
         if not bg:
             self.chat_now = chat
         # The first words are kept so that, after a restart, the owner can be told what was interrupted.
-        self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80], **({"background": True} if bg else {}))
+        self._journal.write("task_start", chars=len(prompt), preview=" ".join(prompt.split())[:80], via=via_of(chat), **({"background": True} if bg else {}))
 
         shown = {"words": False, "step": ""}
 
@@ -1209,7 +1215,7 @@ class Conversation:
                 self._attio.pop_changes()
             for service in self._services:
                 service.pop_changes()
-        trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation",), user=self._who) if self._tracing is not None else None
+        trace = self._tracing.task(prompt, session=self._conversation_id, tags=("conversation", via_of(chat)), user=self._who) if self._tracing is not None else None
         traced = trace.__enter__() if trace is not None else None
         why = "" if bg else self._fresh_reason()     # a job in the background has no conversation to begin again
         if why:
@@ -1357,7 +1363,7 @@ class Conversation:
             for part in parts:
                 await chat.send(part)
                 sent += 1
-            self._journal.write("reply", parts=sent, chars=len(body))
+            self._journal.write("reply", parts=sent, chars=len(body), via=via_of(chat))
             if not bg and outcome.status == "done" and voice_mod.VOICE_NOTE in prompt:
                 await self._speak(outcome.text, chat)       # the owner spoke, so the reply is spoken too, after it is written
             await self._ask_verdict(outcome.text, chat)
@@ -1367,4 +1373,4 @@ class Conversation:
                 runner.compacted = False
                 await self._save_after_condensing(chat)
         except Exception as e:
-            self._journal.write("error", where="reply", error=type(e).__name__, message=str(e)[:300], parts_sent=sent, parts=len(parts))
+            self._journal.write("error", where="reply", error=type(e).__name__, message=str(e)[:300], parts_sent=sent, parts=len(parts), via=via_of(chat))

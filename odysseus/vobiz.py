@@ -38,7 +38,7 @@ from . import fmt
 from .journal import Journal
 from .ocr import MAX_BYTES
 from .typed import TypedAnswers, how
-from .whatsapp import STALE_AFTER_S, TEXT_LIMIT, Http, WhatsApp, digits, signature_ok
+from .whatsapp import STALE_AFTER_S, TEXT_LIMIT, Http, WhatsApp, digits, reports, sent_id, signature_ok, size_of
 
 
 def base(auth_id: str) -> str:
@@ -52,11 +52,14 @@ class VobizChat:
         self._http, self._url, self._channel, self._to, self._journal, self._typed = http, url, channel_id, to, journal, typed
         self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
         self.channel = "whatsapp"
+        self.route = "vobiz"
         # Said once to a person who joins on this number, after the welcome: one more company carries what they send.
         self.welcome_more = "\n\nOne more thing about this number: messages on it pass through the telephone company that provides it, which can read them."
 
     async def _post(self, body: dict[str, Any]) -> None:
         status, data = await self._http("POST", self._url, {"channel_id": self._channel, "to": "+" + self._to, **body})
+        if status < 300:
+            self._journal.write("wa_out", route=self.route, type=str(body.get("type", ""))[:20], chars=size_of(body), id=sent_id(data))
         if status >= 300:
             # Most often: no conversation is open, which is the 24-hour window. Raised so the reply is not counted as delivered.
             error = data.get("error") if isinstance(data, dict) else data
@@ -82,6 +85,7 @@ class VobizChat:
 
 class Vobiz(WhatsApp):
     """Receives what Vobiz passes on, checks it, and hands the owner's messages to the conversation."""
+    route = "vobiz"
 
     def __init__(self, conversation: Conversation, journal: Journal, http: Http, *, auth_id: str, channel_id: str, number: str,
                  owner_number: str, secret: str, owner_id: int, **more: Any):
@@ -111,6 +115,7 @@ class Vobiz(WhatsApp):
             found = self._typed_by[number].answer(body) if number in self._typed_by else None
             if found is not None:
                 self._seen.append(m.get("id"))
+                self._came(m, True)
                 approval_id, answer, first = found
                 try:
                     line = (await conv.handle_decision(who, approval_id, True, thread=True) if answer == "t"
@@ -142,6 +147,7 @@ class Vobiz(WhatsApp):
         except ValueError:
             return 200
         if not isinstance(event, dict) or event.get("event_type") != "message.inbound" or not isinstance(event.get("payload"), dict):
+            self._reported(event)
             return 200          # a status report, or something this program does not use
         for entry in event["payload"].get("entry") or []:
             for change in entry.get("changes") or []:
@@ -156,6 +162,23 @@ class Vobiz(WhatsApp):
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)
         return 200
+
+    def _reported(self, event: Any) -> None:
+        """A report on a message this program sent. Its form on this route is not documented well enough to rely on, so
+        it is read in the platform's own form where that is there, and otherwise only its kind and outcome are kept."""
+        if not isinstance(event, dict):
+            return
+        payload, found = event.get("payload") if isinstance(event.get("payload"), dict) else {}, False
+        for entry in payload.get("entry") or []:
+            for change in (entry.get("changes") or []) if isinstance(entry, dict) else []:
+                statuses = ((change.get("value") or {}).get("statuses")) if isinstance(change, dict) else None
+                if statuses:
+                    found = True
+                    reports(self._journal, "vobiz", statuses)
+        outcome = str(payload.get("status") or event.get("status") or "")[:20]
+        if not found and outcome not in ("sent", "read"):
+            self._journal.write("wa_status", route="vobiz", event=str(event.get("event_type") or "")[:40], status=outcome,
+                                id=str(payload.get("message_id") or payload.get("id") or "")[-16:])
 
     async def _download(self, media_id: str) -> tuple[bytes | None, int]:
         """A file arrives as an id. Vobiz hands over its bytes for that id and the number it came to."""

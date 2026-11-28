@@ -63,6 +63,32 @@ def digits(number: str) -> str:
     return "".join(c for c in str(number) if c.isdigit())
 
 
+def sent_id(data: Any) -> str:
+    """The end of the id a route gave a message it accepted, so that a later report on its delivery can be matched to it."""
+    if not isinstance(data, dict):
+        return ""
+    first = (data.get("messages") or [{}])[0] if isinstance(data.get("messages"), list) else {}
+    found = (first.get("id") if isinstance(first, dict) else "") or data.get("meta_message_id") or data.get("message_id") or data.get("message_uuid") or data.get("id") or ""
+    return str(found)[-16:]
+
+
+def size_of(body: dict[str, Any]) -> int:
+    """How many characters of text a message being sent carries. Its words are never written down here."""
+    text = (body.get("text") or {}).get("body") or ((body.get("interactive") or {}).get("body") or {}).get("text") or ""
+    return len(str(text))
+
+
+def reports(journal: Journal, route: str, statuses: Any) -> None:
+    """What the platform says became of messages this program sent: that one reached the phone, or why one did not.
+    "sent" and "read" are left out, since they say nothing a delivery does not."""
+    for s in statuses if isinstance(statuses, list) else []:
+        if not isinstance(s, dict) or s.get("status") not in ("delivered", "failed"):
+            continue
+        error = (s.get("errors") or [{}])[0] if isinstance(s.get("errors"), list) and s.get("errors") else {}
+        journal.write("wa_status", route=route, status=s["status"], id=str(s.get("id") or "")[-16:],
+                      **({"code": error.get("code"), "why": str(error.get("title") or error.get("message") or "")[:120]} if error else {}))
+
+
 def signature_ok(app_secret: str, raw: bytes, header: str) -> bool:
     """Meta signs each delivery: HMAC-SHA256 of the exact bytes, keyed with the app's secret."""
     if not app_secret or not header.startswith("sha256="):
@@ -78,9 +104,12 @@ class WhatsAppChat:
         self._http, self._url, self._to, self._journal = http, f"{GRAPH}/{phone_id}/messages", to, journal
         self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
         self.channel = "whatsapp"
+        self.route = "whatsapp"     # which of the two ways to WhatsApp this is, for the record of what came and went
 
     async def _post(self, body: dict[str, Any]) -> None:
         status, data = await self._http("POST", self._url, {"messaging_product": "whatsapp", "recipient_type": "individual", "to": self._to, **body})
+        if status < 300:
+            self._journal.write("wa_out", route=self.route, type=str(body.get("type", ""))[:20], chars=size_of(body), id=sent_id(data))
         if status >= 300:
             # Most often: the 24-hour window has closed. Raised so that the caller records the reply as not delivered.
             detail = json.dumps(data)[:300] if not isinstance(data, (bytes, str)) else str(data)[:300]
@@ -218,12 +247,24 @@ class WhatsApp:
                 line = str((value.get("metadata") or {}).get("phone_number_id") or "")
                 if line and self._phone_id and line != self._phone_id:
                     continue        # for another number of the same account, which another route may be serving (vobiz.py)
+                reports(self._journal, "whatsapp", value.get("statuses"))
                 for message in value.get("messages") or []:
                     self._name(value, message)
                     task = asyncio.get_running_loop().create_task(self._handle(message))
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.discard)
         return 200
+
+    route = "whatsapp"
+
+    def _came(self, m: dict[str, Any], heard: bool) -> None:
+        """One line for each message that arrived: what kind, how long, how old, and whether its sender is heard here."""
+        try:
+            age = round(self._clock() - int(m.get("timestamp"))) if m.get("timestamp") else None
+        except (TypeError, ValueError):
+            age = None
+        self._journal.write("wa_in", route=self.route, type=str(m.get("type", ""))[:20], chars=len((m.get("text") or {}).get("body", "") or ""),
+                            heard=heard, **({"age_s": age} if age is not None else {}))
 
     async def wait(self) -> None:
         await asyncio.gather(*list(self._tasks), return_exceptions=True)
@@ -236,6 +277,7 @@ class WhatsApp:
                 return
             self._seen.append(m.get("id"))
             person = self._person(m)
+            self._came(m, person is not None)
             if person is None:
                 if not await self._joining(m):
                     self._journal.write("dropped", what="whatsapp message from a number that is not the owner's")

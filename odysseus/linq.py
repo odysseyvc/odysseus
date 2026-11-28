@@ -81,6 +81,7 @@ class LinqChat:
 
     def __init__(self, linq: "Linq"):
         self._linq, self._typing = linq, 0.0
+        self.route = "imessage"     # for the record of which way a task came (conversation.py)
 
     async def send(self, text: str) -> None:
         for part in split_message(text, TEXT_LIMIT):
