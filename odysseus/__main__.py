@@ -440,6 +440,13 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     if board is not None:
         conversation.alone = lambda: not board.colleagues(settings.owner_id)
     conversation.own_chat = own_chat        # where work offered before a restart reports, once approved
+
+    async def small_pick(system: str, text: str) -> tuple[str, float]:
+        # One plain call to the small model for the reaction on a message (react.py): a few tokens back.
+        from .agent import estimate_usd
+        said, usage = await second_call(settings.background_model, system, text, 200)
+        return said, estimate_usd(settings.background_model, usage)
+    conversation.small = small_pick
     if inbox is not None:
         me.tasks.append(asyncio.create_task(inbox.run_forever()))
     mark("conversation")

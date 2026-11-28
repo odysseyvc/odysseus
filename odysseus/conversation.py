@@ -23,6 +23,7 @@ from .offers import Offers
 from . import deckview as deckview_mod
 from . import fmt
 from . import limits
+from . import react as react_mod
 from . import resume
 from . import progress as progress_mod
 from . import shortlink
@@ -163,6 +164,8 @@ class Conversation:
         # What was said is kept so that it can be found again, and a conversation that ends is summarised: history.py, closing.py.
         self._history, self._closer = history, closer
         self._proposed: set[str] = set()
+        self.reactions, self.small = bool(getattr(settings, "reactions", False)), None      # react.py; `small` is set at start-up
+        self._reacting: set[asyncio.Task] = set()
         self.alone = None            # set at start-up: whether this person is the only one on this copy (peers.py)
         self._decisions = decisions        # the owner's verdict beside each take on a deck: decisions.py
         self._checkins = checkins          # people to keep in touch with: checkins.py
@@ -252,6 +255,14 @@ class Conversation:
         if not text:
             return
         command = text.lower()
+
+        # A reaction on the message, at once and beside whatever the message starts (react.py). Only for what the owner
+        # typed themselves, and never for a command or a stop.
+        if self.reactions and material is None and not background and not images and not command.startswith("/") \
+                and command not in STOP_WORDS and getattr(chat, "react", None) is not None:
+            task = asyncio.create_task(react_mod.put(chat, self.small, text, self._journal))
+            self._reacting.add(task)
+            task.add_done_callback(self._reacting.discard)
 
         # The address a browser ended on after a sign-in carries a one-time code. It goes to the connector and nowhere
         # else: not to the model, not into the log, the history or the memory, whether or not a sign-in is waiting.

@@ -90,6 +90,7 @@ class Settings:
     task_usd: float = 0.50       # what one task is expected to cost at most. A mark, not a wall: see task_stretch
     task_stretch: float = 4.0    # a task still getting somewhere may run to this many times task_usd and max_turns (progress.py)
     daily_usd: float = 3.00      # what one calendar day is expected to cost at most. A mark for the owner's own requests, a wall for unattended work
+    reactions: bool = True       # a reaction on the owner's message the moment it arrives (react.py)
     day_stretch: float = 4.0     # the owner's own requests may take a day to this many times daily_usd; past it the owner is asked (conversation.py)
     fresh_after_min: int = 120   # after this long without a message, the next one starts a new conversation. 0: never
     fresh_above_tokens: int = 40000   # ...and after ten idle minutes, if the conversation has grown past this size
@@ -244,6 +245,7 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         task_usd=float(merged.get("ODYSSEUS_TASK_USD", 0.50)),
         task_stretch=max(1.0, float(merged.get("ODYSSEUS_TASK_STRETCH", 4.0))),
         day_stretch=max(1.0, float(merged.get("ODYSSEUS_DAY_STRETCH", 4.0))),
+        reactions=str(merged.get("ODYSSEUS_REACTIONS", "1")).strip().lower() not in ("0", "false", "off", "no"),
         daily_usd=float(merged.get("ODYSSEUS_DAILY_USD", 3.00)),
         data_dir=Path(merged.get("ODYSSEUS_DATA_DIR", "var")),
         reading_repo=merged.get("ODYSSEUS_READING_REPO", "").strip(),

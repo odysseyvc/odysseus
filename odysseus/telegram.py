@@ -41,6 +41,14 @@ class TelegramChat:
         from aiogram.types import ReplyParameters
         return {"reply_parameters": ReplyParameters(message_id=self._message_id, allow_sending_without_reply=True)}
 
+    async def react(self, emoji: str) -> bool:
+        """Put a reaction on the message this chat object was made for (react.py). False when there is no such message."""
+        if not self._message_id:
+            return False
+        from aiogram.types import ReactionTypeEmoji
+        await self._bot.set_message_reaction(self._chat_id, self._message_id, reaction=[ReactionTypeEmoji(emoji=emoji)])
+        return True
+
     async def links(self, text: str, links: list[tuple[str, str]]) -> None:
         """A message with one button per address. Each button opens its address in the person's own browser."""
         rows = [[InlineKeyboardButton(text=label[:40], url=url)] for label, url in links[:6]]

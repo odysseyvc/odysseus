@@ -116,6 +116,15 @@ class WhatsAppChat:
         self.who = ""       # the sender's name as WhatsApp gives it; used only when someone joins (people.py)
         self.channel = "whatsapp"
         self.route = "whatsapp"     # which of the two ways to WhatsApp this is, for the record of what came and went
+        self.heard_id = ""          # the id of the message this chat object was made for, so that it can be reacted to
+
+    async def react(self, emoji: str) -> bool:
+        """Put a reaction on the message that was just received (react.py). The other route to WhatsApp, through the
+        telephone company's number, has no such call, so its chat has no `react` and nothing is set there."""
+        if not self.heard_id:
+            return False
+        await self._post({"type": "reaction", "reaction": {"message_id": self.heard_id, "emoji": emoji}})
+        return True
 
     async def _post(self, body: dict[str, Any]) -> None:
         status, data = await self._http("POST", self._url, {"messaging_product": "whatsapp", "recipient_type": "individual", "to": self._to, **body})
@@ -330,6 +339,7 @@ class WhatsApp:
                                     "I have not acted on it. Send it again if you still want it.")
                 return
             if kind == "text":
+                chat.heard_id = str(m.get("id") or "")
                 await conv.handle(who, (m.get("text") or {}).get("body", ""), chat)
             elif kind == "interactive":
                 reply = ((m.get("interactive") or {}).get("button_reply") or {}).get("id", "")
