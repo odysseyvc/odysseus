@@ -66,7 +66,7 @@ class Chat(Protocol):
 
 STEPS = (("Agent", "Handing the reading to a helper"), ("attio", "Looking in Attio"), ("pipeline_review", "Going through the pipeline"), ("portfolio", "Looking at the companies' figures"),
          ("round_maths", "Working out the round"), ("mail_send", "Writing the email"), ("mail_reply", "Writing the reply"), ("mail_draft", "Drafting the email"), ("mail_archive", "Filing the email away"), ("mail_", "Reading your mail"), ("inbox_", "Reading my own mailbox"), ("calendar", "Checking your calendar"),
-         ("web_search", "Searching the web"), ("browse", "Opening the page"), ("run_code", "Working on the file"), ("job_start", "Starting a longer job"), ("job_check", "Looking in on the job"), ("template", "Looking at your template"),
+         ("web_search", "Searching the web"), ("web_read", "Reading the page"), ("research", "Researching this, which takes a few minutes"), ("browse", "Opening the page"), ("run_code", "Working on the file"), ("job_start", "Starting a longer job"), ("job_check", "Looking in on the job"), ("template", "Looking at your template"),
          ("skill_read", "Reading how you like this done"), ("files_", "Looking through your files"), ("recall", "Looking back through our conversations"),
          ("remember", "Making a note"), ("note", "Making a note"), ("schedule", "Setting that up"), ("watch", "Setting up the watch"),
          ("who_to_ask_about", "Looking for people worth asking about"), ("colleague", "Asking your colleague's assistant"), ("app_", "Looking in your apps"))
@@ -219,6 +219,19 @@ class Conversation:
     def _raise_day(self) -> None:
         self.day_wall()
         self._day_raised = (self._day_raised[0], self._day_raised[1] + self._s.daily_usd * max(1.0, getattr(self._s, "day_stretch", 1.0)))
+
+    def _told_today(self) -> bool:
+        """Whether the journal already holds today's notice. Found in real use: the day on which the owner was told was held
+        in memory only, so after every restart on a costly day the same notice was sent again."""
+        today = self._now().date()
+        try:
+            told = any(r.get("kind") == "day_mark" and datetime.fromtimestamp(float(r.get("ts", 0)), self._now().tzinfo).date() == today
+                       for r in self._journal.read()[-5000:])
+        except Exception:
+            told = False
+        if told:
+            self._day_told = today
+        return told
 
     def _day_full(self) -> str:
         return (f"Today has reached ${self._ledger.spent_today():.2f}, and ${self.day_wall():.2f} is where I stop and check with you. "
@@ -593,8 +606,9 @@ class Conversation:
             self._journal.write("refused", reason="daily_budget")
             await chat.send(self._day_full() + ", so I have not started this.")
             return
-        if self._ledger.spent_today() >= self._s.daily_usd and self._day_told != self._now().date():
+        if self._ledger.spent_today() >= self._s.daily_usd and self._day_told != self._now().date() and not self._told_today():
             self._day_told = self._now().date()
+            self._journal.write("day_mark")
             try:
                 await chat.send(f"Today has cost ${self._ledger.spent_today():.2f} so far, past the ${self._s.daily_usd:.2f} a day usually comes to. "
                                 f"I'm carrying on with what you ask, and will stop and check with you at ${self.day_wall():.2f}.")

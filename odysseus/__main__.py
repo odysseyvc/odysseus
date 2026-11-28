@@ -393,13 +393,15 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
         await target.handle(settings.owner_id, text, heard)
         return heard.said
     from . import said
+    from .web import Web
 
     def tools_for_a_conversation():
         return make_tool_server(search, journal, memory, schedule, gate=gate, apps=apps, browser=browser, anyapp=anyapp, watches=watches,
                                 on_watch=on_watch, attio=attio, services=services, history=history, checkins=checkins, leads=leads,
                                 files=shelf, send_file=lambda entry: deliver(shelf, entry, files_go_to()), inbox=inbox_tools, code=code_tools,
                                 peers=peer_tools, skills=skills, portfolio=portfolio, reviewer=reviewer,
-                                manage=(said.handler(run_command, journal, host, later=lambda text: late["c"].after_task.append(text)), said.schema(host)))
+                                manage=(said.handler(run_command, journal, host, later=lambda text: late["c"].after_task.append(text)), said.schema(host)),
+                                web=Web(shared.exa, journal, gate.taint) if getattr(shared, "exa", None) is not None else None)
     runner = AgentRunner(settings, journal, tools_for_a_conversation(), gate=gate, system_prompt=instructions, persist=True)
     # More agents with the same tools, the same instructions and the same gate, each for one job at a time in the background:
     # a deck sent by itself, a document read from a link, a filing approved from a question. They keep no conversation.
@@ -744,7 +746,7 @@ async def main() -> int:
         host_name = ""         # learned from the host's first message instead (people.py)
     board = Switchboard(state_file=settings.data_dir / "switchboard.json")
     shared = SimpleNamespace(bot=bot, tracing=tracing, second_call=second_call,
-                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), door=door, rebuild=lambda user_id: None, board=board,
+                             search=Exa(api_key=settings.exa_api_key).tools.web_search(), exa=Exa(api_key=settings.exa_api_key), door=door, rebuild=lambda user_id: None, board=board,
                              name_of=lambda user_id: host_name if user_id == settings.owner_id else people.members.get(str(user_id), {}).get("name", ""))
     host = await assemble(settings, shared, True, marks)
     if service:

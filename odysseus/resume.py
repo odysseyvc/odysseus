@@ -30,7 +30,7 @@ RECENT_S = 15 * 60
 NOTICE = "I was restarted in the middle of your last message. Nothing had been changed yet, so I'm picking it up again now."
 # Tools that only read, by the name their journal record carries. Anything else is a change unless its record says "read".
 READS = frozenset({
-    "web_search", "recall", "mail_search", "mail_read", "mail_each", "mail_attachment", "calendar_list", "calendar_busy", "mail_profile", "mail_for_code",
+    "web_search", "web_read", "research", "recall", "mail_search", "mail_read", "mail_each", "mail_attachment", "calendar_list", "calendar_busy", "mail_profile", "mail_for_code",
     "attio_find", "app_find", "files_find", "list_schedule", "list_watches", "checkin_list", "skill_read", "template", "see_pages", "page_check",
     "times_find", "job_check", "inbox_list", "inbox_read", "portfolio_show", "who_to_ask_about", "pipeline_review", "round_maths", "review", "close"})
 

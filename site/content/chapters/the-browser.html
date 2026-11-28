@@ -23,15 +23,27 @@
 
 <h2 id="when">When a browser is the only way</h2>
 <div class="tablewrap"><table>
-<caption>Three ways to reach the outside world, in the order the model is told to prefer them.</caption>
+<caption>Five ways to reach the outside world, in the order the model is told to prefer them.</caption>
 <thead><tr><th>Route</th><th>Good for</th><th>Typical cost and time in live runs</th></tr></thead>
 <tbody>
 <tr><th>Search</th><td>A fact that is published somewhere</td><td>About 1 cent, under 10 seconds</td></tr>
+<tr><th>The text of a page by its address</th><td>A public page whose address is already known: a link the owner gave, a search result worth reading whole</td><td>A fifth of a cent for three pages, 1.4 seconds (one live call)</td></tr>
+<tr><th>Research in many steps, bought as one call</th><td>A list built from criteria; the same facts filled in for several names</td><td>11 cents and 21 seconds for a three-row table with its sources (one live run); the ceiling is a dollar</td></tr>
 <tr><th>Connector or a service's own server</th><td>The owner's accounts, through an official interface</td><td>About 1 cent, under 10 seconds</td></tr>
 <tr><th>Browser</th><td>Reading a particular page; working through a site; filling in a form</td><td>About 4 cents a run, 20 to 50 seconds (three general runs); about two to three minutes for a document read on a viewing site</td></tr>
 </tbody>
 </table></div>
-<p>The browser is slowest because every step is a page load followed by a model reading the page. It is least certain because pages are built to be looked at, not read by programs, and change without notice; because what comes back is a model's account of a page, not the page; and because a signed-in browser can do anything the owner can, which makes it the hardest route to keep safe. So the model is told: search first for facts; use the browser only when a page must be visited.</p>
+<p>The browser is slowest because every step is a page load followed by a model reading the page. It is least certain because pages are built to be looked at, not read by programs, and change without notice; because what comes back is a model's account of a page, not the page; and because a signed-in browser can do anything the owner can, which makes it the hardest route to keep safe. So the model is told: search first for facts; read a page by its address when the address is known; use the browser only when a page must be worked through.</p>
+
+<h3 id="by-address">Two routes that were bought and not used</h3>
+<p>For a long time this assistant used one thing from the company that does its searching: the search. The same company also fetches the text of a page from its address, and runs research in many steps as a single call. Neither was used, and nobody had decided that. A link the owner sent was opened by a browsing agent at about four cents and half a minute, when its text was all that was wanted and could be had for a fraction of a cent in about a second. The lesson is about bought services in general: read the whole of what a vendor already under contract offers before building or buying anything beside it ({{ch:build-or-buy}}).</p>
+<p>Both routes send something out and bring other people's text back, so both are held to the rules a search is ({{ch:untrusted-content}}). An address or a question that carries details recognised from the owner's accounts is put to the owner first. What comes back is labelled as material and recorded as read. Three smaller rules are worth copying.</p>
+<ul>
+<li>The fetching service can answer for five pages and fail on two. The program reads each page's own status and names every page that failed. A page that needs a sign-in comes back as "could not be read", never as an empty page, because the model would report an empty page as a page that says nothing.</li>
+<li>A research run is given a ceiling in dollars when it is started, and its real cost is written in the journal. A run that stopped at its ceiling is said to have stopped there, so the model reports the list as possibly incomplete.</li>
+<li>The helper that only reads may fetch a page and may not start a research run. A paid run of many steps is the main task's decision.</li>
+</ul>
+<p>The fetching service also keeps dated copies of pages, so a page can be read as it stood on a past date: what a pricing page said before it was changed. That is a paid part of the service which the account here does not have. The tool accepts the date, and when the service refuses, the model is told in plain words that past versions are not available and to say so. It does not fall back to the present page without saying so, since the present page answers a different question.</p>
 <div class="box definition"><div class="label">Definition: browsing agent</div>
 <p>A model, usually another company's, that is given a task in plain words and a browser, and that carries the task out by itself: it opens pages, reads them, clicks and types, and finally writes a report. The program that hands over the task sees the task go in and the report come out, and nothing in between.</p></div>
 

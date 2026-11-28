@@ -260,6 +260,20 @@ def make_gate(journal: Journal, now=None, timeout_s: float = 1800.0, with_apps: 
     # own words than may leave unasked (taint.py); then the owner is asked.
     gate.rule(SEARCH_TOOL, lambda a: ASK if taint.leaked(_sent(a)) or taint.spill(_sent(a)) else ALLOW,
               lambda a: describe_search(a, taint))
+    # Reading a page by its address, and research in many steps (web.py): both send something to the search company, so
+    # both are held to the rule a search is. An address the owner gave, or a question in their words, leaves unasked.
+    from . import web as web_mod
+
+    def describe_web(a: dict[str, Any], what: str) -> str:
+        found = taint.leaked(web_mod.sent(a))
+        shown = "\n".join(web_mod.addresses(a)) or str(a.get("question", "")).strip()
+        why = (f"It contains details that came from your mail, calendar or apps.\n\nDetails recognised: {', '.join(found)}" if found
+               else "I have read your mail, calendar or apps, and this is more than I send out unasked.")
+        return f"{what} This goes to a search company. {why}\n\n{shown}"
+    gate.rule(web_mod.READ_TOOL, lambda a: ASK if taint.leaked(web_mod.sent(a)) or taint.spill(web_mod.sent(a)) else ALLOW,
+              lambda a: describe_web(a, "Fetch these pages?"))
+    gate.rule(web_mod.RESEARCH_TOOL, lambda a: ASK if taint.leaked(web_mod.sent(a)) or taint.spill(web_mod.sent(a)) else ALLOW,
+              lambda a: describe_web(a, "Send this research task out?"))
 
     def schedule_decision(a: dict[str, Any]) -> str:
         # A routine commits the owner to repeated unattended runs that cost money: always asked. A reminder is a fixed
@@ -413,7 +427,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
                      browser: Browser | None = None, anyapp: AnyApp | None = None, watches: WatchStore | None = None,
                      on_watch: Any = None, attio: Any = None, services: Any = (), mail_only: bool = False, history: Any = None,
                      checkins: Any = None, leads: Any = None, files: Any = None, send_file: Any = None, inbox: Any = None, code: Any = None, peers: Any = None,
-                     skills: Any = None, portfolio: Any = None, reviewer: Any = None, manage: Any = None):
+                     skills: Any = None, portfolio: Any = None, reviewer: Any = None, manage: Any = None, web: Any = None):
     """The full server for conversations, or (read_only) the small one for unattended routines."""
     # Earlier conversations are searched only in a conversation: an unattended run's recall reads the saved notes alone.
     m = make_memory_handlers(memory, journal, None if read_only else history, getattr(gate, "taint", None))
@@ -759,6 +773,13 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
     if browser is not None:
         handler = gate.guarded(browser_mod.BROWSE_TOOL, browser.browse) if gate is not None else browser.browse   # lock 2
         tools.append(tool("browse", browser_mod.SCHEMA[0], browser_mod.SCHEMA[1])(handler))
+    if web is not None and not read_only:
+        # Reading a page by its address and research in many steps (web.py), behind the same rule as a search.
+        from . import web as web_mod
+        read = gate.guarded(web_mod.READ_TOOL, web.read) if gate is not None else web.read            # lock 2
+        research = gate.guarded(web_mod.RESEARCH_TOOL, web.research) if gate is not None else web.research
+        tools += [tool("web_read", web_mod.SCHEMAS["web_read"][0], web_mod.SCHEMAS["web_read"][1])(read),
+                  tool("research", web_mod.SCHEMAS["research"][0], web_mod.SCHEMAS["research"][1])(research)]
     if manage is not None and not read_only:
         # The things the program does itself, asked for in the owner's own words (said.py). Never in an unattended run.
         do, (about, shape) = manage

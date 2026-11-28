@@ -84,6 +84,9 @@ async def test_what_a_day_usually_costs_is_a_mark_for_the_owners_own_requests(tm
     assert len(told) == 1 and "$4.00" in told[0], "and they are told once, with where it stops"
     await say(x, "hello again")
     assert len([t for t in x.chat.sent if "a day usually comes to" in t]) == 1, "once a day, not with every message"
+    x.conv._day_told = None                 # what a restart does to what is held in memory
+    await say(x, "hello after a restart")
+    assert len([t for t in x.chat.sent if "a day usually comes to" in t]) == 1, "found in real use: every restart sent it again"
 
 
 async def test_several_times_the_mark_is_a_wall_that_the_owner_raises_in_words(tmp_path):
