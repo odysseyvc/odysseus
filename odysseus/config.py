@@ -41,6 +41,8 @@ class Settings:
     agentmail_api_key: str = ""  # optional: with it, each person can give the assistant an email address of its own (mailbox.py)
     e2b_api_key: str = ""        # optional: with it, the assistant can run code on a throwaway machine (sandbox.py)
     sandbox_template: str = ""   # optional: the name of an image of our own for that machine, which can make decks and PDFs (scripts/build_sandbox.py)
+    computer: bool = True        # each person has a computer of their own that stays (sandbox.Computer). Off: a machine thrown away after each stretch of runs
+    computer_internet: bool = True   # that computer can reach the internet. Off: it cannot, as the throwaway machine never could
     owner_emails: tuple = ()     # the host's other addresses, besides the connected mailbox's: mail from these to the assistant is the host's own
     # Optional: WhatsApp as a second channel (whatsapp.py). All four of the first five are needed for it to switch on.
     whatsapp_token: str = ""          # a permanent access token for the Meta app
@@ -77,6 +79,8 @@ class Settings:
     langfuse_full_content: bool = False   # also record what mail, calendar and app tools returned (off: only its length)
     model: str = "claude-sonnet-5-5"
     background_model: str = "claude-haiku-5-5"   # runs scheduled routines
+    fallback_model: str = "claude-sonnet-5"      # answers when the main model is overloaded or fails on its maker's side; "" for none (agent.py)
+    helper: bool = False         # the conversation may hand reading to a helper on the small model, in a conversation of its own (agent.py)
     voice_model: str = "voxtral-small-transcribe-3"   # turns voice notes into text; uses the Mistral key
     speak: str = "voice"         # voice: a reply to a voice note is also spoken. off: never
     tz: str = ""                 # IANA zone such as Asia/Kolkata; empty means the machine's own clock
@@ -177,6 +181,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         agentmail_api_key=merged.get("AGENTMAIL_API_KEY", "").strip(),
         e2b_api_key=merged.get("E2B_API_KEY", "").strip(),
         sandbox_template=merged.get("ODYSSEUS_SANDBOX_TEMPLATE", "").strip(),
+        computer=merged.get("ODYSSEUS_COMPUTER", "on").strip().lower() not in ("off", "0", "no", "false"),
+        computer_internet=merged.get("ODYSSEUS_COMPUTER_INTERNET", "on").strip().lower() not in ("off", "0", "no", "false"),
         owner_emails=tuple(a.strip().lower() for a in merged.get("ODYSSEUS_OWNER_EMAILS", "").split(",") if "@" in a),
         whatsapp_token=merged.get("WHATSAPP_TOKEN", ""),
         whatsapp_phone_id=merged.get("WHATSAPP_PHONE_ID", ""),
@@ -220,6 +226,8 @@ def load(env: Mapping[str, str] | None = None, env_file: Path = Path(".env")) ->
         ask_every_change=merged.get("ODYSSEUS_ASK_EVERY_CHANGE", "").strip().lower() in ("1", "true", "yes", "on"),
         model=merged.get("ODYSSEUS_MODEL", "claude-sonnet-5-5"),
         background_model=merged.get("ODYSSEUS_BACKGROUND_MODEL", "claude-haiku-5-5"),
+        fallback_model=merged.get("ODYSSEUS_FALLBACK_MODEL", "claude-sonnet-5").strip(),
+        helper=merged.get("ODYSSEUS_HELPER", "").strip().lower() in ("on", "1", "yes", "true"),
         voice_model=merged.get("ODYSSEUS_VOICE_MODEL", "voxtral-small-transcribe-3"),
         speak="off" if merged.get("ODYSSEUS_SPEAK", "voice").strip().lower() in ("off", "0", "no", "false") else "voice",
         tz=merged.get("ODYSSEUS_TZ", ""),

@@ -633,7 +633,7 @@ def make_tool_server(spec: SearchSpec, journal: Journal, memory: MemoryStore, sc
         tools += [tool(n, mailbox_mod.SCHEMAS[n][0], mailbox_mod.SCHEMAS[n][1])(inbox[n]) for n in mailbox_mod.SCHEMAS]
     if code:
         from . import sandbox as sandbox_mod
-        described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)))
+        described = sandbox_mod.schemas(bool(getattr(code.get("run_code"), "documents", False)), bool(getattr(code.get("run_code"), "lasting", False)))
         tools += [tool(n, described[n][0], described[n][1])(code[n]) for n in described if n in code]
     from . import rounds as rounds_mod
     tools.append(tool("round_maths", rounds_mod.SCHEMA[0], rounds_mod.SCHEMA[1])(rounds_mod.handler(journal)))

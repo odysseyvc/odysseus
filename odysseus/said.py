@@ -57,6 +57,8 @@ THINGS: dict[str, tuple[str, str, bool, str]] = {
     "decisions": ("/decisions", SHOW, False, "Show the decisions recorded."),
     "own_address": ("/address", SHOW, False, "Show the assistant's own email address, or make one if there is none."),
     "spending": ("/status", SHOW, False, "Show what has been spent today and whether anything is running."),
+    "computer": ("/computer", SHOW, False, "Say what the assistant's own computer is: that its files stay, whether it reaches the internet."),
+    "wipe_computer": ("/computer wipe", ALWAYS_ASK, False, "Destroy the assistant's own computer and every file on it. It cannot be undone."),
     "browser_sign_in": ("/browser", LINK, False, "Let the owner sign in to websites in the assistant's browser. `detail` is empty to begin, "
                         "or the word done when the owner says they have finished signing in."),
     "sharing_with_colleagues": ("/trust", CHANGE, False, "Show what colleagues' assistants may ask this one, or change it. `detail` is empty to show, "
@@ -91,7 +93,8 @@ def describe(args: dict[str, Any]) -> str:
              "disconnect": "Remove this connection?", "connect": "Start connecting this service?",
              "browser_sign_in": "Open the browser for you to sign in?", "sharing_with_colleagues": "Change what colleagues' assistants may ask mine?",
              "report_wrong_answer": "Send your last message and my reply to the person who runs this assistant?",
-             "add_account": "Make a sign-in link for one more account?"}.get(what, f"Do this: {what.replace('_', ' ')}?")
+             "add_account": "Make a sign-in link for one more account?",
+             "wipe_computer": "Destroy my computer and every file on it? This cannot be undone."}.get(what, f"Do this: {what.replace('_', ' ')}?")
     return plain + (f"\n\n{detail}" if detail else "")
 
 

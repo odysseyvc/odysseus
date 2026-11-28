@@ -330,6 +330,24 @@ return file_block(name, result, sights)</code></pre>
 <li>The keeping is paid for: a minute and a half of an idle machine after a stretch, a quarter of a cent, counted in the ledger.</li>
 </ul>
 <p class="src"><code>odysseus/sandbox.py</code>, <code>tests/test_sandbox_kept.py</code></p>
+<h3 id="a-computer-that-stays">A computer that stays, and what it gave up</h3>
+<p>Everything above describes a machine built to keep nothing and reach nothing. The products this assistant is measured against give each person the opposite: a computer of their own that keeps its files, can install what it needs and can reach the internet. The owner weighed the two and chose, in so many words, to make the assistant as seamless as those products even where that gave up what this design held. A design chapter should record a reversal as plainly as it recorded the first decision, with what was bought and what was paid.</p>
+<p>What changed. Each person now has one machine. Unused for ten minutes, it is put to sleep by the sandbox company with its files and its memory; nothing is paid while it sleeps, and it wakes when next needed. It is found again by an id kept in the person's own folder, so it outlives a restart of the program. It has internet access. A run may take ten minutes. The program never destroys it for a failed run, only on the person's word.</p>
+<p><span class="g v">Verified</span> against the real service, with no model in the loop (one run of each): a file written to the work folder, a value set in memory and a package installed with the ordinary installer were all still there after the machine had been put to sleep and woken by a new program that knew only its id; waking took 1.9 seconds; a public page was fetched; a wipe destroyed it and the next run began on an empty machine.</p>
+<div class="tbl"><table>
+<thead><tr><th>Property of the first design</th><th>Now</th></tr></thead>
+<tbody>
+<tr><th>Nothing is kept between runs</th><td>Given up. The work folder, installed packages and values in memory stay until the person has it wiped</td></tr>
+<tr><th>No way out</th><td>Given up by default; a setting restores it. Code can reach the internet</td></tr>
+<tr><th>No way in</th><td>Kept, and now asked for outright: a request from outside with no token is refused</td></tr>
+<tr><th>None of the owner's keys or sign-ins on the machine</th><td>Kept. The program puts only named files there, and the model is told never to put a secret there</td></tr>
+<tr><th>One person's machine cannot reach another's</th><td>Kept. One machine per person, each found by its own id</td></tr>
+<tr><th>Two runs never share a machine at once</th><td>Kept, differently: a person's runs wait their turn on their one machine</td></tr>
+</tbody>
+</table></div>
+<p>The cost has to be said in the terms of {{ch:untrusted-content}}. The earlier argument for letting code run unasked was that hostile code, written because a deck talked the model into it, "can waste two minutes and print something false, and nothing more". That argument no longer holds. With a way out and files that stay, such code can send out whatever the assistant has left on that machine: the three conditions that make an agent's mistake into a leak (private material, untrusted input, a way to send) are now all present on it. What bounds the loss is what is on the machine, which is files of this one person that the assistant put there, and never a key, a sign-in or anyone else's data. What reduces the chance is an instruction to the model, which is the weakest kind of protection this book knows. The owner chose this with that stated, and the closed machine is one setting away.</p>
+<p class="src"><code>odysseus/sandbox.py</code> (<code>Computer</code>), <code>tests/test_computer.py</code></p>
+
 <p>It runs unasked because of the second row. A deck can talk the model into writing code the owner would not want; with no way out, that code can waste two minutes and print something false, and nothing more. What it prints is recorded as derived from the file, so the rules for what other people wrote apply to it: a save to memory after it is asked about, and a search carrying its figures is asked about ({{ch:untrusted-content}}).</p>
 <p>Run against the real service (<code>scripts/live_sandbox.py</code>, 9 of 9 checks, no model called). The first run of the check failed, usefully. With outbound access off, a connection to a numeric address still opened. A closer probe showed why: the company's own filter accepts the connection and passes nothing on. A web request to a numeric address got no reply, an encrypted one was cut, and names could not be looked up. The check now tests whether anything comes back and not whether a connection opens.</p>
 <div class="tbl"><table>

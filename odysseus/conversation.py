@@ -64,7 +64,7 @@ class Chat(Protocol):
     async def ask(self, text: str, approval_id: str) -> None: ...   # a message with Approve and Decline buttons; with thread=True, a third
 
 
-STEPS = (("attio", "Looking in Attio"), ("pipeline_review", "Going through the pipeline"), ("portfolio", "Looking at the companies' figures"),
+STEPS = (("Agent", "Handing the reading to a helper"), ("attio", "Looking in Attio"), ("pipeline_review", "Going through the pipeline"), ("portfolio", "Looking at the companies' figures"),
          ("round_maths", "Working out the round"), ("mail_send", "Writing the email"), ("mail_reply", "Writing the reply"), ("mail_draft", "Drafting the email"), ("mail_archive", "Filing the email away"), ("mail_", "Reading your mail"), ("inbox_", "Reading my own mailbox"), ("calendar", "Checking your calendar"),
          ("web_search", "Searching the web"), ("browse", "Opening the page"), ("run_code", "Working on the file"), ("template", "Looking at your template"),
          ("skill_read", "Reading how you like this done"), ("files_", "Looking through your files"), ("recall", "Looking back through our conversations"),
@@ -175,6 +175,7 @@ class Conversation:
         self._offers: dict[str, Any] = Offers(settings.data_dir / "offers.json")
         self.own_chat: Any = None       # the owner's own chat, for work offered before a restart: set by the program
         self.chat_now: Any = None       # the chat the task now running was asked in: where a thing done by the program replies (said.py)
+        self.computer: Any = None       # this person's own computer, if they have one that stays (sandbox.Computer): set by the program
         self.after_task: list[str] = []  # things the program is to do once the task now running has ended (said.py)
         # The message now being worked on, kept in one small file until its task ends. If the program is stopped in the
         # middle (a new version going out), the file is still there at the next start and the message can be picked up
@@ -345,6 +346,23 @@ class Conversation:
                 await self._connector.disconnect(text[len("/disconnect"):], chat.send)
             else:
                 await self._connector.connect(text[len(command.split()[0]):] if not command.startswith("/services") else "", chat.send)
+            return
+
+        # The person's own computer (sandbox.Computer): what it is, and destroying it with everything on it. No model is involved.
+        if command in ("/computer", "/computer wipe"):
+            self._journal.write("command", name=command)
+            machine = self.computer
+            if machine is None or not getattr(machine, "lasting", False):
+                await chat.send("I work on a machine that is thrown away after each job, so there is nothing kept to show or wipe.")
+            elif command == "/computer":
+                await chat.send("I have a computer of my own for your work. Files I leave in its work folder, and anything I install, stay there "
+                                "between jobs. It sleeps when unused, which costs nothing, and wakes in a second or two. "
+                                + ("It can reach the internet. " if getattr(machine, "internet", False) else "It cannot reach the internet. ")
+                                + "None of your passwords or sign-ins is ever put on it. Ask me to wipe it and I will destroy it and everything on it.")
+            else:
+                gone = await machine.wipe()
+                await chat.send("Wiped. That computer and everything on it are gone; my next job starts on a new, empty one."
+                                if gone else "There was no computer to wipe, or it could not be reached. My next job starts on a new, empty one.")
             return
 
         # More than one account for a service (two mailboxes): what is signed in, and a link to add one. No model is involved.

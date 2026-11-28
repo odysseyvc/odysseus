@@ -301,8 +301,12 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
     # Code, run on a rented machine that is thrown away after each run, if there is a key for one (sandbox.py).
     code_tools = None
     if settings.e2b_api_key:
-        from .sandbox import E2B, CodeRunner
-        machine = E2B(settings.e2b_api_key, settings.sandbox_template)
+        from .sandbox import E2B, CodeRunner, Computer
+        # Each person's own computer, which stays (sandbox.Computer), unless the owner's settings ask for the machine
+        # that is thrown away. It is put to sleep, not destroyed, when this person's assistant closes.
+        machine = (Computer(settings.e2b_api_key, settings.sandbox_template, state_file=settings.data_dir / "computer.json",
+                            owner=str(settings.owner_id), internet=settings.computer_internet)
+                   if settings.computer else E2B(settings.e2b_api_key, settings.sandbox_template))
         me.closers.append(machine.close)        # a machine kept ready for the next run is destroyed when this person's assistant closes
         code_runner = CodeRunner(machine, journal, ledger, settings.daily_usd, gate.taint)
         if settings.review_model.lower() != "off":
@@ -394,6 +398,7 @@ async def assemble(settings: Settings, shared: SimpleNamespace, host: bool, mark
                                 deckview=DeckViewer(browser._b, apps.messages_for_code, viewer_address, journal, max(settings.task_usd, 1.0))
                                 if browser is not None and apps is not None else None)
     late["c"] = conversation
+    conversation.computer = locals().get("machine")        # this person's own computer, if there is one: shown and wiped by their word
     # Reading notes, filed by code into the owner's website repository (booknotes.py). The host's alone.
     if host and settings.reading_repo and settings.reading_token:
         from . import booknotes
